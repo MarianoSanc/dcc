@@ -1,0 +1,775 @@
+<div class="results-container">
+  <div class="section-header">
+    <h3>Results</h3>
+    <p>Resultados de medición y métodos utilizados en la calibración</p>
+  </div>
+
+  <!-- Measurement Result Block -->
+  <div class="data-block">
+    <div class="block-header">
+      <h4>Measurement Result</h4>
+      <div class="block-actions">
+        <button
+          class="edit-btn"
+          (click)="toggleEdit('measurement-result')"
+          [class.active]="isEditing('measurement-result')"
+        >
+          <i class="material-icons">{{
+            isEditing("measurement-result") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("measurement-result") ? "Cancelar" : "Editar" }}
+        </button>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <!-- View Mode -->
+      <div
+        *ngIf="!isEditing('measurement-result')"
+        class="measurement-result-view"
+      >
+        <table class="data-table">
+          <tr>
+            <td class="label">Name:</td>
+            <td>{{ measurementResult.name || "No especificado" }}</td>
+          </tr>
+          <tr>
+            <td class="label">Description:</td>
+            <td class="description-cell">
+              {{ measurementResult.description || "No especificado" }}
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Edit Mode -->
+      <div
+        *ngIf="isEditing('measurement-result')"
+        class="measurement-result-edit"
+      >
+        <div class="edit-form">
+          <div class="form-group">
+            <label>Name:</label>
+            <input
+              type="text"
+              [(ngModel)]="measurementResult.name"
+              placeholder="Ingrese el nombre del resultado de medición"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Description:</label>
+            <textarea
+              [(ngModel)]="measurementResult.description"
+              placeholder="Ingrese la descripción del resultado de medición"
+              rows="4"
+            ></textarea>
+          </div>
+
+          <div class="form-actions">
+            <button class="save-btn" (click)="saveBlock('measurement-result')">
+              Guardar
+            </button>
+            <button
+              class="cancel-btn"
+              (click)="cancelEdit('measurement-result')"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Used Methods Block -->
+  <div class="data-block">
+    <div class="block-header">
+      <h4>Used Methods</h4>
+      <div class="block-actions">
+        <button class="add-btn" (click)="addMethod()">
+          <i class="material-icons">add</i>
+          Agregar Método
+        </button>
+        <button
+          class="edit-btn"
+          (click)="toggleEdit('used-methods')"
+          [class.active]="isEditing('used-methods')"
+        >
+          <i class="material-icons">{{
+            isEditing("used-methods") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("used-methods") ? "Cancelar" : "Editar" }}
+        </button>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <!-- View Mode -->
+      <div *ngIf="!isEditing('used-methods')" class="methods-view">
+        <div class="item-card" *ngFor="let method of usedMethods">
+          <div class="item-header">
+            <h5>{{ method.name || "Sin nombre" }}</h5>
+            <span class="ref-type-badge">{{ method.refType }}</span>
+          </div>
+          <div class="item-details">
+            <div class="detail-row" *ngIf="method.description">
+              <strong>Description:</strong> {{ method.description }}
+            </div>
+            <div class="detail-row" *ngIf="method.norm">
+              <strong>Norm:</strong> {{ method.norm }}
+            </div>
+            <div class="detail-row" *ngIf="method.reference">
+              <strong>Reference:</strong> {{ method.reference }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Mode -->
+      <div *ngIf="isEditing('used-methods')" class="methods-edit">
+        <div class="edit-form">
+          <div
+            class="item-form"
+            *ngFor="let method of usedMethods; let methodIndex = index"
+          >
+            <div class="item-form-header">
+              <h5>Método {{ methodIndex + 1 }}</h5>
+              <button class="remove-btn" (click)="removeMethod(method.id)">
+                <i class="material-icons">delete</i>
+                Eliminar
+              </button>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Name:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="method.name"
+                  placeholder="Ingrese el nombre del método"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>RefType:</label>
+                <select [(ngModel)]="method.refType">
+                  <option value="">Seleccione el tipo de referencia</option>
+                  <option value="basic_calibrationMethod">
+                    basic_calibrationMethod
+                  </option>
+                  <option value="basic_uncertainty">basic_uncertainty</option>
+                  <option value="basic_measurementProcedure">
+                    basic_measurementProcedure
+                  </option>
+                  <option value="basic_evaluationMethod">
+                    basic_evaluationMethod
+                  </option>
+                  <option value="other">other</option>
+                </select>
+              </div>
+
+              <div class="form-group full-width">
+                <label>Description:</label>
+                <textarea
+                  [(ngModel)]="method.description"
+                  placeholder="Ingrese la descripción del método"
+                  rows="3"
+                ></textarea>
+              </div>
+
+              <div class="form-group">
+                <label>Norm:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="method.norm"
+                  placeholder="Ingrese la norma"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>Reference:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="method.reference"
+                  placeholder="Ingrese la referencia"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="save-btn" (click)="saveBlock('used-methods')">
+              Guardar
+            </button>
+            <button class="cancel-btn" (click)="cancelEdit('used-methods')">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Influence Conditions Block -->
+  <div class="data-block">
+    <div class="block-header">
+      <h4>Influence Conditions</h4>
+      <div class="block-actions">
+        <button class="add-btn" (click)="addInfluenceCondition()">
+          <i class="material-icons">add</i>
+          Agregar Condición
+        </button>
+        <button
+          class="edit-btn"
+          (click)="toggleEdit('influence-conditions')"
+          [class.active]="isEditing('influence-conditions')"
+        >
+          <i class="material-icons">{{
+            isEditing("influence-conditions") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("influence-conditions") ? "Cancelar" : "Editar" }}
+        </button>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <!-- View Mode -->
+      <div *ngIf="!isEditing('influence-conditions')" class="conditions-view">
+        <div class="item-card" *ngFor="let condition of influenceConditions">
+          <div class="item-header">
+            <h5>{{ condition.name || "Sin nombre" }}</h5>
+            <span class="status-badge">{{ condition.status }}</span>
+            <span class="ref-type-badge">{{ condition.refType }}</span>
+          </div>
+          <div class="sub-block">
+            <h6>Sub-block Data:</h6>
+            <div class="sub-block-details">
+              <div class="detail-row">
+                <strong>Name:</strong> {{ condition.subBlock.name }}
+              </div>
+              <div class="detail-row">
+                <strong>Value:</strong> {{ condition.subBlock.value }}
+              </div>
+              <div class="detail-row">
+                <strong>Unit:</strong> {{ condition.subBlock.unit }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Mode -->
+      <div *ngIf="isEditing('influence-conditions')" class="conditions-edit">
+        <div class="edit-form">
+          <div
+            class="item-form"
+            *ngFor="
+              let condition of influenceConditions;
+              let conditionIndex = index
+            "
+          >
+            <div class="item-form-header">
+              <h5>Condición {{ conditionIndex + 1 }}</h5>
+              <button
+                class="remove-btn"
+                (click)="removeInfluenceCondition(condition.id)"
+              >
+                <i class="material-icons">delete</i>
+                Eliminar
+              </button>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Name:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="condition.name"
+                  placeholder="Ingrese el nombre de la condición"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>RefType:</label>
+                <select [(ngModel)]="condition.refType">
+                  <option value="">Seleccione el tipo de referencia</option>
+                  <option value="basic_temperature">basic_temperature</option>
+                  <option value="basic_humidityRelative">
+                    basic_humidityRelative
+                  </option>
+                  <option value="basic_pressure">basic_pressure</option>
+                  <option value="basic_voltage">basic_voltage</option>
+                  <option value="basic_current">basic_current</option>
+                  <option value="basic_frequency">basic_frequency</option>
+                  <option value="other">other</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Status:</label>
+                <select [(ngModel)]="condition.status">
+                  <option value="">Seleccione el estado</option>
+                  <option value="beforeAdjustment">beforeAdjustment</option>
+                  <option value="afterAdjustment">afterAdjustment</option>
+                  <option value="beforeRepair">beforeRepair</option>
+                  <option value="afterRepair">afterRepair</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Sub-block -->
+            <div class="identifications-section">
+              <h6>Sub-block Data:</h6>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Name:</label>
+                  <input
+                    type="text"
+                    [(ngModel)]="condition.subBlock.name"
+                    placeholder="Ingrese el nombre del sub-bloque"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label>Value:</label>
+                  <input
+                    type="text"
+                    [(ngModel)]="condition.subBlock.value"
+                    placeholder="Ingrese el valor"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label>Unit:</label>
+                  <select [(ngModel)]="condition.subBlock.unit">
+                    <option value="">Seleccione la unidad</option>
+                    <option value="\degreecelsius">\degreecelsius</option>
+                    <option value="\percent">\percent</option>
+                    <option value="\one">\one</option>
+                    <option value="\kilovolt">\kilovolt</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button
+              class="save-btn"
+              (click)="saveBlock('influence-conditions')"
+            >
+              Guardar
+            </button>
+            <button
+              class="cancel-btn"
+              (click)="cancelEdit('influence-conditions')"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Measuring Equipments Block -->
+  <div class="data-block">
+    <div class="block-header">
+      <h4>Measuring Equipments</h4>
+      <div class="block-actions">
+        <button class="add-btn" (click)="addMeasuringEquipment()">
+          <i class="material-icons">add</i>
+          Agregar Equipo
+        </button>
+        <button
+          class="edit-btn"
+          (click)="toggleEdit('measuring-equipments')"
+          [class.active]="isEditing('measuring-equipments')"
+        >
+          <i class="material-icons">{{
+            isEditing("measuring-equipments") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("measuring-equipments") ? "Cancelar" : "Editar" }}
+        </button>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <!-- View Mode -->
+      <div *ngIf="!isEditing('measuring-equipments')" class="equipments-view">
+        <div class="item-card" *ngFor="let equipment of measuringEquipments">
+          <div class="item-header">
+            <h5>{{ equipment.name || "Sin nombre" }}</h5>
+            <span class="ref-type-badge">{{ equipment.refType }}</span>
+          </div>
+          <div class="identifications">
+            <h6>Identifications:</h6>
+            <div class="identification-grid">
+              <div
+                class="identification-item"
+                *ngFor="let id of equipment.identifications"
+              >
+                <span
+                  ><strong>{{ id.issuer }}</strong></span
+                >
+                <span>{{ id.value }}</span>
+                <span>{{ id.name }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Mode -->
+      <div *ngIf="isEditing('measuring-equipments')" class="equipments-edit">
+        <div class="edit-form">
+          <div
+            class="item-form"
+            *ngFor="
+              let equipment of measuringEquipments;
+              let equipmentIndex = index
+            "
+          >
+            <div class="item-form-header">
+              <h5>Equipo {{ equipmentIndex + 1 }}</h5>
+              <button
+                class="remove-btn"
+                (click)="removeMeasuringEquipment(equipment.id)"
+              >
+                <i class="material-icons">delete</i>
+                Eliminar
+              </button>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Name:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="equipment.name"
+                  placeholder="Ingrese el nombre del equipo"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>RefType:</label>
+                <select [(ngModel)]="equipment.refType">
+                  <option value="">Seleccione el tipo de referencia</option>
+                  <option value="basic_standardUsed">basic_standardUsed</option>
+                  <option value="basic_auxiliaryEquipment">
+                    basic_auxiliaryEquipment
+                  </option>
+                  <option value="basic_measuringInstrument">
+                    basic_measuringInstrument
+                  </option>
+                  <option value="other">other</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Identifications Section -->
+            <div class="identifications-section">
+              <div class="identifications-header">
+                <h6>Identifications:</h6>
+                <button
+                  class="add-sub-btn"
+                  (click)="addIdentificationToEquipment(equipmentIndex)"
+                >
+                  <i class="material-icons">add</i>
+                  Agregar ID
+                </button>
+              </div>
+              <div
+                class="identification-form"
+                *ngFor="
+                  let id of equipment.identifications;
+                  let idIndex = index
+                "
+              >
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label>Issuer:</label>
+                    <input
+                      type="text"
+                      [(ngModel)]="id.issuer"
+                      placeholder="Ingrese el emisor"
+                    />
+                  </div>
+
+                  <div class="form-group">
+                    <label>Value:</label>
+                    <input
+                      type="text"
+                      [(ngModel)]="id.value"
+                      placeholder="Ingrese el valor"
+                    />
+                  </div>
+
+                  <div class="form-group">
+                    <label>Name:</label>
+                    <input
+                      type="text"
+                      [(ngModel)]="id.name"
+                      placeholder="Ingrese el nombre"
+                    />
+                  </div>
+
+                  <div class="form-group delete-action">
+                    <button
+                      class="remove-btn"
+                      (click)="
+                        removeIdentificationFromEquipment(
+                          equipmentIndex,
+                          idIndex
+                        )
+                      "
+                    >
+                      <i class="material-icons">delete</i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button
+              class="save-btn"
+              (click)="saveBlock('measuring-equipments')"
+            >
+              Guardar
+            </button>
+            <button
+              class="cancel-btn"
+              (click)="cancelEdit('measuring-equipments')"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SF PT-XX Block -->
+  <div class="data-block">
+    <ng-container [ngSwitch]="coreData.pt_id">
+      <div *ngSwitchCase="'PT-23'">
+        <app-pt23-results></app-pt23-results>
+      </div>
+      <div *ngSwitchCase="'PT-24'">
+        <app-pt24-results></app-pt24-results>
+      </div>
+      <div *ngSwitchDefault>
+        <p>Seleccione un PT válido para mostrar los cálculos.</p>
+      </div>
+    </ng-container>
+  </div>
+
+  <!-- Results Block -->
+  <div class="data-block">
+    <div class="block-header">
+      <h4>Results</h4>
+      <div class="block-actions">
+        <button class="add-btn" (click)="addResult()">
+          <i class="material-icons">add</i>
+          Agregar Resultado
+        </button>
+        <button
+          class="edit-btn"
+          (click)="toggleEdit('results')"
+          [class.active]="isEditing('results')"
+        >
+          <i class="material-icons">{{
+            isEditing("results") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("results") ? "Cancelar" : "Editar" }}
+        </button>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <!-- View Mode -->
+      <div *ngIf="!isEditing('results')" class="results-view">
+        <div class="item-card" *ngFor="let result of results">
+          <div class="item-header">
+            <h5>{{ result.name || "Sin nombre" }}</h5>
+            <span class="ref-type-badge">{{ result.refType }}</span>
+          </div>
+          <div class="identifications">
+            <h6>Data:</h6>
+            <div class="identification-grid">
+              <div class="identification-item" *ngFor="let data of result.data">
+                <span
+                  ><strong>{{ data.refType }}</strong></span
+                >
+                <span>{{ data.name }}</span>
+                <span *ngIf="data.dataType === 'realListXMLList'">{{
+                  data.valueXMLList
+                }}</span>
+                <span *ngIf="data.dataType === 'real'">{{ data.value }}</span>
+                <span *ngIf="data.dataType === 'realListXMLList'">{{
+                  data.unitXMLList
+                }}</span>
+                <span *ngIf="data.dataType === 'real'">{{ data.unit }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Mode -->
+      <div *ngIf="isEditing('results')" class="results-edit">
+        <div class="edit-form">
+          <div
+            class="item-form"
+            *ngFor="let result of results; let resultIndex = index"
+          >
+            <div class="item-form-header">
+              <h5>Resultado {{ resultIndex + 1 }}</h5>
+              <button class="remove-btn" (click)="removeResult(result.id)">
+                <i class="material-icons">delete</i>
+                Eliminar
+              </button>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Name:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="result.name"
+                  placeholder="Ingrese el nombre del resultado"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>RefType:</label>
+                <select [(ngModel)]="result.refType">
+                  <option value="">Seleccione el tipo de referencia</option>
+                  <option value="hv_scaleFactor">hv_scaleFactor</option>
+                  <option value="hv_linearity">hv_linearity</option>
+                  <option value="basic_measurement">basic_measurement</option>
+                  <option value="other">other</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Data Section -->
+            <div class="identifications-section">
+              <div class="identifications-header">
+                <h6>Data:</h6>
+                <button
+                  class="add-sub-btn"
+                  (click)="addDataToResult(resultIndex)"
+                >
+                  <i class="material-icons">add</i>
+                  Agregar Data
+                </button>
+              </div>
+              <div
+                class="identification-form"
+                *ngFor="let data of result.data; let dataIndex = index"
+              >
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label>RefType:</label>
+                    <input
+                      type="text"
+                      [(ngModel)]="data.refType"
+                      placeholder="Ingrese el refType"
+                    />
+                  </div>
+
+                  <div class="form-group">
+                    <label>Name:</label>
+                    <input
+                      type="text"
+                      [(ngModel)]="data.name"
+                      placeholder="Ingrese el nombre"
+                    />
+                  </div>
+
+                  <div class="form-group">
+                    <label>Data Type:</label>
+                    <select [(ngModel)]="data.dataType">
+                      <option value="realListXMLList">
+                        realListXMLList (Lista)
+                      </option>
+                      <option value="real">real (Valor único)</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group delete-action">
+                    <button
+                      class="remove-btn"
+                      (click)="removeDataFromResult(resultIndex, dataIndex)"
+                    >
+                      <i class="material-icons">delete</i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Conditional fields based on data type -->
+                <div
+                  class="form-grid"
+                  *ngIf="data.dataType === 'realListXMLList'"
+                >
+                  <div class="form-group">
+                    <label>Value XML List:</label>
+                    <textarea
+                      [(ngModel)]="data.valueXMLList"
+                      placeholder="Ingrese los valores separados por espacios"
+                      rows="2"
+                    ></textarea>
+                  </div>
+
+                  <div class="form-group">
+                    <label>Unit XML List:</label>
+                    <select [(ngModel)]="data.unitXMLList">
+                      <option value="">Seleccione la unidad</option>
+                      <option value="\percent">\percent</option>
+                      <option value="\one">\one</option>
+                      <option value="\kilovolt">\kilovolt</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-grid" *ngIf="data.dataType === 'real'">
+                  <div class="form-group">
+                    <label>Value:</label>
+                    <input
+                      type="text"
+                      [(ngModel)]="data.value"
+                      placeholder="Ingrese el valor"
+                    />
+                  </div>
+
+                  <div class="form-group">
+                    <label>Unit:</label>
+                    <select [(ngModel)]="data.unit">
+                      <option value="">Seleccione la unidad</option>
+                      <option value="\percent">\percent</option>
+                      <option value="\one">\one</option>
+                      <option value="\kilovolt">\kilovolt</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="save-btn" (click)="saveBlock('results')">
+              Guardar
+            </button>
+            <button class="cancel-btn" (click)="cancelEdit('results')">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

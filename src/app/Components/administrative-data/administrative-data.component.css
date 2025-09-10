@@ -1,0 +1,418 @@
+.administrative-data-container {
+  padding: 30px;
+  height: 100%;
+}
+
+.section-header {
+  margin-bottom: 30px;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 15px;
+}
+
+.section-header h3 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 1.8em;
+}
+
+.section-header p {
+  margin: 0;
+  color: #666;
+  font-size: 1em;
+}
+
+/* Data Block Styles */
+.data-block {
+  margin-bottom: 30px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.block-header {
+  background: #f8f9fa;
+  padding: 15px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.block-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 1.2em;
+}
+
+.block-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.edit-btn,
+.add-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: all 0.3s ease;
+}
+
+.edit-btn {
+  background: #2196f3;
+  color: white;
+}
+
+.edit-btn:hover {
+  background: #1976d2;
+}
+
+.edit-btn.active {
+  background: #f44336;
+}
+
+.add-btn {
+  background: #4caf50;
+  color: white;
+}
+
+.add-btn:hover {
+  background: #45a049;
+}
+
+.block-content {
+  padding: 20px;
+}
+
+/* Table Styles */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.data-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #333;
+}
+
+.data-table td.label {
+  font-weight: 500;
+  color: #666;
+  width: 30%;
+  background: #f8f9fa;
+}
+
+.data-table tr:hover {
+  background: #f5f5f5;
+}
+
+/* Form Styles */
+.edit-form {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 6px;
+  margin-top: 10px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1em;
+  transition: border-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+/* Checkbox specific styling */
+.form-group input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  transform: scale(1.3);
+  align-self: flex-start;
+  margin-right: auto;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.form-group input[type="checkbox"]:focus {
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.3);
+  border-radius: 2px;
+}
+
+/* Dynamic Item Styles */
+.identification-item,
+.responsible-item {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 15px;
+  align-items: end;
+  margin-bottom: 15px;
+  padding: 15px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.responsible-item {
+  grid-template-columns: 1fr 1fr 1fr 1fr auto;
+}
+
+.delete-action {
+  display: flex;
+  align-items: end;
+  margin-bottom: 0 !important;
+}
+
+.remove-btn {
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+}
+
+.remove-btn:hover {
+  background: #d32f2f;
+}
+
+.remove-btn i {
+  font-size: 1.2em;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.save-btn,
+.cancel-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1em;
+  transition: all 0.3s ease;
+}
+
+.save-btn {
+  background: #4caf50;
+  color: white;
+}
+
+.save-btn:hover {
+  background: #45a049;
+}
+
+.cancel-btn {
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+}
+
+.cancel-btn:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+/* Non-editable block styles */
+.data-block.non-editable {
+  opacity: 0.9;
+  background: #fafafa;
+}
+
+.data-block.non-editable .block-header {
+  background: #f0f0f0;
+}
+
+.readonly-badge {
+  display: inline-block;
+  background: #ff9800;
+  color: white;
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 10px;
+  font-weight: normal;
+}
+
+.no-edit-message {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #666;
+  font-size: 0.9em;
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.no-edit-message i {
+  font-size: 1.1em;
+  color: #999;
+}
+
+/* Enhanced styles for locked content */
+.data-block.non-editable .data-table {
+  background: #fafafa;
+}
+
+.data-block.non-editable .data-table td.label {
+  background: #f0f0f0;
+}
+
+.data-block.non-editable .data-table tr:hover {
+  background: #f5f5f5;
+}
+
+/* Multiselect dropdown styles */
+.fixed-width-dropdown {
+  width: 100% !important;
+}
+
+.fixed-width-dropdown ::ng-deep .multiselect-dropdown {
+  width: 100% !important;
+  position: relative;
+}
+
+.fixed-width-dropdown ::ng-deep .dropdown-btn {
+  width: 100% !important;
+  min-height: 40px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1em;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.fixed-width-dropdown ::ng-deep .dropdown-btn:focus {
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.fixed-width-dropdown ::ng-deep .dropdown-list {
+  width: 100% !important;
+  max-height: 200px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  position: absolute;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.fixed-width-dropdown ::ng-deep .dropdown-list ul {
+  max-height: none !important;
+  overflow: visible !important;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fixed-width-dropdown ::ng-deep .dropdown-list li {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.fixed-width-dropdown ::ng-deep .dropdown-list li:hover {
+  background-color: #f5f5f5;
+}
+
+.fixed-width-dropdown ::ng-deep .dropdown-list li:last-child {
+  border-bottom: none;
+}
+
+/* Prevent parent containers from creating additional scrollbars */
+.form-group {
+  overflow: visible !important;
+}
+
+.responsible-item {
+  overflow: visible !important;
+}
+
+.edit-form {
+  overflow: visible !important;
+}
+
+@media (max-width: 768px) {
+  .administrative-data-container {
+    padding: 20px;
+  }
+
+  .block-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .block-actions {
+    align-self: stretch;
+  }
+
+  .identification-item,
+  .responsible-item {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .delete-action {
+    justify-content: center;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .save-btn,
+  .cancel-btn {
+    width: 100%;
+  }
+}

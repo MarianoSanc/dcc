@@ -1,0 +1,278 @@
+.statements-container {
+  padding: 30px;
+  height: 100%;
+}
+
+.section-header {
+  margin-bottom: 30px;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.section-header div {
+  flex: 1;
+}
+
+.section-header h3 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 1.8em;
+}
+
+.section-header p {
+  margin: 0;
+  color: #666;
+  font-size: 1em;
+}
+
+.add-statement-btn {
+  background: #4caf50;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1em;
+  transition: all 0.3s ease;
+}
+
+.add-statement-btn:hover {
+  background: #45a049;
+  transform: translateY(-1px);
+}
+
+.statements-list {
+  display: grid;
+  gap: 20px;
+}
+
+/* Data Block Styles */
+.data-block {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.block-header {
+  background: #f8f9fa;
+  padding: 15px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.block-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 1.2em;
+}
+
+.statement-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.edit-btn,
+.save-btn,
+.cancel-btn,
+.remove-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: all 0.3s ease;
+}
+
+.edit-btn {
+  background: #2196f3;
+  color: white;
+}
+
+.edit-btn:hover {
+  background: #1976d2;
+}
+
+.save-btn {
+  background: #4caf50;
+  color: white;
+}
+
+.save-btn:hover {
+  background: #45a049;
+}
+
+.cancel-btn {
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+}
+
+.cancel-btn:hover {
+  background: #e0e0e0;
+}
+
+.remove-btn {
+  background: #f44336;
+  color: white;
+}
+
+.remove-btn:hover {
+  background: #d32f2f;
+}
+
+.block-content {
+  padding: 20px;
+}
+
+/* Table Styles */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+}
+
+.data-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+  vertical-align: top;
+}
+
+.data-table td.label {
+  font-weight: 500;
+  color: #666;
+  width: 20%;
+  background: #f8f9fa;
+}
+
+.data-table tr:hover {
+  background: #f5f5f5;
+}
+
+.content-cell {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-width: 0;
+}
+
+/* Form Styles */
+.edit-form {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 6px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1em;
+  transition: border-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  background: white;
+  border: 2px dashed #e0e0e0;
+  border-radius: 8px;
+}
+
+.empty-content {
+  text-align: center;
+  color: #666;
+}
+
+.empty-content i {
+  font-size: 4em;
+  color: #ccc;
+  margin-bottom: 15px;
+}
+
+.empty-content h4 {
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.empty-content p {
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .statements-container {
+    padding: 20px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .block-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .statement-actions {
+    align-self: stretch;
+  }
+
+  .edit-btn,
+  .save-btn,
+  .cancel-btn,
+  .remove-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .data-table td.label {
+    width: 30%;
+  }
+}

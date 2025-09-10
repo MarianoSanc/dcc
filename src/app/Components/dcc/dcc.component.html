@@ -1,0 +1,196 @@
+<div class="dcc-container">
+  <!-- Initial Options Screen -->
+  <div *ngIf="showInitialOptions" class="initial-options">
+    <div class="options-content">
+      <h1>Gestión de DCC</h1>
+      <p>Selecciona una opción para continuar:</p>
+
+      <div class="option-buttons">
+        <button class="option-btn create-btn" (click)="openCreateDccModal()">
+          <i class="material-icons">add_circle</i>
+          <span>Crear DCC</span>
+        </button>
+        <button class="option-btn load-dcc-btn" (click)="openDccSelectModal()">
+          <i class="material-icons">folder_open</i>
+          <span>Cargar DCC</span>
+        </button>
+        <button class="option-btn load-btn" (click)="loadExistingDCC()">
+          <i class="material-icons">upload_file</i>
+          <span>Cargar XML</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para crear DCC -->
+  <div
+    *ngIf="showCreateDccModal"
+    class="modal-backdrop"
+    (click)="closeCreateDccModal()"
+  >
+    <div
+      class="modal-content create-dcc-modal"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h3>Crear nuevo DCC</h3>
+        <button class="close-btn" (click)="closeCreateDccModal()">
+          <i class="material-icons">close</i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="ptId">PT ID:</label>
+          <select id="ptId" [(ngModel)]="newDccPtId" class="dcc-select">
+            <option value="">Seleccione PT ID</option>
+            <option value="PT-23">PT-23</option>
+            <option value="PT-24">PT-24</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="certNumber">Certificate Number:</label>
+          <input
+            id="certNumber"
+            type="text"
+            [(ngModel)]="newDccCertificateNumber"
+            class="dcc-select"
+            placeholder="Ingrese el número de certificado"
+          />
+        </div>
+        <div class="form-actions" style="margin-top: 20px">
+          <button
+            class="save-btn"
+            [disabled]="!newDccPtId || !newDccCertificateNumber"
+            (click)="startNewDcc()"
+          >
+            Empezar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para seleccionar DCC existente -->
+  <div
+    *ngIf="showDccSelect"
+    class="modal-backdrop"
+    (click)="closeDccSelectModal()"
+  >
+    <div
+      class="modal-content dcc-select-modal"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h3>Cargar DCC existente</h3>
+        <button class="close-btn" (click)="closeDccSelectModal()">
+          <i class="material-icons">close</i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <label for="existingDccSelect" class="dcc-select-label">
+          Seleccione un DCC guardado:
+        </label>
+        <select
+          id="existingDccSelect"
+          [(ngModel)]="selectedDccId"
+          (change)="onSelectExistingDcc()"
+          class="dcc-select"
+        >
+          <option value="">Seleccione un DCC...</option>
+          <option *ngFor="let dcc of existingDccList" [value]="dcc.id">
+            {{ dcc.id }}
+          </option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload Modal -->
+  <div
+    *ngIf="showUploadModal"
+    class="modal-backdrop"
+    (click)="closeUploadModal()"
+  >
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Cargar archivo DCC</h3>
+        <button class="close-btn" (click)="closeUploadModal()">
+          <i class="material-icons">close</i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="upload-area">
+          <i class="material-icons">cloud_upload</i>
+          <p>Selecciona un archivo XML</p>
+          <input
+            type="file"
+            accept=".xml"
+            (change)="onFileSelected($event)"
+            class="file-input"
+            id="file-upload"
+            #fileInput
+          />
+
+          <label for="file-upload" class="upload-btn">
+            Seleccionar archivo
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Interface with Tabs -->
+  <div *ngIf="showMainInterface" class="main-interface">
+    <!-- Header with back button -->
+    <div class="main-header">
+      <button class="back-btn" (click)="backToOptions()">
+        <i class="material-icons">arrow_back</i>
+        Volver
+      </button>
+      <h2>Digital Calibration Certificate</h2>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+      <div class="tabs-container">
+        <button
+          *ngFor="let tab of tabs"
+          class="tab-btn"
+          [class.active]="activeTab === tab.id"
+          (click)="selectTab(tab.id)"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- Administrative Data Tab -->
+      <div *ngIf="activeTab === 'administrative-data'" class="tab-panel">
+        <app-administrative-data></app-administrative-data>
+      </div>
+
+      <!-- Items Tab -->
+      <div *ngIf="activeTab === 'items'" class="tab-panel">
+        <app-items></app-items>
+      </div>
+
+      <!-- Statements Tab -->
+      <div *ngIf="activeTab === 'statements'" class="tab-panel">
+        <app-statements></app-statements>
+      </div>
+
+      <!-- Results Tab -->
+      <div *ngIf="activeTab === 'results'" class="tab-panel">
+        <app-results></app-results>
+      </div>
+
+      <!-- Preview Tab -->
+      <div *ngIf="activeTab === 'preview'" class="tab-panel">
+        <app-preview></app-preview>
+      </div>
+    </div>
+  </div>
+</div>

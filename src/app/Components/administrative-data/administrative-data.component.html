@@ -1,0 +1,736 @@
+<div class="administrative-data-container">
+  <div class="section-header">
+    <h3>Administrative Data</h3>
+    <p>Información administrativa del certificado de calibración digital</p>
+  </div>
+
+  <!-- Software for DCC creation Block -->
+  <div class="data-block" [class.non-editable]="!isBlockEditable('software')">
+    <div class="block-header">
+      <h4>
+        Software for DCC creation
+        <span *ngIf="!isBlockEditable('software')" class="readonly-badge"
+          >Solo lectura</span
+        >
+      </h4>
+      <div class="block-actions">
+        <button
+          *ngIf="isBlockEditable('software')"
+          class="edit-btn"
+          (click)="toggleEdit('software')"
+          [class.active]="isEditing('software')"
+        >
+          <i class="material-icons">{{
+            isEditing("software") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("software") ? "Cancelar" : "Editar" }}
+        </button>
+        <span *ngIf="!isBlockEditable('software')" class="no-edit-message">
+          <i class="material-icons">lock</i>
+          No editable
+        </span>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <table class="data-table" *ngIf="!isEditing('software')">
+        <tr>
+          <td class="label">Name:</td>
+          <td>{{ softwareData.name }}</td>
+        </tr>
+        <tr>
+          <td class="label">Version:</td>
+          <td>{{ softwareData.version }}</td>
+        </tr>
+        <tr>
+          <td class="label">Type:</td>
+          <td>{{ softwareData.type }}</td>
+        </tr>
+        <tr>
+          <td class="label">Description:</td>
+          <td>{{ softwareData.description }}</td>
+        </tr>
+      </table>
+
+      <div class="edit-form" *ngIf="isEditing('software')">
+        <div class="form-group">
+          <label>Name:</label>
+          <input type="text" [(ngModel)]="softwareData.name" />
+        </div>
+        <div class="form-group">
+          <label>Version:</label>
+          <input type="text" [(ngModel)]="softwareData.version" />
+        </div>
+        <div class="form-group">
+          <label>Type:</label>
+          <input type="text" [(ngModel)]="softwareData.type" />
+        </div>
+        <div class="form-group">
+          <label>Description:</label>
+          <input type="text" [(ngModel)]="softwareData.description" />
+        </div>
+        <div class="form-actions">
+          <button class="save-btn" (click)="saveBlock('software')">
+            Guardar
+          </button>
+          <button class="cancel-btn" (click)="cancelEdit('software')">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Core Data Block -->
+  <div class="data-block" [class.non-editable]="!isBlockEditable('core')">
+    <div class="block-header">
+      <h4>
+        Core Data
+        <span *ngIf="!isBlockEditable('core')" class="readonly-badge"
+          >Solo lectura</span
+        >
+      </h4>
+      <div class="block-actions">
+        <button
+          *ngIf="isBlockEditable('core')"
+          class="edit-btn"
+          (click)="toggleEdit('core')"
+          [class.active]="isEditing('core')"
+        >
+          <i class="material-icons">{{
+            isEditing("core") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("core") ? "Cancelar" : "Editar" }}
+        </button>
+        <span *ngIf="!isBlockEditable('core')" class="no-edit-message">
+          <i class="material-icons">lock</i>
+          No editable
+        </span>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <table class="data-table" *ngIf="!isEditing('core')">
+        <tr>
+          <td class="label">PT ID:</td>
+          <td>{{ coreData.pt_id }}</td>
+        </tr>
+        <tr>
+          <td class="label">Country Code:</td>
+          <td>{{ coreData.country_code }}</td>
+        </tr>
+        <tr>
+          <td class="label">Language:</td>
+          <td>{{ coreData.language }}</td>
+        </tr>
+        <tr>
+          <td class="label">Certificate Number:</td>
+          <td>{{ coreData.certificate_number || "No asignado" }}</td>
+        </tr>
+        <tr>
+          <td class="label">Receipt Date:</td>
+          <td>
+            {{
+              coreData.receipt_date
+                ? (coreData.receipt_date | date : "dd/MM/yyyy")
+                : "No asignado"
+            }}
+          </td>
+        </tr>
+
+        <tr>
+          <td class="label">Date of calibration:</td>
+          <td>
+            {{
+              coreData.performance_date
+                ? (coreData.performance_date | date : "dd/MM/yyyy")
+                : "No asignado"
+            }}
+          </td>
+        </tr>
+        <tr>
+          <td class="label">Is Range Date:</td>
+          <td>{{ coreData.is_range_date ? "Sí" : "No" }}</td>
+        </tr>
+        <tr *ngIf="coreData.is_range_date">
+          <td class="label">End Calibration Date:</td>
+          <td>
+            {{
+              coreData.end_performance_date
+                ? (coreData.end_performance_date | date : "dd/MM/yyyy")
+                : "No asignado"
+            }}
+          </td>
+        </tr>
+        <tr>
+          <td class="label">Performance Location:</td>
+          <td>{{ coreData.performance_localition || "No asignado" }}</td>
+        </tr>
+        <tr>
+          <td class="label">Issue Date:</td>
+          <td>
+            {{
+              coreData.issue_date
+                ? (coreData.issue_date | date : "dd/MM/yyyy")
+                : "No asignado"
+            }}
+          </td>
+        </tr>
+      </table>
+
+      <div class="edit-form" *ngIf="isEditing('core')">
+        <div class="form-group">
+          <label>PT ID:</label>
+          <select [(ngModel)]="coreData.pt_id">
+            <option value="PT-23">PT-23</option>
+            <option value="PT-24">PT-24</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Country Code:</label>
+          <input type="text" [(ngModel)]="coreData.country_code" />
+        </div>
+        <div class="form-group">
+          <label>Language:</label>
+          <input type="text" [(ngModel)]="coreData.language" />
+        </div>
+        <div class="form-group">
+          <label>Certificate Number:</label>
+          <input
+            type="text"
+            [(ngModel)]="coreData.certificate_number"
+            placeholder="Ingrese el número de certificado"
+          />
+        </div>
+        <div class="form-group">
+          <label>Receipt Date:</label>
+          <input
+            type="date"
+            [(ngModel)]="coreData.receipt_date"
+            placeholder="Seleccione la fecha de recepción"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Calibration Date:</label>
+          <input
+            type="date"
+            [(ngModel)]="coreData.performance_date"
+            (ngModelChange)="onDateChange()"
+            placeholder="Seleccione la fecha de inicio de calibración"
+          />
+        </div>
+        <div class="form-group">
+          <label>Is Range Date:</label>
+          <input
+            type="checkbox"
+            [(ngModel)]="coreData.is_range_date"
+            (ngModelChange)="onIsRangeDateChange()"
+          />
+        </div>
+        <div class="form-group" *ngIf="coreData.is_range_date">
+          <label>End Calibration Date:</label>
+          <input
+            type="date"
+            [(ngModel)]="coreData.end_performance_date"
+            (ngModelChange)="onDateChange()"
+            placeholder="Seleccione la fecha de fin de calibración"
+          />
+        </div>
+        <div class="form-group">
+          <label>Performance Location:</label>
+          <select [(ngModel)]="coreData.performance_localition">
+            <option value="">Seleccione la ubicación</option>
+            <option value="customer">Customer</option>
+            <option value="customerBranch">Customer Branch</option>
+            <option value="laboratory">Laboratory</option>
+            <option value="laboratoryBranch">Laboratory Branch</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Issue Date:</label>
+          <input
+            type="date"
+            [(ngModel)]="coreData.issue_date"
+            placeholder="Seleccione la fecha de emisión"
+          />
+        </div>
+        <div class="form-actions">
+          <button class="save-btn" (click)="saveBlock('core')">Guardar</button>
+          <button class="cancel-btn" (click)="cancelEdit('core')">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Identifications Block -->
+  <div
+    class="data-block"
+    [class.non-editable]="!isBlockEditable('identifications')"
+  >
+    <div class="block-header">
+      <h4>
+        Identifications
+        <span *ngIf="!isBlockEditable('identifications')" class="readonly-badge"
+          >Solo lectura</span
+        >
+      </h4>
+      <div class="block-actions">
+        <button
+          *ngIf="isBlockEditable('identifications')"
+          class="add-btn"
+          (click)="addIdentification()"
+        >
+          <i class="material-icons">add</i>
+          Agregar
+        </button>
+        <button
+          *ngIf="isBlockEditable('identifications')"
+          class="edit-btn"
+          (click)="toggleEdit('identifications')"
+          [class.active]="isEditing('identifications')"
+        >
+          <i class="material-icons">{{
+            isEditing("identifications") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("identifications") ? "Cancelar" : "Editar" }}
+        </button>
+        <span
+          *ngIf="!isBlockEditable('identifications')"
+          class="no-edit-message"
+        >
+          <i class="material-icons">lock</i>
+          No editable
+        </span>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <table class="data-table" *ngIf="!isEditing('identifications')">
+        <thead>
+          <tr>
+            <th>Issuer</th>
+            <th>Value</th>
+            <th>Name</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of identifications">
+            <td>{{ item.issuer }}</td>
+            <td>{{ item.value }}</td>
+            <td>{{ item.name }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="edit-form" *ngIf="isEditing('identifications')">
+        <div
+          class="identification-item"
+          *ngFor="let item of identifications; let i = index"
+        >
+          <div class="form-group">
+            <label>Issuer:</label>
+            <select [(ngModel)]="item.issuer">
+              <option value="">Seleccione el emisor</option>
+              <option value="Manufacturer">Manufacturer</option>
+              <option value="Calibration Laboratory">
+                Calibration Laboratory
+              </option>
+              <option value="Customer">Customer</option>
+              <option value="Owner">Owner</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Value:</label>
+            <input type="text" [(ngModel)]="item.value" />
+          </div>
+          <div class="form-group">
+            <label>Name:</label>
+            <input type="text" [(ngModel)]="item.name" />
+          </div>
+          <div class="form-group delete-action">
+            <button class="remove-btn" (click)="removeIdentification(i)">
+              <i class="material-icons">delete</i>
+            </button>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="save-btn" (click)="saveBlock('identifications')">
+            Guardar
+          </button>
+          <button class="cancel-btn" (click)="cancelEdit('identifications')">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calibration Laboratory Block -->
+  <div class="data-block" [class.non-editable]="!isBlockEditable('laboratory')">
+    <div class="block-header">
+      <h4>
+        Calibration Laboratory
+        <span *ngIf="!isBlockEditable('laboratory')" class="readonly-badge"
+          >Solo lectura</span
+        >
+      </h4>
+      <div class="block-actions">
+        <button
+          *ngIf="isBlockEditable('laboratory')"
+          class="edit-btn"
+          (click)="toggleEdit('laboratory')"
+          [class.active]="isEditing('laboratory')"
+        >
+          <i class="material-icons">{{
+            isEditing("laboratory") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("laboratory") ? "Cancelar" : "Editar" }}
+        </button>
+        <span *ngIf="!isBlockEditable('laboratory')" class="no-edit-message">
+          <i class="material-icons">lock</i>
+          No editable
+        </span>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <table class="data-table" *ngIf="!isEditing('laboratory')">
+        <tr>
+          <td class="label">Name:</td>
+          <td>{{ laboratoryData.name }}</td>
+        </tr>
+        <tr>
+          <td class="label">Email:</td>
+          <td>{{ laboratoryData.email }}</td>
+        </tr>
+        <tr>
+          <td class="label">Phone:</td>
+          <td>{{ laboratoryData.phone }}</td>
+        </tr>
+        <tr>
+          <td class="label">Fax:</td>
+          <td>{{ laboratoryData.fax }}</td>
+        </tr>
+        <tr>
+          <td class="label">Postal Code:</td>
+          <td>{{ laboratoryData.postal_code }}</td>
+        </tr>
+        <tr>
+          <td class="label">City:</td>
+          <td>{{ laboratoryData.city }}</td>
+        </tr>
+        <tr>
+          <td class="label">Street:</td>
+          <td>{{ laboratoryData.street }}</td>
+        </tr>
+        <tr>
+          <td class="label">Street Number:</td>
+          <td>{{ laboratoryData.street_number }}</td>
+        </tr>
+        <tr>
+          <td class="label">State:</td>
+          <td>{{ laboratoryData.state }}</td>
+        </tr>
+        <tr>
+          <td class="label">Country:</td>
+          <td>{{ laboratoryData.country }}</td>
+        </tr>
+      </table>
+
+      <div class="edit-form" *ngIf="isEditing('laboratory')">
+        <div class="form-group">
+          <label>Name:</label>
+          <input type="text" [(ngModel)]="laboratoryData.name" />
+        </div>
+        <div class="form-group">
+          <label>Email:</label>
+          <input type="email" [(ngModel)]="laboratoryData.email" />
+        </div>
+        <div class="form-group">
+          <label>Phone:</label>
+          <input type="text" [(ngModel)]="laboratoryData.phone" />
+        </div>
+        <div class="form-group">
+          <label>Fax:</label>
+          <input type="text" [(ngModel)]="laboratoryData.fax" />
+        </div>
+        <div class="form-group">
+          <label>Postal Code:</label>
+          <input type="text" [(ngModel)]="laboratoryData.postal_code" />
+        </div>
+        <div class="form-group">
+          <label>City:</label>
+          <input type="text" [(ngModel)]="laboratoryData.city" />
+        </div>
+        <div class="form-group">
+          <label>Street:</label>
+          <input type="text" [(ngModel)]="laboratoryData.street" />
+        </div>
+        <div class="form-group">
+          <label>Street Number:</label>
+          <input type="text" [(ngModel)]="laboratoryData.street_number" />
+        </div>
+        <div class="form-group">
+          <label>State:</label>
+          <input type="text" [(ngModel)]="laboratoryData.state" />
+        </div>
+        <div class="form-group">
+          <label>Country:</label>
+          <input type="text" [(ngModel)]="laboratoryData.country" />
+        </div>
+        <div class="form-actions">
+          <button class="save-btn" (click)="saveBlock('laboratory')">
+            Guardar
+          </button>
+          <button class="cancel-btn" (click)="cancelEdit('laboratory')">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Responsible Persons Block -->
+  <div
+    class="data-block"
+    [class.non-editable]="!isBlockEditable('responsible')"
+  >
+    <div class="block-header">
+      <h4>
+        Responsible Persons
+        <span *ngIf="!isBlockEditable('responsible')" class="readonly-badge"
+          >Solo lectura</span
+        >
+      </h4>
+      <div class="block-actions">
+        <button
+          *ngIf="isBlockEditable('responsible')"
+          class="add-btn"
+          (click)="addResponsiblePerson()"
+        >
+          <i class="material-icons">add</i>
+          Agregar
+        </button>
+        <button
+          *ngIf="isBlockEditable('responsible')"
+          class="edit-btn"
+          (click)="toggleEdit('responsible')"
+          [class.active]="isEditing('responsible')"
+        >
+          <i class="material-icons">{{
+            isEditing("responsible") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("responsible") ? "Cancelar" : "Editar" }}
+        </button>
+        <span *ngIf="!isBlockEditable('responsible')" class="no-edit-message">
+          <i class="material-icons">lock</i>
+          No editable
+        </span>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <table class="data-table" *ngIf="!isEditing('responsible')">
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let person of responsiblePersons">
+            <td>{{ person.role }}</td>
+            <td>{{ getResponsiblePersonDisplayName(person) }}</td>
+            <td>{{ person.email }}</td>
+            <td>{{ person.phone }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="edit-form" *ngIf="isEditing('responsible')">
+        <div
+          class="responsible-item"
+          *ngFor="let person of responsiblePersons; let i = index"
+        >
+          <div class="form-group">
+            <label>Role:</label>
+            <select [(ngModel)]="person.role">
+              <option value="" disabled selected hidden>
+                Seleccione el rol
+              </option>
+              <option value="Calibration Technician">
+                Calibration Technician
+              </option>
+              <option value="Calibration Engineer">Calibration Engineer</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Name:</label>
+            <ng-multiselect-dropdown
+              class="fixed-width-dropdown"
+              [settings]="dropdownuser"
+              [data]="listauser"
+              [(ngModel)]="person.name"
+              (onSelect)="onUserSelect($event, i)"
+              (onDeSelect)="person.name = []"
+            >
+            </ng-multiselect-dropdown>
+          </div>
+          <div class="form-group">
+            <label>Email:</label>
+            <input type="email" [(ngModel)]="person.email" />
+          </div>
+          <div class="form-group">
+            <label>Phone:</label>
+            <input type="text" [(ngModel)]="person.phone" />
+          </div>
+          <div class="form-group delete-action">
+            <button class="remove-btn" (click)="removeResponsiblePerson(i)">
+              <i class="material-icons">delete</i>
+            </button>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="save-btn" (click)="saveBlock('responsible')">
+            Guardar
+          </button>
+          <button class="cancel-btn" (click)="cancelEdit('responsible')">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customer Block -->
+  <div class="data-block" [class.non-editable]="!isBlockEditable('customer')">
+    <div class="block-header">
+      <h4>
+        Customer
+        <span *ngIf="!isBlockEditable('customer')" class="readonly-badge"
+          >Solo lectura</span
+        >
+      </h4>
+      <div class="block-actions">
+        <button
+          *ngIf="isBlockEditable('customer')"
+          class="edit-btn"
+          (click)="toggleEdit('customer')"
+          [class.active]="isEditing('customer')"
+        >
+          <i class="material-icons">{{
+            isEditing("customer") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("customer") ? "Cancelar" : "Editar" }}
+        </button>
+        <span *ngIf="!isBlockEditable('customer')" class="no-edit-message">
+          <i class="material-icons">lock</i>
+          No editable
+        </span>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <table class="data-table" *ngIf="!isEditing('customer')">
+        <tr>
+          <td class="label">Name:</td>
+          <td>{{ customerData.name }}</td>
+        </tr>
+        <tr>
+          <td class="label">Email:</td>
+          <td>{{ customerData.email }}</td>
+        </tr>
+        <tr>
+          <td class="label">Phone:</td>
+          <td>{{ customerData.phone }}</td>
+        </tr>
+        <tr>
+          <td class="label">Fax:</td>
+          <td>{{ customerData.fax }}</td>
+        </tr>
+        <tr>
+          <td class="label">Postal Code:</td>
+          <td>{{ customerData.postal_code }}</td>
+        </tr>
+        <tr>
+          <td class="label">City:</td>
+          <td>{{ customerData.city }}</td>
+        </tr>
+        <tr>
+          <td class="label">Street:</td>
+          <td>{{ customerData.street }}</td>
+        </tr>
+        <tr>
+          <td class="label">Street Number:</td>
+          <td>{{ customerData.street_number }}</td>
+        </tr>
+        <tr>
+          <td class="label">State:</td>
+          <td>{{ customerData.state }}</td>
+        </tr>
+        <tr>
+          <td class="label">Country:</td>
+          <td>{{ customerData.country }}</td>
+        </tr>
+      </table>
+
+      <div class="edit-form" *ngIf="isEditing('customer')">
+        <div class="form-group">
+          <label>Name:</label>
+          <input type="text" [(ngModel)]="customerData.name" />
+        </div>
+        <div class="form-group">
+          <label>Email:</label>
+          <input type="email" [(ngModel)]="customerData.email" />
+        </div>
+        <div class="form-group">
+          <label>Phone:</label>
+          <input type="text" [(ngModel)]="customerData.phone" />
+        </div>
+        <div class="form-group">
+          <label>Fax:</label>
+          <input type="text" [(ngModel)]="customerData.fax" />
+        </div>
+        <div class="form-group">
+          <label>Postal Code:</label>
+          <input type="text" [(ngModel)]="customerData.postal_code" />
+        </div>
+        <div class="form-group">
+          <label>City:</label>
+          <input type="text" [(ngModel)]="customerData.city" />
+        </div>
+        <div class="form-group">
+          <label>Street:</label>
+          <input type="text" [(ngModel)]="customerData.street" />
+        </div>
+        <div class="form-group">
+          <label>Street Number:</label>
+          <input type="text" [(ngModel)]="customerData.street_number" />
+        </div>
+        <div class="form-group">
+          <label>State:</label>
+          <input type="text" [(ngModel)]="customerData.state" />
+        </div>
+        <div class="form-group">
+          <label>Country:</label>
+          <input type="text" [(ngModel)]="customerData.country" />
+        </div>
+        <div class="form-actions">
+          <button class="save-btn" (click)="saveBlock('customer')">
+            Guardar
+          </button>
+          <button class="cancel-btn" (click)="cancelEdit('customer')">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,79 @@
+<div class="preview-container">
+  <div class="section-header">
+    <h3>Preview</h3>
+    <p>Vista previa del certificado de calibración digital</p>
+  </div>
+
+  <!-- Controls Bar -->
+  <div class="controls-bar">
+    <div class="view-options">
+      <h4>Vista:</h4>
+      <div class="view-buttons">
+        <button
+          class="view-btn"
+          [class.active]="viewMode === 'xml'"
+          (click)="setViewMode('xml')"
+        >
+          <i class="material-icons">code</i>
+          XML
+        </button>
+        <button
+          class="view-btn"
+          [class.active]="viewMode === 'pdf'"
+          (click)="setViewMode('pdf')"
+        >
+          <i class="material-icons">picture_as_pdf</i>
+          PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="download-section">
+      <button class="download-btn" (click)="downloadFile()">
+        <i class="material-icons">download</i>
+        Descargar {{ viewMode.toUpperCase() }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Preview Content -->
+  <div class="preview-content">
+    <!-- XML View -->
+    <div *ngIf="viewMode === 'xml'" class="xml-preview">
+      <div class="xml-header">
+        <h4>Contenido XML</h4>
+        <span class="file-info">
+          Archivo: DCC_{{
+            dccData?.administrativeData?.core?.certificate_number ||
+              "certificate"
+          }}.xml
+        </span>
+      </div>
+      <div class="xml-content">
+        <pre><code>{{ xmlContent }}</code></pre>
+      </div>
+    </div>
+
+    <!-- PDF View -->
+    <div *ngIf="viewMode === 'pdf'" class="pdf-preview">
+      <div class="pdf-header">
+        <h4>Vista previa PDF</h4>
+        <span class="file-info">
+          Archivo: DCC_{{
+            dccData?.administrativeData?.core?.certificate_number ||
+              "certificate"
+          }}.pdf
+        </span>
+      </div>
+      <div class="pdf-content">
+        <div class="pdf-placeholder">
+          <i class="material-icons">picture_as_pdf</i>
+          <h4>Vista previa PDF</h4>
+          <p>
+            La funcionalidad de vista previa PDF será implementada próximamente.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

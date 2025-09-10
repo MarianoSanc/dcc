@@ -1,0 +1,138 @@
+<div class="statements-container">
+  <div class="section-header">
+    <h3>Statements</h3>
+    <p>Declaraciones y referencias normativas del certificado de calibración</p>
+    <button class="add-statement-btn" (click)="addStatement()">
+      <i class="material-icons">add</i>
+      Agregar Statement
+    </button>
+  </div>
+
+  <!-- Statements List -->
+  <div class="statements-list" *ngIf="statements.length > 0">
+    <div
+      class="statement-card"
+      *ngFor="let statement of statements; let statementIndex = index"
+    >
+      <!-- Statement Block -->
+      <div class="data-block">
+        <div class="block-header">
+          <h4>
+            Statement {{ statementIndex + 1 }}:
+            {{ statement.refType || "Sin RefType" }}
+          </h4>
+          <div class="statement-actions">
+            <button
+              class="edit-btn"
+              (click)="editStatement(statement.id)"
+              *ngIf="!isEditing(statement.id)"
+            >
+              <i class="material-icons">edit</i>
+              Editar
+            </button>
+            <button
+              class="save-btn"
+              (click)="saveStatement(statement.id)"
+              *ngIf="isEditing(statement.id)"
+            >
+              <i class="material-icons">save</i>
+              Guardar
+            </button>
+            <button
+              class="cancel-btn"
+              (click)="cancelEdit(statement.id)"
+              *ngIf="isEditing(statement.id)"
+            >
+              <i class="material-icons">close</i>
+              Cancelar
+            </button>
+            <button class="remove-btn" (click)="removeStatement(statement.id)">
+              <i class="material-icons">delete</i>
+              Eliminar
+            </button>
+          </div>
+        </div>
+
+        <div class="block-content">
+          <!-- View Mode -->
+          <div *ngIf="!isEditing(statement.id)" class="statement-view">
+            <table class="data-table">
+              <tr>
+                <td class="label">RefType:</td>
+                <td>{{ statement.refType || "No especificado" }}</td>
+              </tr>
+              <tr>
+                <td class="label">Norm:</td>
+                <td>{{ statement.norm || "No especificado" }}</td>
+              </tr>
+              <tr>
+                <td class="label">Reference:</td>
+                <td>{{ statement.reference || "No especificado" }}</td>
+              </tr>
+              <tr>
+                <td class="label">Content:</td>
+                <td class="content-cell">
+                  {{ statement.content || "No especificado" }}
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Edit Mode -->
+          <div *ngIf="isEditing(statement.id)" class="statement-edit">
+            <div class="edit-form">
+              <div class="form-group">
+                <label>RefType:</label>
+                <select [(ngModel)]="statement.refType">
+                  <option value="">Seleccione el tipo de referencia</option>
+                  <option value="Standard">Standard</option>
+                  <option value="Procedure">Procedure</option>
+                  <option value="Uncertainty">Uncertainty</option>
+                  <option value="Traceability">Traceability</option>
+                  <option value="Environmental">Environmental</option>
+                  <option value="Method">Method</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Norm:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="statement.norm"
+                  placeholder="Ingrese la norma o estándar"
+                />
+              </div>
+              <div class="form-group">
+                <label>Reference:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="statement.reference"
+                  placeholder="Ingrese la referencia"
+                />
+              </div>
+              <div class="form-group">
+                <label>Content:</label>
+                <textarea
+                  [(ngModel)]="statement.content"
+                  placeholder="Ingrese el contenido de la declaración"
+                  rows="4"
+                ></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="empty-state" *ngIf="statements.length === 0">
+    <div class="empty-content">
+      <i class="material-icons">description</i>
+      <h4>No hay statements agregados</h4>
+      <p>
+        Haz clic en "Agregar Statement" para comenzar a añadir declaraciones al
+        certificado.
+      </p>
+    </div>
+  </div>
+</div>

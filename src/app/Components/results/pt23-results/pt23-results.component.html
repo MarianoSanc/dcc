@@ -1,0 +1,69 @@
+<div class="data-block">
+  <div class="block-header">
+    <h4>SF PT-23</h4>
+    <div class="block-actions">
+      <button class="add-btn" (click)="agregarNivel()">
+        <i class="material-icons">add</i>
+        Agregar otro nivel de tensión
+      </button>
+      <button class="close-btn" (click)="cerrarTablas()">
+        <i class="material-icons">close</i>
+        Cerrar
+      </button>
+    </div>
+  </div>
+  <div class="block-content">
+    <div *ngFor="let tabla of tablas; let tablaIdx = index" class="nivel-block">
+      <div class="form-group">
+        <label>Nivel de tensión ({{ tablaIdx + 1 }}):</label>
+        <input
+          type="number"
+          [(ngModel)]="tabla.nivel"
+          placeholder="Ingrese el nivel de tensión"
+        />
+      </div>
+      <div class="table-wrapper">
+        <table class="data-table compact-table">
+          <thead>
+            <tr>
+              <th style="width: 40px">Nivel</th>
+              <th style="width: 90px">DUT</th>
+              <th style="width: 90px">Patrón</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of filas; let i = index">
+              <td>{{ i + 1 }}</td>
+              <td>
+                <input
+                  type="number"
+                  [(ngModel)]="tabla.dut[i]"
+                  class="cell-input"
+                />
+              </td>
+              <td>
+                <input
+                  type="number"
+                  [(ngModel)]="tabla.patron[i]"
+                  class="cell-input"
+                />
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td><strong>Promedio</strong></td>
+              <td>
+                <strong>{{ getAverage(tabla.dut) }}</strong>
+              </td>
+              <td>
+                <strong>{{ getAverage(tabla.patron) }}</strong>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <hr *ngIf="tablas.length > 1 && tablaIdx < tablas.length - 1" />
+    </div>
+  </div>
+</div>
