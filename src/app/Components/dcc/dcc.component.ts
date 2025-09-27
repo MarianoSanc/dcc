@@ -6,6 +6,7 @@ import { StatementsComponent } from '../statements/statements.component';
 import { ResultsComponent } from '../results/results.component';
 import { PreviewComponent } from '../preview/preview.component';
 import { FormsModule } from '@angular/forms';
+import { NgMultiSelectDropDownModule } from 'ng-multiselect-dropdown';
 import { ApiService } from '../../api/api.service';
 import { DccDataService } from '../../services/dcc-data.service';
 import Swal from 'sweetalert2';
@@ -22,6 +23,7 @@ import { UrlClass } from '../../shared/models/url.model';
     ResultsComponent,
     PreviewComponent,
     FormsModule,
+    NgMultiSelectDropDownModule,
   ],
   templateUrl: './dcc.component.html',
   styleUrl: './dcc.component.css',
@@ -59,8 +61,27 @@ export class DccComponent implements OnInit {
   showCreateDccModal: boolean = false;
 
   // Variables para el modal de creación de DCC
+  newDccProjectId: any = [];
   newDccPtId: string = '';
-  newDccCertificateNumber: string = '';
+  newDccDutNumber: number | null = null;
+  generatedCertificateNumber: string = '';
+
+  // Configuración para el multiselect de proyectos
+  projectDropdownSettings = {
+    singleSelection: true,
+    idField: 'id',
+    textField: 'name',
+    selectAllText: 'Seleccionar todos',
+    unSelectAllText: 'Deseleccionar todos',
+    itemsShowLimit: 1,
+    allowSearchFilter: true,
+    searchPlaceholderText: 'Buscar proyecto...',
+    noDataAvailablePlaceholderText: 'No hay proyectos disponibles',
+    noFilteredDataAvailablePlaceholderText: 'No se encontraron proyectos',
+    closeDropDownOnSelection: true,
+    showSelectedItemsAtTop: false,
+    defaultOpen: false,
+  };
 
   constructor(
     private apiService: ApiService,
@@ -70,6 +91,67 @@ export class DccComponent implements OnInit {
   // Al iniciar el componente, carga la lista de DCCs existentes
   ngOnInit() {
     this.loadExistingDccList();
+    this.loadProjects();
+  }
+
+  // Carga la lista de proyectos desde la base de datos para el modal de creación de DCC
+  projects: any[] = [];
+  // Optimizar la carga de proyectos para que sea más rápida
+  loadProjects() {
+    const requests = [
+      // Request 1: Opportunity
+      this.apiService.post(
+        {
+          action: 'get',
+          bd: 'hvtest2',
+          table: 'opportunity',
+          opts: {
+            attributes: ['id', 'name'],
+            where: { deleted: 0 },
+            order_by: ['created_at', 'DESC'],
+          },
+        },
+        UrlClass.URLNuevo
+      ),
+
+      // Request 2: Opportunity Calpro
+      this.apiService.post(
+        {
+          action: 'get',
+          bd: 'hvtest2',
+          table: 'opportunity_calpro',
+          opts: {
+            attributes: ['id', 'name'],
+            where: { deleted: 0 },
+            order_by: ['created_at', 'DESC'],
+          },
+        },
+        UrlClass.URLNuevo
+      ),
+    ];
+
+    // Ejecutar ambos requests en paralelo usando forkJoin para mayor velocidad
+    import('rxjs').then((rxjs) => {
+      rxjs.forkJoin(requests).subscribe({
+        next: ([response1, response2]: any[]) => {
+          const projectsPh = (response1.result || []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+          }));
+
+          const projectsPc = (response2.result || []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+          }));
+
+          this.projects = [...projectsPh, ...projectsPc];
+        },
+        error: (error) => {
+          console.error('Error loading projects:', error);
+          this.projects = []; // Fallback a array vacío
+        },
+      });
+    });
   }
 
   // Inicia la creación de un nuevo DCC (pantalla principal)
@@ -186,14 +268,41 @@ export class DccComponent implements OnInit {
   onSelectExistingDcc() {
     if (!this.selectedDccId) return;
 
+    // Mostrar loading mientras se carga
+    Swal.fire({
+      title: 'Cargando DCC...',
+      text: 'Por favor espere',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
     const getDcc = {
       action: 'get',
       bd: this.database,
       table: 'dcc_data',
       opts: {
         where: { id: this.selectedDccId },
+        // Incluir id_laboratory e id_customer en los campos solicitados
+        attributes: [
+          'id',
+          'pt',
+          'country',
+          'language',
+          'receipt_date',
+          'date_calibration',
+          'date_range',
+          'date_end',
+          'location',
+          'issue_date',
+          'id_laboratory',
+          'id_customer',
+          'dcc_data',
+        ],
       },
     };
+
     this.apiService.post(getDcc, UrlClass.URLNuevo).subscribe({
       next: (response: any) => {
         let dccData = response.result[0];
@@ -206,44 +315,11 @@ export class DccComponent implements OnInit {
           return;
         }
 
-        // Si tienes muchas variables, usa un solo objeto y mergea todo
-        // mergedData contendrá todos los campos cargados y los que falten se completan con los defaults
-        const defaultData = this.dccDataService.getCurrentData();
-        const mergedData = defaultData;
-
-        console.log('Datos del DCC cargados:', mergedData);
-        console.log('Datos del DCC originales:', dccData);
-
-        // Si necesitas personalizar algunos campos principales, hazlo aquí
-        if (
-          mergedData.administrativeData &&
-          mergedData.administrativeData.core
-        ) {
-          mergedData.administrativeData.core.certificate_number = dccData.id;
-          mergedData.administrativeData.core.pt_id = dccData.pt;
-          mergedData.administrativeData.core.country_code = dccData.country;
-          mergedData.administrativeData.core.language = dccData.language;
-          mergedData.administrativeData.core.receipt_date =
-            dccData.receipt_date;
-          mergedData.administrativeData.core.performance_date =
-            dccData.date_calibration;
-          mergedData.administrativeData.core.is_range_date = dccData.date_range;
-          mergedData.administrativeData.core.end_performance_date =
-            dccData.date_end;
-          mergedData.administrativeData.core.is_range_date = dccData.date_range;
-          mergedData.administrativeData.core.is_range_date = dccData.date_range;
-        }
-
-        // Solo actualiza el servicio con el objeto completo
-        this.dccDataService.loadFromObject(mergedData);
-
-        console.log('Datos del DCC cargados en el servicio:', mergedData);
-
-        this.showInitialOptions = false;
-        this.showMainInterface = true;
-        this.showDccSelect = false;
+        // Cargar datos adicionales (laboratorio y cliente) si existen
+        this.loadAdditionalData(dccData);
       },
       error: (err: any) => {
+        Swal.close();
         Swal.fire({
           icon: 'error',
           title: 'Error',
@@ -251,6 +327,231 @@ export class DccComponent implements OnInit {
         });
       },
     });
+  }
+
+  // Nuevo método para cargar datos adicionales (laboratorio y cliente)
+  private loadAdditionalData(dccData: any) {
+    const loadTasks: Promise<any>[] = [];
+
+    // Si hay id_laboratory, cargar datos del laboratorio
+    if (dccData.id_laboratory) {
+      const loadLabPromise = this.loadLaboratoryData(dccData.id_laboratory)
+        .then((labData) => {
+          if (labData) {
+            dccData.laboratoryInfo = labData;
+            console.log('🏢 Laboratory data loaded:', labData);
+          }
+        })
+        .catch(() => {
+          console.log('❌ Failed to load laboratory data');
+        });
+      loadTasks.push(loadLabPromise);
+    }
+
+    // Si hay id_customer, cargar datos del cliente
+    if (dccData.id_customer) {
+      const loadCustomerPromise = this.loadCustomerData(dccData.id_customer)
+        .then((customerData) => {
+          if (customerData) {
+            dccData.customerInfo = customerData;
+            console.log('👤 Customer data loaded:', customerData);
+          }
+        })
+        .catch(() => {
+          console.log('❌ Failed to load customer data');
+        });
+      loadTasks.push(loadCustomerPromise);
+    }
+
+    // Cargar datos de responsible persons para este DCC
+    const loadResponsiblePromise = this.loadResponsiblePersons(dccData.id)
+      .then((responsibleData) => {
+        if (responsibleData && responsibleData.length > 0) {
+          dccData.responsibleInfo = responsibleData;
+          console.log('👥 Responsible persons data loaded:', responsibleData);
+        }
+      })
+      .catch(() => {
+        console.log('❌ Failed to load responsible persons data');
+      });
+    loadTasks.push(loadResponsiblePromise);
+
+    // Cuando todas las tareas terminen, procesar los datos
+    Promise.all(loadTasks).finally(() => {
+      this.processDccData(dccData);
+    });
+  }
+
+  // Método para cargar datos del laboratorio (convertir a Promise)
+  private loadLaboratoryData(laboratoryId: string): Promise<any> {
+    const getLaboratory = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_laboratory',
+      opts: {
+        where: { id: laboratoryId, deleted: 0 },
+      },
+    };
+
+    return this.apiService
+      .post(getLaboratory, UrlClass.URLNuevo)
+      .toPromise()
+      .then((response: any) => {
+        return response?.result?.[0] || null;
+      });
+  }
+
+  // Nuevo método para cargar datos del cliente
+  private loadCustomerData(customerId: string): Promise<any> {
+    const getCustomer = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_customer',
+      opts: {
+        where: { id: customerId, deleted: 0 },
+      },
+    };
+
+    return this.apiService
+      .post(getCustomer, UrlClass.URLNuevo)
+      .toPromise()
+      .then((response: any) => {
+        return response?.result?.[0] || null;
+      });
+  }
+
+  // Nuevo método para cargar responsible persons
+  private loadResponsiblePersons(dccId: string): Promise<any> {
+    const getResponsiblePersons = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_responsiblepersons',
+      opts: {
+        where: { id_dcc: dccId },
+        order_by: ['id', 'ASC'],
+      },
+    };
+
+    return this.apiService
+      .post(getResponsiblePersons, UrlClass.URLNuevo)
+      .toPromise()
+      .then((response: any) => {
+        return response?.result || [];
+      });
+  }
+
+  // Método separado para procesar los datos del DCC
+  private processDccData(dccData: any) {
+    Swal.close();
+
+    let mergedData;
+    if (dccData.dcc_data && typeof dccData.dcc_data === 'object') {
+      mergedData = dccData.dcc_data;
+    } else {
+      mergedData = this.dccDataService.getCurrentData();
+    }
+
+    // Asignar los campos básicos de la base de datos
+    if (mergedData.administrativeData && mergedData.administrativeData.core) {
+      mergedData.administrativeData.core.certificate_number = dccData.id;
+      mergedData.administrativeData.core.pt_id = dccData.pt;
+
+      // Asignar campos básicos
+      if (dccData.country)
+        mergedData.administrativeData.core.country_code = dccData.country;
+      if (dccData.language)
+        mergedData.administrativeData.core.language = dccData.language;
+      if (dccData.receipt_date)
+        mergedData.administrativeData.core.receipt_date = dccData.receipt_date;
+      if (dccData.date_calibration)
+        mergedData.administrativeData.core.performance_date =
+          dccData.date_calibration;
+      if (dccData.date_range !== undefined)
+        mergedData.administrativeData.core.is_range_date = Boolean(
+          dccData.date_range
+        );
+      if (dccData.date_end)
+        mergedData.administrativeData.core.end_performance_date =
+          dccData.date_end;
+      if (dccData.location)
+        mergedData.administrativeData.core.performance_localition =
+          dccData.location;
+      if (dccData.issue_date)
+        mergedData.administrativeData.core.issue_date = dccData.issue_date;
+
+      // Asignar datos del laboratorio si existen
+      if (dccData.laboratoryInfo) {
+        const labInfo = dccData.laboratoryInfo;
+        mergedData.administrativeData.laboratory = {
+          name: labInfo.name || '',
+          email: labInfo.email || '',
+          phone: labInfo.phone || '',
+          fax: labInfo.fax || '',
+          postal_code: labInfo.postal_code || '',
+          city: labInfo.city || '',
+          street: labInfo.street || '',
+          street_number: labInfo.number || '',
+          state: labInfo.state || '',
+          country: labInfo.country || '',
+          laboratory_id: dccData.id_laboratory,
+        };
+      }
+
+      // Asignar datos del cliente si existen
+      if (dccData.customerInfo) {
+        const custInfo = dccData.customerInfo;
+        mergedData.administrativeData.customer = {
+          name: custInfo.name || '',
+          email: custInfo.email || '',
+          phone: custInfo.phone || '',
+          fax: custInfo.fax || '',
+          postal_code: custInfo.postal_code || '',
+          city: custInfo.city || '',
+          street: custInfo.street || '',
+          street_number: custInfo.number || '',
+          state: custInfo.state || '',
+          country: custInfo.country || '',
+          customer_id: dccData.id_customer,
+        };
+
+        console.log(
+          '🔗 Setting customer ID from DCC data:',
+          dccData.id_customer
+        );
+      } else if (dccData.id_customer) {
+        // Si tenemos ID pero no datos del cliente, al menos asignar el ID
+        mergedData.administrativeData.customer.customer_id =
+          dccData.id_customer;
+        console.log(
+          '🔗 Setting customer ID only (no additional data):',
+          dccData.id_customer
+        );
+      }
+
+      // Asignar datos de responsible persons si existen
+      if (dccData.responsibleInfo && dccData.responsibleInfo.length > 0) {
+        mergedData.administrativeData.responsiblePersons =
+          dccData.responsibleInfo.map((person: any) => ({
+            role: person.role || '',
+            name: person.no_nomina || '', // Usar no_nomina como name inicialmente
+            email: '', // Los datos adicionales del usuario se cargarán después si es necesario
+            phone: '',
+          }));
+
+        console.log(
+          '👥 Setting responsible persons from database:',
+          dccData.responsibleInfo
+        );
+      }
+    }
+
+    console.log('✅ Final merged data:', mergedData);
+
+    this.dccDataService.loadFromObject(mergedData);
+
+    this.showInitialOptions = false;
+    this.showMainInterface = true;
+    this.showDccSelect = false;
   }
 
   // Cambia la tab activa
@@ -270,30 +571,78 @@ export class DccComponent implements OnInit {
   // Abre el modal para crear un nuevo DCC
   openCreateDccModal() {
     this.showCreateDccModal = true;
+    this.newDccProjectId = [];
     this.newDccPtId = '';
-    this.newDccCertificateNumber = '';
+    this.newDccDutNumber = null;
+    this.generatedCertificateNumber = '';
   }
 
   // Cierra el modal de creación de DCC
   closeCreateDccModal() {
     this.showCreateDccModal = false;
+    this.newDccProjectId = [];
     this.newDccPtId = '';
-    this.newDccCertificateNumber = '';
+    this.newDccDutNumber = null;
+    this.generatedCertificateNumber = '';
+  }
+
+  // Maneja la selección de proyecto
+  onProjectSelect(item: any) {
+    console.log('Proyecto seleccionado:', item);
+    this.newDccProjectId = [item]; // Asegurar que sea un array con un solo elemento
+    this.updateCertificateNumber();
+  }
+
+  // Maneja la deselección de proyecto
+  onProjectDeselect(item: any) {
+    console.log('Proyecto deseleccionado:', item);
+    this.newDccProjectId = [];
+    this.updateCertificateNumber();
+  }
+
+  // Actualiza el número de certificado generado
+  updateCertificateNumber() {
+    const projectId =
+      this.newDccProjectId && this.newDccProjectId.length > 0
+        ? this.newDccProjectId[0].id
+        : '';
+
+    if (
+      projectId &&
+      this.newDccPtId &&
+      this.newDccDutNumber &&
+      this.newDccDutNumber > 0
+    ) {
+      const ptNumber = this.newDccPtId.replace('PT-', '');
+      const dutFormatted = this.newDccDutNumber.toString().padStart(2, '0');
+      this.generatedCertificateNumber = `${projectId} DCC ${ptNumber} ${dutFormatted}`;
+    } else {
+      this.generatedCertificateNumber = '';
+    }
   }
 
   // Inicia un nuevo DCC con los datos ingresados en el modal
   startNewDcc() {
+    const projectId =
+      this.newDccProjectId && this.newDccProjectId.length > 0
+        ? this.newDccProjectId[0].id
+        : '';
+
+    if (!projectId || !this.newDccPtId || !this.newDccDutNumber) {
+      return;
+    }
+
     this.dccDataService.resetData();
     // Asigna PT ID y Certificate Number
     const currentData = this.dccDataService.getCurrentData();
     currentData.administrativeData.core.pt_id = this.newDccPtId;
     currentData.administrativeData.core.certificate_number =
-      this.newDccCertificateNumber;
+      this.generatedCertificateNumber;
     this.dccDataService.loadFromObject(currentData);
 
     // Prepara los atributos base para guardar en la base de datos
     let attributes: any = {
-      id: this.newDccCertificateNumber,
+      id: this.generatedCertificateNumber,
       pt: this.newDccPtId,
     };
 
@@ -306,18 +655,16 @@ export class DccComponent implements OnInit {
       },
     };
 
-    // Muestra en consola los atributos preparados
     console.log('Atributos preparados para el nuevo DCC:', createDcc);
 
-    // Llama a la API para crear el registro en la base de datos
     this.apiService.post(createDcc, UrlClass.URLNuevo).subscribe(
       (response: any) => {
         Swal.close();
         if (response.result) {
           Swal.fire({
             icon: 'success',
-            title: '¡Modificado!',
-            text: 'Se ha modificado correctamente',
+            title: '¡DCC Creado!',
+            text: `Se ha creado el DCC ${this.generatedCertificateNumber} correctamente`,
             timer: 2500,
             showConfirmButton: false,
             position: 'top-end',
@@ -326,7 +673,7 @@ export class DccComponent implements OnInit {
           Swal.fire({
             icon: 'error',
             title: 'Error',
-            text: 'Ocurrió un problema al modificar.',
+            text: 'Ocurrió un problema al crear el DCC.',
           });
         }
       },

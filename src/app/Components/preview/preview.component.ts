@@ -341,8 +341,43 @@ export class PreviewComponent implements OnInit, OnDestroy {
       .replace(/'/g, '&apos;');
   }
 
-  private formatDate(date: Date): string {
-    return date.toISOString().split('T')[0];
+  private formatDate(dateValue: any): string {
+    if (!dateValue) return new Date().toISOString().split('T')[0];
+
+    // Si ya es string en formato YYYY-MM-DD, devolverlo directamente
+    if (
+      typeof dateValue === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
+    ) {
+      return dateValue;
+    }
+
+    let date: Date;
+
+    // Si es string, convertir a Date cuidadosamente
+    if (typeof dateValue === 'string') {
+      date = new Date(dateValue + 'T12:00:00'); // Agregar tiempo para evitar zona horaria
+    }
+    // Si ya es Date object
+    else if (dateValue instanceof Date) {
+      date = dateValue;
+    }
+    // Si no es válido, usar fecha actual
+    else {
+      date = new Date();
+    }
+
+    // Verificar si la fecha es válida
+    if (isNaN(date.getTime())) {
+      date = new Date(); // Fallback a fecha actual
+    }
+
+    // Formatear usando métodos locales en lugar de toISOString para evitar problemas de zona horaria
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
   }
 
   private generateIdentificationsXML(identifications: any[]): string {

@@ -79,7 +79,7 @@
   top: 0;
   left: 0;
   width: 100vw;
-  height: 100vh;
+  height: 120vh;
   background: rgba(33, 33, 33, 0.25);
   z-index: 1000;
   display: flex;
@@ -645,4 +645,131 @@
 }
 .create-dcc-modal .save-btn:hover:not(:disabled) {
   background: #388e3c;
+}
+
+.certificate-preview {
+  margin-top: 15px;
+  padding: 15px;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.certificate-number-display {
+  font-family: monospace;
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #000000;
+  padding: 10px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.save-btn:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.save-btn:disabled:hover {
+  background: #cccccc;
+}
+
+/* Estilos específicos para el multiselect de proyectos */
+.form-group ng-multiselect-dropdown {
+  display: block;
+  width: 100%;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .multiselect-dropdown {
+  width: 100% !important;
+  position: relative;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-btn {
+  width: 100% !important;
+  min-height: 42px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1em;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-btn:focus,
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-btn:hover {
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+  outline: none;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-list {
+  width: 100% !important;
+  max-height: 200px !important;
+  overflow-y: auto !important;
+  position: absolute;
+  z-index: 9999;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-top: 2px;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-list li {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-list li:hover {
+  background-color: #f8f9fa;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-list li:last-child {
+  border-bottom: none;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-list li.selected {
+  background-color: #e3f2fd;
+  font-weight: 500;
+}
+
+/* Ocultar elementos innecesarios para selección única */
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-list .select-all,
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-list .clear-all {
+  display: none !important;
+}
+
+/* Estilos para el texto del placeholder */
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-btn .dropdown-down {
+  color: #666;
+}
+
+.form-group
+  ng-multiselect-dropdown
+  ::ng-deep
+  .dropdown-btn
+  .dropdown-multiselect__caret {
+  border-top: 4px solid #666;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 0;
+  margin-left: auto;
 }

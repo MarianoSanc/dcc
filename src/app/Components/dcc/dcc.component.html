@@ -39,31 +39,64 @@
         </button>
       </div>
       <div class="modal-body">
+        <div>
+          <label for="projectId">Proyecto:</label>
+          <ng-multiselect-dropdown
+            id="projectId"
+            [settings]="projectDropdownSettings"
+            [data]="projects"
+            [(ngModel)]="newDccProjectId"
+            (onSelect)="onProjectSelect($event)"
+            (onDeSelect)="onProjectDeselect($event)"
+            (ngModelChange)="updateCertificateNumber()"
+          >
+          </ng-multiselect-dropdown>
+        </div>
         <div class="form-group">
           <label for="ptId">PT ID:</label>
-          <select id="ptId" [(ngModel)]="newDccPtId" class="dcc-select">
+          <select
+            id="ptId"
+            [(ngModel)]="newDccPtId"
+            class="dcc-select"
+            (ngModelChange)="updateCertificateNumber()"
+          >
             <option value="">Seleccione PT ID</option>
             <option value="PT-23">PT-23</option>
             <option value="PT-24">PT-24</option>
           </select>
         </div>
         <div class="form-group">
-          <label for="certNumber">Certificate Number:</label>
+          <label for="dutNumber">Número DUT:</label>
           <input
-            id="certNumber"
-            type="text"
-            [(ngModel)]="newDccCertificateNumber"
+            id="dutNumber"
+            type="number"
+            min="1"
+            max="99"
+            [(ngModel)]="newDccDutNumber"
             class="dcc-select"
-            placeholder="Ingrese el número de certificado"
+            placeholder="Ingrese número DUT (1-99)"
+            (ngModelChange)="updateCertificateNumber()"
           />
+        </div>
+        <div class="form-group certificate-preview">
+          <label>Certificate Number:</label>
+          <div class="certificate-number-display">
+            {{ generatedCertificateNumber || "Seleccione todos los campos" }}
+          </div>
         </div>
         <div class="form-actions" style="margin-top: 20px">
           <button
             class="save-btn"
-            [disabled]="!newDccPtId || !newDccCertificateNumber"
+            [disabled]="
+              !newDccProjectId ||
+              newDccProjectId.length === 0 ||
+              !newDccPtId ||
+              !newDccDutNumber ||
+              newDccDutNumber < 1
+            "
             (click)="startNewDcc()"
           >
-            Empezar
+            Crear DCC
           </button>
         </div>
       </div>

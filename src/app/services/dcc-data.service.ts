@@ -40,6 +40,7 @@ export interface DCCData {
       street_number: string;
       state: string;
       country: string;
+      laboratory_id: string; // Agregar campo para el ID del laboratorio
     };
     responsiblePersons: Array<{
       role: string;
@@ -58,6 +59,7 @@ export interface DCCData {
       street_number: string;
       state: string;
       country: string;
+      customer_id: string; // Agregar campo para el ID del cliente
     };
   };
   items: Array<{
@@ -205,6 +207,7 @@ export class DccDataService {
           street_number: '103 y 105',
           state: 'Aguascalientes',
           country: 'México',
+          laboratory_id: '1',
         },
         responsiblePersons: [
           {
@@ -231,6 +234,7 @@ export class DccDataService {
           street_number: '103 y 105',
           state: 'Aguascalientes',
           country: 'México',
+          customer_id: '1', // ID predeterminado
         },
       },
       items: [],
@@ -599,6 +603,7 @@ export class DccDataService {
         street_number: this.getTextContent(locationNode, 'streetNo') || '',
         state: this.getTextContent(locationNode, 'state') || '',
         country: this.getTextContent(locationNode, 'countryCode') || '',
+        laboratory_id: '', // Agregar campo para el ID del laboratorio
       };
     }
 
@@ -642,6 +647,7 @@ export class DccDataService {
           this.getTextContent(customerLocationNode, 'streetNo') || '',
         state: this.getTextContent(customerLocationNode, 'state') || '',
         country: this.getTextContent(customerLocationNode, 'countryCode') || '',
+        customer_id: '', // Add a default or parsed value as needed
       };
     }
 

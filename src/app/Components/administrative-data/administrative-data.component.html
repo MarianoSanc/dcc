@@ -233,7 +233,8 @@
           <input
             type="date"
             [(ngModel)]="coreData.end_performance_date"
-            (ngModelChange)="onDateChange()"
+            [min]="getMinEndDate()"
+            (ngModelChange)="onEndDateChange()"
             placeholder="Seleccione la fecha de fin de calibración"
           />
         </div>
@@ -443,49 +444,158 @@
       </table>
 
       <div class="edit-form" *ngIf="isEditing('laboratory')">
-        <div class="form-group">
-          <label>Name:</label>
-          <input type="text" [(ngModel)]="laboratoryData.name" />
+        <!-- Opciones de acción para laboratorio -->
+        <div class="laboratory-action-selector">
+          <div class="action-buttons">
+            <button
+              type="button"
+              class="action-btn"
+              [class.active]="laboratoryAction === 'edit'"
+              (click)="setLaboratoryAction('edit')"
+              [disabled]="!hasLoadedLaboratory()"
+            >
+              <i class="material-icons">edit</i>
+              Editar Actual
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              [class.active]="laboratoryAction === 'select'"
+              (click)="setLaboratoryAction('select')"
+            >
+              <i class="material-icons">swap_horiz</i>
+              Seleccionar Otro
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              [class.active]="laboratoryAction === 'create'"
+              (click)="setLaboratoryAction('create')"
+            >
+              <i class="material-icons">add</i>
+              Crear Nuevo
+            </button>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Email:</label>
-          <input type="email" [(ngModel)]="laboratoryData.email" />
+
+        <!-- Selector de laboratorio (solo para seleccionar otro) -->
+        <div class="form-group" *ngIf="laboratoryAction === 'select'">
+          <label>Seleccionar Laboratorio:</label>
+          <select
+            [(ngModel)]="tempLaboratoryId"
+            (ngModelChange)="loadSelectedLaboratory()"
+          >
+            <option value="">Seleccione un laboratorio</option>
+            <option *ngFor="let lab of laboratoryList" [value]="lab.id">
+              {{ lab.name }}
+            </option>
+          </select>
         </div>
-        <div class="form-group">
-          <label>Phone:</label>
-          <input type="text" [(ngModel)]="laboratoryData.phone" />
+
+        <!-- Campos de laboratorio -->
+        <div class="laboratory-fields" *ngIf="laboratoryAction">
+          <div class="form-group">
+            <label>Name:</label>
+            <input
+              type="text"
+              [(ngModel)]="laboratoryData.name"
+              [disabled]="areFieldsDisabled()"
+              [class.disabled-field]="areFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Email:</label>
+            <input
+              type="email"
+              [(ngModel)]="laboratoryData.email"
+              [disabled]="areFieldsDisabled()"
+              [class.disabled-field]="areFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Phone:</label>
+            <input
+              type="text"
+              [(ngModel)]="laboratoryData.phone"
+              [disabled]="areFieldsDisabled()"
+              [class.disabled-field]="areFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Fax:</label>
+            <input
+              type="text"
+              [(ngModel)]="laboratoryData.fax"
+              [disabled]="areFieldsDisabled()"
+              [class.disabled-field]="areFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Postal Code:</label>
+            <input
+              type="text"
+              [(ngModel)]="laboratoryData.postal_code"
+              [disabled]="areFieldsDisabled()"
+              [class.disabled-field]="areFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>City:</label>
+            <input
+              type="text"
+              [(ngModel)]="laboratoryData.city"
+              [disabled]="areFieldsDisabled()"
+              [class.disabled-field]="areFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Street:</label>
+            <input
+              type="text"
+              [(ngModel)]="laboratoryData.street"
+              [disabled]="areFieldsDisabled()"
+              [class.disabled-field]="areFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Street Number:</label>
+            <input
+              type="text"
+              [(ngModel)]="laboratoryData.street_number"
+              [disabled]="areFieldsDisabled()"
+              [class.disabled-field]="areFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>State:</label>
+            <input
+              type="text"
+              [(ngModel)]="laboratoryData.state"
+              [disabled]="areFieldsDisabled()"
+              [class.disabled-field]="areFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Country:</label>
+            <input
+              type="text"
+              [(ngModel)]="laboratoryData.country"
+              [disabled]="areFieldsDisabled()"
+              [class.disabled-field]="areFieldsDisabled()"
+            />
+          </div>
         </div>
-        <div class="form-group">
-          <label>Fax:</label>
-          <input type="text" [(ngModel)]="laboratoryData.fax" />
-        </div>
-        <div class="form-group">
-          <label>Postal Code:</label>
-          <input type="text" [(ngModel)]="laboratoryData.postal_code" />
-        </div>
-        <div class="form-group">
-          <label>City:</label>
-          <input type="text" [(ngModel)]="laboratoryData.city" />
-        </div>
-        <div class="form-group">
-          <label>Street:</label>
-          <input type="text" [(ngModel)]="laboratoryData.street" />
-        </div>
-        <div class="form-group">
-          <label>Street Number:</label>
-          <input type="text" [(ngModel)]="laboratoryData.street_number" />
-        </div>
-        <div class="form-group">
-          <label>State:</label>
-          <input type="text" [(ngModel)]="laboratoryData.state" />
-        </div>
-        <div class="form-group">
-          <label>Country:</label>
-          <input type="text" [(ngModel)]="laboratoryData.country" />
-        </div>
+
         <div class="form-actions">
-          <button class="save-btn" (click)="saveBlock('laboratory')">
-            Guardar
+          <button
+            class="save-btn"
+            (click)="saveBlock('laboratory')"
+            [disabled]="
+              !laboratoryAction ||
+              (laboratoryAction === 'select' && !selectedLaboratoryId)
+            "
+          >
+            {{ getLaboratorySaveButtonText() }}
           </button>
           <button class="cancel-btn" (click)="cancelEdit('laboratory')">
             Cancelar
@@ -508,25 +618,28 @@
         >
       </h4>
       <div class="block-actions">
+        <!-- Solo mostrar botones cuando está en modo edición -->
+        <ng-container *ngIf="isEditing('responsible')">
+          <button class="add-btn" (click)="addResponsiblePerson()">
+            <i class="material-icons">add</i>
+            Agregar
+          </button>
+          <button class="cancel-btn" (click)="cancelEdit('responsible')">
+            <i class="material-icons">close</i>
+            Cancelar
+          </button>
+        </ng-container>
+
+        <!-- Botón de editar cuando NO está en modo edición -->
         <button
-          *ngIf="isBlockEditable('responsible')"
-          class="add-btn"
-          (click)="addResponsiblePerson()"
-        >
-          <i class="material-icons">add</i>
-          Agregar
-        </button>
-        <button
-          *ngIf="isBlockEditable('responsible')"
+          *ngIf="isBlockEditable('responsible') && !isEditing('responsible')"
           class="edit-btn"
           (click)="toggleEdit('responsible')"
-          [class.active]="isEditing('responsible')"
         >
-          <i class="material-icons">{{
-            isEditing("responsible") ? "close" : "edit"
-          }}</i>
-          {{ isEditing("responsible") ? "Cancelar" : "Editar" }}
+          <i class="material-icons">edit</i>
+          Editar
         </button>
+
         <span *ngIf="!isBlockEditable('responsible')" class="no-edit-message">
           <i class="material-icons">lock</i>
           No editable
@@ -579,7 +692,7 @@
               [data]="listauser"
               [(ngModel)]="person.name"
               (onSelect)="onUserSelect($event, i)"
-              (onDeSelect)="person.name = []"
+              (onDeSelect)="onUserDeselect($event, i)"
             >
             </ng-multiselect-dropdown>
           </div>
@@ -597,12 +710,11 @@
             </button>
           </div>
         </div>
+
+        <!-- Solo botón de guardar en la parte inferior -->
         <div class="form-actions">
           <button class="save-btn" (click)="saveBlock('responsible')">
             Guardar
-          </button>
-          <button class="cancel-btn" (click)="cancelEdit('responsible')">
-            Cancelar
           </button>
         </div>
       </div>
@@ -682,49 +794,158 @@
       </table>
 
       <div class="edit-form" *ngIf="isEditing('customer')">
-        <div class="form-group">
-          <label>Name:</label>
-          <input type="text" [(ngModel)]="customerData.name" />
+        <!-- Opciones de acción para cliente -->
+        <div class="customer-action-selector">
+          <div class="action-buttons">
+            <button
+              type="button"
+              class="action-btn"
+              [class.active]="customerAction === 'edit'"
+              (click)="setCustomerAction('edit')"
+              [disabled]="!hasLoadedCustomer()"
+            >
+              <i class="material-icons">edit</i>
+              Editar Actual
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              [class.active]="customerAction === 'select'"
+              (click)="setCustomerAction('select')"
+            >
+              <i class="material-icons">swap_horiz</i>
+              Seleccionar Otro
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              [class.active]="customerAction === 'create'"
+              (click)="setCustomerAction('create')"
+            >
+              <i class="material-icons">add</i>
+              Crear Nuevo
+            </button>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Email:</label>
-          <input type="email" [(ngModel)]="customerData.email" />
+
+        <!-- Selector de cliente (solo para seleccionar otro) -->
+        <div class="form-group" *ngIf="customerAction === 'select'">
+          <label>Seleccionar Cliente:</label>
+          <select
+            [(ngModel)]="tempCustomerId"
+            (ngModelChange)="loadSelectedCustomer()"
+          >
+            <option value="">Seleccione un cliente</option>
+            <option *ngFor="let customer of customerList" [value]="customer.id">
+              {{ customer.name }}
+            </option>
+          </select>
         </div>
-        <div class="form-group">
-          <label>Phone:</label>
-          <input type="text" [(ngModel)]="customerData.phone" />
+
+        <!-- Campos de cliente -->
+        <div class="customer-fields" *ngIf="customerAction">
+          <div class="form-group">
+            <label>Name:</label>
+            <input
+              type="text"
+              [(ngModel)]="customerData.name"
+              [disabled]="areCustomerFieldsDisabled()"
+              [class.disabled-field]="areCustomerFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Email:</label>
+            <input
+              type="email"
+              [(ngModel)]="customerData.email"
+              [disabled]="areCustomerFieldsDisabled()"
+              [class.disabled-field]="areCustomerFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Phone:</label>
+            <input
+              type="text"
+              [(ngModel)]="customerData.phone"
+              [disabled]="areCustomerFieldsDisabled()"
+              [class.disabled-field]="areCustomerFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Fax:</label>
+            <input
+              type="text"
+              [(ngModel)]="customerData.fax"
+              [disabled]="areCustomerFieldsDisabled()"
+              [class.disabled-field]="areCustomerFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Postal Code:</label>
+            <input
+              type="text"
+              [(ngModel)]="customerData.postal_code"
+              [disabled]="areCustomerFieldsDisabled()"
+              [class.disabled-field]="areCustomerFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>City:</label>
+            <input
+              type="text"
+              [(ngModel)]="customerData.city"
+              [disabled]="areCustomerFieldsDisabled()"
+              [class.disabled-field]="areCustomerFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Street:</label>
+            <input
+              type="text"
+              [(ngModel)]="customerData.street"
+              [disabled]="areCustomerFieldsDisabled()"
+              [class.disabled-field]="areCustomerFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Street Number:</label>
+            <input
+              type="text"
+              [(ngModel)]="customerData.street_number"
+              [disabled]="areCustomerFieldsDisabled()"
+              [class.disabled-field]="areCustomerFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>State:</label>
+            <input
+              type="text"
+              [(ngModel)]="customerData.state"
+              [disabled]="areCustomerFieldsDisabled()"
+              [class.disabled-field]="areCustomerFieldsDisabled()"
+            />
+          </div>
+          <div class="form-group">
+            <label>Country:</label>
+            <input
+              type="text"
+              [(ngModel)]="customerData.country"
+              [disabled]="areCustomerFieldsDisabled()"
+              [class.disabled-field]="areCustomerFieldsDisabled()"
+            />
+          </div>
         </div>
-        <div class="form-group">
-          <label>Fax:</label>
-          <input type="text" [(ngModel)]="customerData.fax" />
-        </div>
-        <div class="form-group">
-          <label>Postal Code:</label>
-          <input type="text" [(ngModel)]="customerData.postal_code" />
-        </div>
-        <div class="form-group">
-          <label>City:</label>
-          <input type="text" [(ngModel)]="customerData.city" />
-        </div>
-        <div class="form-group">
-          <label>Street:</label>
-          <input type="text" [(ngModel)]="customerData.street" />
-        </div>
-        <div class="form-group">
-          <label>Street Number:</label>
-          <input type="text" [(ngModel)]="customerData.street_number" />
-        </div>
-        <div class="form-group">
-          <label>State:</label>
-          <input type="text" [(ngModel)]="customerData.state" />
-        </div>
-        <div class="form-group">
-          <label>Country:</label>
-          <input type="text" [(ngModel)]="customerData.country" />
-        </div>
+
         <div class="form-actions">
-          <button class="save-btn" (click)="saveBlock('customer')">
-            Guardar
+          <button
+            class="save-btn"
+            (click)="saveBlock('customer')"
+            [disabled]="
+              !customerAction ||
+              (customerAction === 'select' && !selectedCustomerId)
+            "
+          >
+            {{ getCustomerSaveButtonText() }}
           </button>
           <button class="cancel-btn" (click)="cancelEdit('customer')">
             Cancelar
