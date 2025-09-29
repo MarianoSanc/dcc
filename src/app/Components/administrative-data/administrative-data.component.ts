@@ -6,6 +6,9 @@ import {
   IDropdownSettings,
 } from 'ng-multiselect-dropdown';
 import { DccDataService } from '../../services/dcc-data.service';
+import { LaboratoryService } from '../../services/laboratory.service';
+import { CustomerService } from '../../services/customer.service';
+import { ResponsiblePersonsService } from '../../services/responsible-persons.service';
 import { ApiService } from '../../api/api.service';
 import { UrlClass } from '../../shared/models/url.model';
 import Swal from 'sweetalert2';
@@ -20,20 +23,18 @@ import Swal from 'sweetalert2';
 export class AdministrativeDataComponent implements OnInit {
   editingBlocks: { [key: string]: boolean } = {};
 
-  // Configuración para qué bloques son editables
+  // Configuración para qué bloques son editables (removido identifications)
   editableBlocks = {
-    software: false, // El bloque de software no es editable
+    software: false,
     core: true,
-    identifications: true,
     laboratory: true,
     responsible: true,
     customer: true,
   };
 
-  // Propiedades de datos
+  // Propiedades de datos (removido identifications)
   softwareData: any = {};
   coreData: any = {};
-  identifications: any[] = [];
   laboratoryData: any = {};
   responsiblePersons: any[] = [];
   customerData: any = {};
@@ -42,10 +43,10 @@ export class AdministrativeDataComponent implements OnInit {
   listauser: any[] = [];
   selectedUsers: any[] = [];
 
-  // Configuración del dropdown
+  // Configuración del dropdown CORREGIDA
   dropdownuser: IDropdownSettings = {
-    idField: 'full_name',
-    textField: 'full_name',
+    idField: 'no_nomina', // El ID interno sigue siendo no_nomina
+    textField: 'name', // Pero muestra el 'name' (que es el CONCAT)
     allowSearchFilter: true,
     searchPlaceholderText: 'Buscar usuario',
     enableCheckAll: false,
@@ -76,6 +77,9 @@ export class AdministrativeDataComponent implements OnInit {
 
   constructor(
     private dccDataService: DccDataService,
+    private laboratoryService: LaboratoryService,
+    private customerService: CustomerService,
+    private responsiblePersonsService: ResponsiblePersonsService,
     private apiService: ApiService
   ) {}
 
@@ -106,7 +110,6 @@ export class AdministrativeDataComponent implements OnInit {
         );
       }
 
-      this.identifications = [...data.administrativeData.identifications];
       this.laboratoryData = { ...data.administrativeData.laboratory };
 
       console.log('🔍 Loaded laboratory data:', this.laboratoryData);
@@ -128,14 +131,20 @@ export class AdministrativeDataComponent implements OnInit {
       }
 
       this.responsiblePersons = [...data.administrativeData.responsiblePersons];
+      console.log(
+        '🔍 Loaded responsible persons data:',
+        this.responsiblePersons
+      );
       this.customerData = { ...data.administrativeData.customer };
 
-      console.log('🔍 Loaded customer data:', this.customerData);
+      console.log(
+        '🔍 Loaded responsible persons data:',
+        this.responsiblePersons
+      );
 
       // Usar directamente el customer_id si está disponible
       if (data.administrativeData.customer.customer_id) {
         this.selectedCustomerId = data.administrativeData.customer.customer_id;
-        console.log('🔍 Using customer_id from data:', this.selectedCustomerId);
       } else if (
         this.customerData.name &&
         this.customerData.name.trim() !== '' &&
@@ -158,46 +167,49 @@ export class AdministrativeDataComponent implements OnInit {
     this.loadUsers();
     this.loadLaboratories();
     this.loadCustomers();
-    this.loadResponsiblePersons();
   }
 
-  // Nuevo método para encontrar el ID del laboratorio
-  private findLaboratoryId(): void {
-    if (this.laboratoryList.length > 0 && this.laboratoryData.name) {
-      const existingLab = this.laboratoryList.find(
-        (lab) =>
-          lab.name === this.laboratoryData.name &&
-          lab.email === this.laboratoryData.email
-      );
-      if (existingLab) {
-        this.selectedLaboratoryId = existingLab.id;
-        console.log('🔍 Found laboratory ID:', this.selectedLaboratoryId);
-      } else {
-        console.log(
-          '🔍 Laboratory not found in database, might need to create new one'
-        );
+  // Método simplificado para cargar usuarios
+  loadUsers() {
+    this.responsiblePersonsService.loadUsers().subscribe({
+      next: (users) => {
+        this.listauser = users;
+        console.log('✅ Loaded users:', this.listauser);
+        this.checkIfNeedToLoadResponsiblePersonsFromDB();
+      },
+      error: (error) => {
+        console.error('Error loading users:', error);
+      },
+    });
+  }
+
+  // Método para alternar edición de bloques
+  toggleEdit(blockName: string) {
+    // Solo alternar si el bloque es editable
+    if (this.editableBlocks[blockName as keyof typeof this.editableBlocks]) {
+      this.editingBlocks[blockName] = !this.editingBlocks[blockName];
+
+      // Si se está abriendo la edición del laboratorio, determinar acción inicial
+      if (blockName === 'laboratory' && this.editingBlocks[blockName]) {
+        this.initializeLaboratoryEdit();
+      } else if (blockName === 'laboratory') {
+        this.resetLaboratoryAction();
       }
-    } else {
-      // Si la lista aún no está cargada, intentar después de un momento
-      setTimeout(() => this.findLaboratoryId(), 500);
+
+      // Si se está abriendo la edición del cliente, determinar acción inicial
+      if (blockName === 'customer' && this.editingBlocks[blockName]) {
+        this.initializeCustomerEdit();
+      } else if (blockName === 'customer') {
+        this.resetCustomerAction();
+      }
     }
   }
 
-  // Nuevo método para cargar laboratorios
+  // Método para cargar laboratorios
   loadLaboratories() {
-    const getLaboratories = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_laboratory',
-      opts: {
-        where: { deleted: 0 },
-        order_by: ['name', 'ASC'],
-      },
-    };
-
-    this.apiService.post(getLaboratories, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        this.laboratoryList = response.result || [];
+    this.laboratoryService.loadLaboratories().subscribe({
+      next: (labs) => {
+        this.laboratoryList = labs;
         console.log('✅ Loaded laboratories:', this.laboratoryList);
         // Después de cargar laboratorios, intentar encontrar el ID si hay datos
         if (this.laboratoryData.name) {
@@ -208,6 +220,21 @@ export class AdministrativeDataComponent implements OnInit {
         console.error('❌ Error loading laboratories:', error);
       },
     });
+  }
+
+  // Método simplificado para encontrar el ID del laboratorio
+  private findLaboratoryId(): void {
+    const foundId = this.laboratoryService.findLaboratoryByData(
+      this.laboratoryData,
+      this.laboratoryList
+    );
+    if (foundId) {
+      this.selectedLaboratoryId = foundId;
+      console.log('🔍 Found laboratory ID:', this.selectedLaboratoryId);
+    } else {
+      // Si la lista aún no está cargada, intentar después de un momento
+      setTimeout(() => this.findLaboratoryId(), 500);
+    }
   }
 
   // Nuevo método para encontrar el ID del cliente
@@ -242,19 +269,9 @@ export class AdministrativeDataComponent implements OnInit {
 
   // Nuevo método para cargar clientes
   loadCustomers() {
-    const getCustomers = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_customer',
-      opts: {
-        where: { deleted: 0 },
-        order_by: ['name', 'ASC'],
-      },
-    };
-
-    this.apiService.post(getCustomers, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        this.customerList = response.result || [];
+    this.customerService.loadCustomers().subscribe({
+      next: (customers) => {
+        this.customerList = customers;
         console.log('✅ Loaded customers:', this.customerList);
         // Después de cargar clientes, intentar encontrar el ID si hay datos
         if (this.customerData.name) {
@@ -265,150 +282,6 @@ export class AdministrativeDataComponent implements OnInit {
         console.error('❌ Error loading customers:', error);
       },
     });
-  }
-
-  // Nuevo método para cargar responsables
-  loadResponsiblePersons() {
-    const getCustomers = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_responsiblepersons',
-      opts: {
-        where: { deleted: 0 },
-        order_by: ['name', 'ASC'],
-      },
-    };
-
-    this.apiService.post(getCustomers, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        this.customerList = response.result || [];
-        console.log('✅ Loaded customers:', this.customerList);
-        // Después de cargar clientes, intentar encontrar el ID si hay datos
-        if (this.customerData.name) {
-          this.findCustomerId();
-        }
-      },
-      error: (error) => {
-        console.error('❌ Error loading customers:', error);
-      },
-    });
-  }
-
-  // Función para formatear fechas para inputs de tipo date
-  private formatDateForInput(dateValue: any): string {
-    if (!dateValue) return '';
-
-    // Si ya es string en formato YYYY-MM-DD, devolverlo directamente
-    if (
-      typeof dateValue === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
-    ) {
-      return dateValue;
-    }
-
-    // Si es Date object o string de fecha, convertir cuidadosamente
-    let date: Date;
-    if (typeof dateValue === 'string') {
-      // Agregar tiempo para evitar problemas de zona horaria
-      date = new Date(dateValue + 'T12:00:00');
-    } else if (dateValue instanceof Date) {
-      date = dateValue;
-    } else {
-      return '';
-    }
-
-    if (isNaN(date.getTime())) {
-      return '';
-    }
-
-    // Formatear usando métodos locales
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
-  }
-
-  loadUsers() {
-    const info_usuarios = {
-      action: 'get',
-      bd: 'administracion',
-      table: 'user',
-      opts: {
-        customSelect:
-          'user.no_nomina, user.first_name, user.last_name, user.alias, CONCAT(user.first_name, " ", user.last_name) AS full_name',
-        where: {
-          deleted: 0,
-          organizacion: 0,
-        },
-        order_by: ['user.first_name', 'ASC'],
-      },
-    };
-
-    this.apiService.post(info_usuarios, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        this.listauser = response['result'] || [];
-      },
-      error: (error) => {
-        console.error('Error loading users:', error);
-      },
-    });
-  }
-
-  toggleEdit(blockName: string) {
-    // Solo alternar si el bloque es editable
-    if (this.editableBlocks[blockName as keyof typeof this.editableBlocks]) {
-      this.editingBlocks[blockName] = !this.editingBlocks[blockName];
-
-      // Si se está abriendo la edición del laboratorio, determinar acción inicial
-      if (blockName === 'laboratory' && this.editingBlocks[blockName]) {
-        this.initializeLaboratoryEdit();
-      } else if (blockName === 'laboratory') {
-        this.resetLaboratoryAction();
-      }
-
-      // Si se está abriendo la edición del cliente, determinar acción inicial
-      if (blockName === 'customer' && this.editingBlocks[blockName]) {
-        this.initializeCustomerEdit();
-      } else if (blockName === 'customer') {
-        this.resetCustomerAction();
-      }
-    }
-  }
-
-  // Modificar método para inicializar la edición del laboratorio
-  private initializeLaboratoryEdit(): void {
-    // Verificar si hay datos del laboratorio cargado
-    const hasLaboratoryData =
-      this.laboratoryData.name && this.laboratoryData.name.trim() !== '';
-
-    if (hasLaboratoryData) {
-      // Si hay datos del laboratorio, establecer como "editar" por defecto
-      this.laboratoryAction = 'edit';
-
-      // Si no tenemos el selectedLaboratoryId, intentar encontrarlo
-      if (!this.selectedLaboratoryId) {
-        const existingLab = this.laboratoryList.find(
-          (lab) =>
-            lab.name === this.laboratoryData.name &&
-            lab.email === this.laboratoryData.email
-        );
-        if (existingLab) {
-          this.selectedLaboratoryId = existingLab.id;
-        }
-      }
-    } else {
-      // Si no hay datos del laboratorio, crear nuevo
-      this.laboratoryAction = 'create';
-    }
-
-    this.tempLaboratoryId = '';
-  }
-
-  // Nuevo método para resetear la acción del laboratorio
-  private resetLaboratoryAction(): void {
-    this.laboratoryAction = null;
-    this.tempLaboratoryId = '';
   }
 
   // Nuevo método para establecer la acción del laboratorio
@@ -450,13 +323,12 @@ export class AdministrativeDataComponent implements OnInit {
     console.log('🔧 laboratoryAction set to:', this.laboratoryAction);
   }
 
-  // Modificar método para cargar laboratorio seleccionado
+  // Método simplificado para cargar laboratorio seleccionado
   loadSelectedLaboratory(): void {
     console.log('🔄 loadSelectedLaboratory called');
     console.log('🔄 tempLaboratoryId:', this.tempLaboratoryId);
 
     if (!this.tempLaboratoryId) {
-      // Si no hay selección, no hacer nada (mantener datos actuales)
       return;
     }
 
@@ -467,27 +339,16 @@ export class AdministrativeDataComponent implements OnInit {
     console.log('🔄 selectedLab found:', selectedLab);
 
     if (selectedLab) {
-      // Actualizar el ID seleccionado
       this.selectedLaboratoryId = this.tempLaboratoryId;
 
-      // Actualizar los datos del laboratorio con los del seleccionado
-      this.laboratoryData = {
-        name: selectedLab.name || '',
-        email: selectedLab.email || '',
-        phone: selectedLab.phone || '',
-        fax: selectedLab.fax || '',
-        postal_code: selectedLab.postal_code || '',
-        city: selectedLab.city || '',
-        street: selectedLab.street || '',
-        street_number: selectedLab.number || '', // Mapear desde 'number' de la BD
-        state: selectedLab.state || '',
-        country: selectedLab.country || '',
-      };
+      // Usar el servicio para mapear los datos
+      this.laboratoryData =
+        this.laboratoryService.mapSelectedLaboratoryData(selectedLab);
 
-      // NUEVO: Actualizar inmediatamente en el servicio DCC para que se reflejen los cambios en la interfaz
+      // Actualizar inmediatamente en el servicio DCC
       const updatedLaboratoryData = {
         ...this.laboratoryData,
-        laboratory_id: this.selectedLaboratoryId, // Mantener el ID actual pero no guardarlo aún en BD
+        laboratory_id: this.selectedLaboratoryId,
       };
       this.dccDataService.updateAdministrativeData(
         'laboratory',
@@ -498,26 +359,160 @@ export class AdministrativeDataComponent implements OnInit {
         '🔄 laboratoryData updated with selected lab:',
         this.laboratoryData
       );
-      console.log(
-        '🔄 selectedLaboratoryId updated to:',
-        this.selectedLaboratoryId
-      );
-      console.log('🔄 Data immediately updated in DCC service for UI display');
     }
   }
 
-  // Nuevo método para obtener texto del botón guardar
-  getLaboratorySaveButtonText(): string {
-    switch (this.laboratoryAction) {
-      case 'edit':
-        return 'Actualizar Laboratorio';
-      case 'select':
-        return 'Seleccionar Laboratorio';
-      case 'create':
-        return 'Crear Laboratorio';
-      default:
-        return 'Guardar';
+  // Nuevo método para resetear la acción del laboratorio
+  private resetLaboratoryAction(): void {
+    this.laboratoryAction = null;
+    this.tempLaboratoryId = '';
+  }
+
+  // Método simplificado para crear nuevo laboratorio
+  private createNewLaboratory(): void {
+    console.log('🆕 createNewLaboratory() called');
+
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    if (!certificateNumber) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Advertencia',
+        text: 'No se puede guardar: Certificate Number no está definido.',
+      });
+      return;
     }
+
+    this.laboratoryService.createLaboratory(this.laboratoryData).subscribe({
+      next: (labId) => {
+        this.selectedLaboratoryId = labId;
+        console.log(
+          '✅ Laboratory created with ID:',
+          this.selectedLaboratoryId
+        );
+
+        // Vincular al DCC y mostrar mensaje de éxito
+        this.linkLaboratoryToDcc(certificateNumber, true);
+
+        // Recargar la lista de laboratorios
+        this.loadLaboratories();
+      },
+      error: (error) => {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: error.message,
+        });
+      },
+    });
+  }
+
+  // Método simplificado para actualizar laboratorio
+  private updateLaboratoryInDatabase(): void {
+    console.log('🔄 updateLaboratoryInDatabase() called');
+
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    // Si no tenemos selectedLaboratoryId, intentar obtenerlo de los datos
+    if (
+      !this.selectedLaboratoryId &&
+      currentData.administrativeData.laboratory.laboratory_id
+    ) {
+      this.selectedLaboratoryId =
+        currentData.administrativeData.laboratory.laboratory_id;
+    }
+
+    if (!certificateNumber) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Advertencia',
+        text: 'No se puede guardar: Certificate Number no está definido.',
+      });
+      return;
+    }
+
+    this.laboratoryService
+      .updateLaboratory(this.selectedLaboratoryId, this.laboratoryData)
+      .subscribe({
+        next: (success) => {
+          if (success) {
+            console.log('✅ Laboratory updated successfully');
+            // Vincular al DCC
+            this.linkLaboratoryToDcc(certificateNumber, false);
+          } else {
+            Swal.fire({
+              icon: 'error',
+              title: 'Error',
+              text: 'No se pudo actualizar el laboratorio.',
+            });
+          }
+        },
+        error: (error) => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message,
+          });
+        },
+      });
+  }
+
+  // Método simplificado para seleccionar laboratorio
+  private selectLaboratory(): void {
+    console.log('🔄 selectLaboratory() called');
+
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    this.linkLaboratoryToDcc(certificateNumber, false);
+  }
+
+  // Método helper para vincular laboratorio al DCC
+  private linkLaboratoryToDcc(certificateNumber: string, isNew: boolean): void {
+    this.laboratoryService
+      .linkLaboratoryToDcc(certificateNumber, this.selectedLaboratoryId)
+      .subscribe({
+        next: (success) => {
+          if (success) {
+            // Actualizar el laboratory_id en el servicio
+            const finalLaboratoryData = {
+              ...this.laboratoryData,
+              laboratory_id: this.selectedLaboratoryId,
+            };
+            this.dccDataService.updateAdministrativeData(
+              'laboratory',
+              finalLaboratoryData
+            );
+
+            const successMessage = isNew
+              ? 'Laboratorio creado y vinculado correctamente'
+              : 'Laboratorio guardado correctamente';
+
+            Swal.fire({
+              icon: 'success',
+              title: '¡Guardado!',
+              text: successMessage,
+              timer: 2000,
+              showConfirmButton: false,
+              position: 'top-end',
+            });
+
+            this.editingBlocks['laboratory'] = false;
+          }
+        },
+        error: (error) => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message,
+          });
+        },
+      });
   }
 
   // Método para inicializar la edición del cliente
@@ -598,13 +593,12 @@ export class AdministrativeDataComponent implements OnInit {
     console.log('🔧 customerAction set to:', this.customerAction);
   }
 
-  // Método para cargar cliente seleccionado
+  // Método simplificado para cargar cliente seleccionado
   loadSelectedCustomer(): void {
     console.log('🔄 loadSelectedCustomer called');
     console.log('🔄 tempCustomerId:', this.tempCustomerId);
 
     if (!this.tempCustomerId) {
-      // Si no hay selección, no hacer nada (mantener datos actuales)
       return;
     }
 
@@ -615,27 +609,16 @@ export class AdministrativeDataComponent implements OnInit {
     console.log('🔄 selectedCustomer found:', selectedCustomer);
 
     if (selectedCustomer) {
-      // Actualizar el ID seleccionado
       this.selectedCustomerId = this.tempCustomerId;
 
-      // Actualizar los datos del cliente con los del seleccionado
-      this.customerData = {
-        name: selectedCustomer.name || '',
-        email: selectedCustomer.email || '',
-        phone: selectedCustomer.phone || '',
-        fax: selectedCustomer.fax || '',
-        postal_code: selectedCustomer.postal_code || '',
-        city: selectedCustomer.city || '',
-        street: selectedCustomer.street || '',
-        street_number: selectedCustomer.number || '', // Mapear desde 'number' de la BD
-        state: selectedCustomer.state || '',
-        country: selectedCustomer.country || '',
-      };
+      // Usar el servicio para mapear los datos
+      this.customerData =
+        this.customerService.mapSelectedCustomerData(selectedCustomer);
 
-      // Actualizar inmediatamente en el servicio DCC para que se reflejen los cambios en la interfaz
+      // Actualizar inmediatamente en el servicio DCC
       const updatedCustomerData = {
         ...this.customerData,
-        customer_id: this.selectedCustomerId, // Mantener el ID actual
+        customer_id: this.selectedCustomerId,
       };
       this.dccDataService.updateAdministrativeData(
         'customer',
@@ -646,9 +629,151 @@ export class AdministrativeDataComponent implements OnInit {
         '🔄 customerData updated with selected customer:',
         this.customerData
       );
-      console.log('🔄 selectedCustomerId updated to:', this.selectedCustomerId);
-      console.log('🔄 Data immediately updated in DCC service for UI display');
     }
+  }
+
+  // Nuevo método para crear nuevo cliente
+  private createNewCustomer(): void {
+    console.log('🆕 createNewCustomer() called');
+
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    if (!certificateNumber) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Advertencia',
+        text: 'No se puede guardar: Certificate Number no está definido.',
+      });
+      return;
+    }
+
+    this.customerService.createCustomer(this.customerData).subscribe({
+      next: (customerId) => {
+        this.selectedCustomerId = customerId;
+        console.log('✅ Customer created with ID:', this.selectedCustomerId);
+
+        // Vincular al DCC y mostrar mensaje de éxito
+        this.linkCustomerToDcc(certificateNumber, true);
+
+        // Recargar la lista de clientes
+        this.loadCustomers();
+      },
+      error: (error) => {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: error.message,
+        });
+      },
+    });
+  }
+
+  // Método simplificado para actualizar cliente
+  private updateCustomerInDatabase(): void {
+    console.log('🔄 updateCustomerInDatabase() called');
+
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    // Si no tenemos selectedCustomerId, intentar obtenerlo de los datos
+    if (
+      !this.selectedCustomerId &&
+      currentData.administrativeData.customer.customer_id
+    ) {
+      this.selectedCustomerId =
+        currentData.administrativeData.customer.customer_id;
+    }
+
+    if (!certificateNumber) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Advertencia',
+        text: 'No se puede guardar: Certificate Number no está definido.',
+      });
+      return;
+    }
+
+    this.customerService
+      .updateCustomer(this.selectedCustomerId, this.customerData)
+      .subscribe({
+        next: (success) => {
+          if (success) {
+            console.log('✅ Customer updated successfully');
+            // Vincular al DCC
+            this.linkCustomerToDcc(certificateNumber, false);
+          } else {
+            Swal.fire({
+              icon: 'error',
+              title: 'Error',
+              text: 'No se pudo actualizar el cliente.',
+            });
+          }
+        },
+        error: (error) => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message,
+          });
+        },
+      });
+  }
+
+  // Método simplificado para seleccionar cliente
+  private selectCustomer(): void {
+    console.log('🔄 selectCustomer() called');
+
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    this.linkCustomerToDcc(certificateNumber, false);
+  }
+
+  // Método helper para vincular cliente al DCC
+  private linkCustomerToDcc(certificateNumber: string, isNew: boolean): void {
+    this.customerService
+      .linkCustomerToDcc(certificateNumber, this.selectedCustomerId)
+      .subscribe({
+        next: (success) => {
+          if (success) {
+            // Actualizar el customer_id en el servicio
+            const finalCustomerData = {
+              ...this.customerData,
+              customer_id: this.selectedCustomerId,
+            };
+            this.dccDataService.updateAdministrativeData(
+              'customer',
+              finalCustomerData
+            );
+
+            const successMessage = isNew
+              ? 'Cliente creado y vinculado correctamente'
+              : 'Cliente guardado correctamente';
+
+            Swal.fire({
+              icon: 'success',
+              title: '¡Guardado!',
+              text: successMessage,
+              timer: 2000,
+              showConfirmButton: false,
+              position: 'top-end',
+            });
+
+            this.editingBlocks['customer'] = false;
+          }
+        },
+        error: (error) => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message,
+          });
+        },
+      });
   }
 
   // Método para obtener texto del botón guardar cliente
@@ -707,16 +832,6 @@ export class AdministrativeDataComponent implements OnInit {
         };
         break;
 
-      case 'identifications':
-        this.dccDataService.updateAdministrativeData(
-          'identifications',
-          this.identifications
-        );
-        dataToSave = {
-          identifications: JSON.stringify(this.identifications),
-        };
-        break;
-
       case 'laboratory':
         console.log('💾 Laboratory save block entered');
         console.log('💾 laboratoryAction:', this.laboratoryAction);
@@ -757,6 +872,10 @@ export class AdministrativeDataComponent implements OnInit {
 
         this.dccDataService.updateAdministrativeData(
           'responsiblePersons',
+          this.responsiblePersons
+        );
+        console.log(
+          '💾 responsiblePersons after update:',
           this.responsiblePersons
         );
 
@@ -806,603 +925,6 @@ export class AdministrativeDataComponent implements OnInit {
     this.editingBlocks[blockType] = false;
   }
 
-  // Nuevo método para crear laboratorio
-  private createNewLaboratory(): void {
-    console.log('🆕 createNewLaboratory() called');
-
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    console.log('🆕 certificateNumber:', certificateNumber);
-    console.log('🆕 laboratoryData to create:', this.laboratoryData);
-
-    if (!certificateNumber) {
-      console.log('❌ No certificate number found');
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    // Validar que los campos requeridos estén llenos
-    if (!this.laboratoryData.name || !this.laboratoryData.name.trim()) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Campo requerido',
-        text: 'El nombre del laboratorio es obligatorio.',
-      });
-      return;
-    }
-
-    // Mostrar loading
-    Swal.fire({
-      title: 'Creando Laboratorio...',
-      text: 'Por favor espere',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    // Crear el laboratorio en dcc_laboratory
-    const createLabRequest = {
-      action: 'create',
-      bd: this.database,
-      table: 'dcc_laboratory',
-      opts: {
-        attributes: {
-          name: this.laboratoryData.name,
-          email: this.laboratoryData.email || '',
-          phone: this.laboratoryData.phone || '',
-          fax: this.laboratoryData.fax || '',
-          postal_code: this.laboratoryData.postal_code || '',
-          city: this.laboratoryData.city || '',
-          street: this.laboratoryData.street || '',
-          number: this.laboratoryData.street_number || '',
-          state: this.laboratoryData.state || '',
-          country: this.laboratoryData.country || '',
-          deleted: 0, // Marcar como activo
-        },
-      },
-    };
-
-    console.log('🆕 createLabRequest:', createLabRequest);
-
-    this.apiService.post(createLabRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        console.log('✅ Create laboratory response:', response);
-        if (response.result) {
-          console.log('✅ Laboratory created successfully, now finding its ID');
-          // Buscar el ID del laboratorio recién creado
-          this.findCreatedLaboratoryId(certificateNumber);
-        } else {
-          console.log('❌ Failed to create laboratory');
-          Swal.close();
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudo crear el laboratorio.',
-          });
-        }
-      },
-      error: (error) => {
-        console.log('❌ Error creating laboratory:', error);
-        Swal.close();
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al crear el laboratorio.',
-        });
-      },
-    });
-  }
-
-  // Nuevo método para encontrar el ID del laboratorio recién creado
-  private findCreatedLaboratoryId(certificateNumber: string): void {
-    console.log('🔍 findCreatedLaboratoryId() called');
-
-    // Buscar el laboratorio recién creado por nombre y email (identificadores únicos)
-    const findLabRequest = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_laboratory',
-      opts: {
-        where: {
-          name: this.laboratoryData.name,
-          email: this.laboratoryData.email || '',
-          deleted: 0,
-        },
-        order_by: ['id', 'DESC'], // Obtener el más reciente
-        limit: 1,
-      },
-    };
-
-    console.log('🔍 findLabRequest:', findLabRequest);
-
-    this.apiService.post(findLabRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        console.log('✅ Find laboratory response:', response);
-        if (response.result && response.result.length > 0) {
-          const createdLab = response.result[0];
-          this.selectedLaboratoryId = createdLab.id.toString();
-          console.log(
-            '✅ Found created laboratory ID:',
-            this.selectedLaboratoryId
-          );
-
-          // Actualizar la referencia en dcc_data (indicando que es un laboratorio nuevo)
-          this.updateDccDataLaboratoryReference(certificateNumber, true);
-
-          // Recargar la lista de laboratorios para incluir el nuevo
-          this.loadLaboratories();
-        } else {
-          console.log('❌ Could not find created laboratory');
-          Swal.close();
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudo encontrar el laboratorio creado.',
-          });
-        }
-      },
-      error: (error) => {
-        console.log('❌ Error finding created laboratory:', error);
-        Swal.close();
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al buscar el laboratorio creado.',
-        });
-      },
-    });
-  }
-
-  // Modificar método updateDccDataLaboratoryReference para manejar mensajes específicos
-  private updateDccDataLaboratoryReference(
-    certificateNumber: string,
-    isNewLab: boolean = false
-  ): void {
-    console.log('🔗 updateDccDataLaboratoryReference() called');
-    console.log('🔗 certificateNumber:', certificateNumber);
-    console.log('🔗 selectedLaboratoryId:', this.selectedLaboratoryId);
-    console.log('🔗 isNewLab:', isNewLab);
-
-    const updateDccRequest = {
-      action: 'update',
-      bd: this.database,
-      table: 'dcc_data',
-      opts: {
-        where: { id: certificateNumber },
-        attributes: {
-          id_laboratory: this.selectedLaboratoryId,
-        },
-      },
-    };
-
-    console.log('🔗 updateDccRequest:', updateDccRequest);
-
-    this.apiService.post(updateDccRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        console.log('✅ Update DCC reference response:', response);
-        Swal.close();
-        if (response.result) {
-          console.log('✅ DCC reference updated successfully');
-
-          // Actualizar el laboratory_id en el servicio
-          const finalLaboratoryData = {
-            ...this.laboratoryData,
-            laboratory_id: this.selectedLaboratoryId,
-          };
-          this.dccDataService.updateAdministrativeData(
-            'laboratory',
-            finalLaboratoryData
-          );
-
-          const successMessage = isNewLab
-            ? 'Laboratorio creado y vinculado correctamente'
-            : 'Laboratorio guardado correctamente';
-
-          Swal.fire({
-            icon: 'success',
-            title: '¡Guardado!',
-            text: successMessage,
-            timer: 2000,
-            showConfirmButton: false,
-            position: 'top-end',
-          });
-
-          // Salir del modo edición
-          this.editingBlocks['laboratory'] = false;
-        } else {
-          console.log('❌ Failed to update DCC reference');
-          const errorMessage = isNewLab
-            ? 'No se pudo vincular el laboratorio creado al DCC.'
-            : 'No se pudo vincular el laboratorio al DCC.';
-
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: errorMessage,
-          });
-        }
-      },
-      error: (error) => {
-        console.log('❌ Error updating DCC reference:', error);
-        Swal.close();
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al vincular el laboratorio.',
-        });
-      },
-    });
-  }
-
-  // Modificar las llamadas existentes a updateDccDataLaboratoryReference
-  private updateLaboratoryInDatabase(): void {
-    console.log('🔄 updateLaboratoryInDatabase() called');
-
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    console.log('🔄 certificateNumber:', certificateNumber);
-    console.log('🔄 selectedLaboratoryId:', this.selectedLaboratoryId);
-    console.log('🔄 laboratoryData to update:', this.laboratoryData);
-
-    if (!certificateNumber) {
-      console.log('❌ No certificate number found');
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    // Si no tenemos selectedLaboratoryId, intentar obtenerlo de los datos
-    if (
-      !this.selectedLaboratoryId &&
-      currentData.administrativeData.laboratory.laboratory_id
-    ) {
-      this.selectedLaboratoryId =
-        currentData.administrativeData.laboratory.laboratory_id;
-      console.log(
-        '🔄 Using laboratory_id from current data:',
-        this.selectedLaboratoryId
-      );
-    }
-
-    if (!this.selectedLaboratoryId) {
-      console.log('❌ No laboratory ID available for update');
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'No se puede actualizar: no se encontró el ID del laboratorio.',
-      });
-      return;
-    }
-
-    // Mostrar loading
-    Swal.fire({
-      title: 'Guardando Laboratorio...',
-      text: 'Por favor espere',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    // Actualizar el laboratorio en dcc_laboratory usando el selectedLaboratoryId
-    const updateLabRequest = {
-      action: 'update',
-      bd: this.database,
-      table: 'dcc_laboratory',
-      opts: {
-        where: { id: this.selectedLaboratoryId },
-        attributes: {
-          name: this.laboratoryData.name,
-          email: this.laboratoryData.email,
-          phone: this.laboratoryData.phone,
-          fax: this.laboratoryData.fax,
-          postal_code: this.laboratoryData.postal_code,
-          city: this.laboratoryData.city,
-          street: this.laboratoryData.street,
-          number: this.laboratoryData.street_number,
-          state: this.laboratoryData.state,
-          country: this.laboratoryData.country,
-        },
-      },
-    };
-
-    console.log('🔄 updateLabRequest:', updateLabRequest);
-
-    this.apiService.post(updateLabRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        console.log('✅ Update laboratory response:', response);
-        if (response.result) {
-          console.log(
-            '✅ Laboratory updated successfully, now updating DCC reference'
-          );
-          // Actualizar la referencia en dcc_data
-          this.updateDccDataLaboratoryReference(certificateNumber, false);
-        } else {
-          console.log('❌ Failed to update laboratory');
-          Swal.close();
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudo actualizar el laboratorio.',
-          });
-        }
-      },
-      error: (error) => {
-        console.log('❌ Error updating laboratory:', error);
-        Swal.close();
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al actualizar el laboratorio.',
-        });
-      },
-    });
-  }
-
-  // Método para crear cliente
-  private createNewCustomer(): void {
-    console.log('🆕 createNewCustomer() called');
-
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    console.log('🆕 certificateNumber:', certificateNumber);
-    console.log('🆕 customerData to create:', this.customerData);
-
-    if (!certificateNumber) {
-      console.log('❌ No certificate number found');
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    // Validar que los campos requeridos estén llenos
-    if (!this.customerData.name || !this.customerData.name.trim()) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Campo requerido',
-        text: 'El nombre del cliente es obligatorio.',
-      });
-      return;
-    }
-
-    // Mostrar loading
-    Swal.fire({
-      title: 'Creando Cliente...',
-      text: 'Por favor espere',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    // Crear el cliente en dcc_customer
-    const createCustomerRequest = {
-      action: 'create',
-      bd: this.database,
-      table: 'dcc_customer',
-      opts: {
-        attributes: {
-          name: this.customerData.name,
-          email: this.customerData.email || '',
-          phone: this.customerData.phone || '',
-          fax: this.customerData.fax || '',
-          postal_code: this.customerData.postal_code || '',
-          city: this.customerData.city || '',
-          street: this.customerData.street || '',
-          number: this.customerData.street_number || '',
-          state: this.customerData.state || '',
-          country: this.customerData.country || '',
-          deleted: 0, // Marcar como activo
-        },
-      },
-    };
-
-    console.log('🆕 createCustomerRequest:', createCustomerRequest);
-
-    this.apiService.post(createCustomerRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        console.log('✅ Create customer response:', response);
-        if (response.result) {
-          console.log('✅ Customer created successfully, now finding its ID');
-          // Buscar el ID del cliente recién creado
-          this.findCreatedCustomerId(certificateNumber);
-        } else {
-          console.log('❌ Failed to create customer');
-          Swal.close();
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudo crear el cliente.',
-          });
-        }
-      },
-      error: (error) => {
-        console.log('❌ Error creating customer:', error);
-        Swal.close();
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al crear el cliente.',
-        });
-      },
-    });
-  }
-
-  // Método para encontrar el ID del cliente recién creado
-  private findCreatedCustomerId(certificateNumber: string): void {
-    console.log('🔍 findCreatedCustomerId() called');
-
-    // Buscar el cliente recién creado por nombre y email (identificadores únicos)
-    const findCustomerRequest = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_customer',
-      opts: {
-        where: {
-          name: this.customerData.name,
-          email: this.customerData.email || '',
-          deleted: 0,
-        },
-        order_by: ['id', 'DESC'], // Obtener el más reciente
-        limit: 1,
-      },
-    };
-
-    console.log('🔍 findCustomerRequest:', findCustomerRequest);
-
-    this.apiService.post(findCustomerRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        console.log('✅ Find customer response:', response);
-        if (response.result && response.result.length > 0) {
-          const createdCustomer = response.result[0];
-          this.selectedCustomerId = createdCustomer.id.toString();
-          console.log('✅ Found created customer ID:', this.selectedCustomerId);
-
-          // Actualizar la referencia en dcc_data (indicando que es un cliente nuevo)
-          this.updateDccDataCustomerReference(certificateNumber, true);
-
-          // Recargar la lista de clientes para incluir el nuevo
-          this.loadCustomers();
-        } else {
-          console.log('❌ Could not find created customer');
-          Swal.close();
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudo encontrar el cliente creado.',
-          });
-        }
-      },
-      error: (error) => {
-        console.log('❌ Error finding created customer:', error);
-        Swal.close();
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al buscar el cliente creado.',
-        });
-      },
-    });
-  }
-
-  // Método para actualizar la referencia del cliente en dcc_data
-  private updateDccDataCustomerReference(
-    certificateNumber: string,
-    isNewCustomer: boolean = false
-  ): void {
-    console.log('🔗 updateDccDataCustomerReference() called');
-    console.log('🔗 certificateNumber:', certificateNumber);
-    console.log('🔗 selectedCustomerId:', this.selectedCustomerId);
-    console.log('🔗 isNewCustomer:', isNewCustomer);
-
-    const updateDccRequest = {
-      action: 'update',
-      bd: this.database,
-      table: 'dcc_data',
-      opts: {
-        where: { id: certificateNumber },
-        attributes: {
-          id_customer: this.selectedCustomerId,
-        },
-      },
-    };
-
-    console.log('🔗 updateDccRequest:', updateDccRequest);
-
-    this.apiService.post(updateDccRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        console.log('✅ Update DCC reference response:', response);
-        Swal.close();
-        if (response.result) {
-          console.log('✅ DCC reference updated successfully');
-
-          // Actualizar el customer_id en el servicio
-          const finalCustomerData = {
-            ...this.customerData,
-            customer_id: this.selectedCustomerId,
-          };
-          this.dccDataService.updateAdministrativeData(
-            'customer',
-            finalCustomerData
-          );
-
-          const successMessage = isNewCustomer
-            ? 'Cliente creado y vinculado correctamente'
-            : 'Cliente guardado correctamente';
-
-          Swal.fire({
-            icon: 'success',
-            title: '¡Guardado!',
-            text: successMessage,
-            timer: 2000,
-            showConfirmButton: false,
-            position: 'top-end',
-          });
-
-          // Salir del modo edición
-          this.editingBlocks['customer'] = false;
-        } else {
-          console.log('❌ Failed to update DCC reference');
-          const errorMessage = isNewCustomer
-            ? 'No se pudo vincular el cliente creado al DCC.'
-            : 'No se pudo vincular el cliente al DCC.';
-
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: errorMessage,
-          });
-        }
-      },
-      error: (error) => {
-        console.log('❌ Error updating DCC reference:', error);
-        Swal.close();
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al vincular el cliente.',
-        });
-      },
-    });
-  }
-
-  // Nuevo método para verificar si hay laboratorio cargado
-  hasLoadedLaboratory(): boolean {
-    const hasLab =
-      this.laboratoryData.name && this.laboratoryData.name.trim() !== '';
-    console.log('🔍 hasLoadedLaboratory():', hasLab);
-    console.log('🔍 laboratoryData.name:', this.laboratoryData.name);
-    console.log('🔍 selectedLaboratoryId:', this.selectedLaboratoryId);
-    return hasLab;
-  }
-
-  // Nuevo método para verificar si hay cliente cargado
-  hasLoadedCustomer(): boolean {
-    const hasCustomer =
-      this.customerData.name && this.customerData.name.trim() !== '';
-    console.log('🔍 hasLoadedCustomer():', hasCustomer);
-    console.log('🔍 customerData.name:', this.customerData.name);
-    console.log('🔍 selectedCustomerId:', this.selectedCustomerId);
-    return hasCustomer;
-  }
-
   // Método para verificar si los campos deben estar deshabilitados
   areFieldsDisabled(): boolean {
     return this.laboratoryAction === 'select';
@@ -1413,214 +935,79 @@ export class AdministrativeDataComponent implements OnInit {
     return this.customerAction === 'select';
   }
 
-  // Nuevo método para seleccionar laboratorio (cambiar referencia y datos)
-  private selectLaboratory(): void {
-    console.log(
-      '🔄 selectLaboratory() called - Only updating database reference'
-    );
+  // Método para inicializar la edición del laboratorio
+  private initializeLaboratoryEdit(): void {
+    // Verificar si hay datos del laboratorio cargado
+    const hasLaboratoryData =
+      this.laboratoryData.name && this.laboratoryData.name.trim() !== '';
 
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
+    if (hasLaboratoryData) {
+      // Si hay datos del laboratorio, establecer como "editar" por defecto
+      this.laboratoryAction = 'edit';
 
-    console.log('🔄 certificateNumber:', certificateNumber);
-    console.log('🔄 selectedLaboratoryId:', this.selectedLaboratoryId);
-
-    if (!certificateNumber) {
-      console.log('❌ No certificate number found');
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    if (!this.selectedLaboratoryId) {
-      console.log('❌ No laboratory ID selected');
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'No se puede seleccionar: no se ha seleccionado un laboratorio.',
-      });
-      return;
-    }
-
-    // Mostrar loading
-    Swal.fire({
-      title: 'Guardando selección...',
-      text: 'Por favor espere',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    // SOLO actualizar la referencia en dcc_data
-    const updateDccRequest = {
-      action: 'update',
-      bd: this.database,
-      table: 'dcc_data',
-      opts: {
-        where: { id: certificateNumber },
-        attributes: {
-          id_laboratory: this.selectedLaboratoryId,
-        },
-      },
-    };
-
-    console.log('🔄 updateDccRequest (only reference):', updateDccRequest);
-
-    this.apiService.post(updateDccRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        console.log('✅ Update DCC reference response:', response);
-        Swal.close();
-        if (response.result) {
-          // Actualizar el laboratory_id en el servicio para mantener consistencia
-          const finalLaboratoryData = {
-            ...this.laboratoryData,
-            laboratory_id: this.selectedLaboratoryId,
-          };
-          this.dccDataService.updateAdministrativeData(
-            'laboratory',
-            finalLaboratoryData
-          );
-
-          console.log('✅ Laboratory reference saved to database successfully');
-          Swal.fire({
-            icon: 'success',
-            title: '¡Laboratorio Seleccionado!',
-            text: 'La referencia del laboratorio ha sido guardada correctamente',
-            timer: 2000,
-            showConfirmButton: false,
-            position: 'top-end',
-          });
-          // Salir del modo edición
-          this.editingBlocks['laboratory'] = false;
-        } else {
-          console.log('❌ Failed to update DCC reference');
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudo guardar la selección del laboratorio.',
-          });
+      // Si no tenemos el selectedLaboratoryId, intentar encontrarlo
+      if (!this.selectedLaboratoryId) {
+        const existingLab = this.laboratoryList.find(
+          (lab) =>
+            lab.name === this.laboratoryData.name &&
+            lab.email === this.laboratoryData.email
+        );
+        if (existingLab) {
+          this.selectedLaboratoryId = existingLab.id;
         }
-      },
-      error: (error) => {
-        console.log('❌ Error updating DCC reference:', error);
-        Swal.close();
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al guardar la selección.',
-        });
-      },
-    });
+      }
+    } else {
+      // Si no hay datos del laboratorio, crear nuevo
+      this.laboratoryAction = 'create';
+    }
+
+    this.tempLaboratoryId = '';
   }
 
-  // Método para seleccionar cliente (cambiar referencia y datos)
-  private selectCustomer(): void {
-    console.log(
-      '🔄 selectCustomer() called - Only updating database reference'
-    );
+  // Método para sincronizar la fecha de fin de rendimiento cuando cambia is_range_date
+  onIsRangeDateChange() {
+    if (this.coreData.is_range_date && this.coreData.performance_date) {
+      // Si es un rango de fechas, establecer la fecha de fin igual a la de inicio
+      this.coreData.end_performance_date = this.coreData.performance_date;
+    } else {
+      // Si no es un rango de fechas, poner null la fecha de fin
+      this.coreData.end_performance_date = null;
+    }
+  }
 
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
+  // Función para formatear fechas para inputs de tipo date
+  private formatDateForInput(dateValue: any): string {
+    if (!dateValue) return '';
 
-    console.log('🔄 certificateNumber:', certificateNumber);
-    console.log('🔄 selectedCustomerId:', this.selectedCustomerId);
-
-    if (!certificateNumber) {
-      console.log('❌ No certificate number found');
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
+    // Si ya es string en formato YYYY-MM-DD, devolverlo directamente
+    if (
+      typeof dateValue === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
+    ) {
+      return dateValue;
     }
 
-    if (!this.selectedCustomerId) {
-      console.log('❌ No customer ID selected');
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'No se puede seleccionar: no se ha seleccionado un cliente.',
-      });
-      return;
+    // Si es Date object o string de fecha, convertir cuidadosamente
+    let date: Date;
+    if (typeof dateValue === 'string') {
+      // Agregar tiempo para evitar problemas de zona horaria
+      date = new Date(dateValue + 'T12:00:00');
+    } else if (dateValue instanceof Date) {
+      date = dateValue;
+    } else {
+      return '';
     }
 
-    // Mostrar loading
-    Swal.fire({
-      title: 'Guardando selección...',
-      text: 'Por favor espere',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
+    if (isNaN(date.getTime())) {
+      return '';
+    }
 
-    // SOLO actualizar la referencia en dcc_data
-    const updateDccRequest = {
-      action: 'update',
-      bd: this.database,
-      table: 'dcc_data',
-      opts: {
-        where: { id: certificateNumber },
-        attributes: {
-          id_customer: this.selectedCustomerId,
-        },
-      },
-    };
+    // Formatear usando métodos locales
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
 
-    console.log('🔄 updateDccRequest (only reference):', updateDccRequest);
-
-    this.apiService.post(updateDccRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        console.log('✅ Update DCC reference response:', response);
-        Swal.close();
-        if (response.result) {
-          // Actualizar el customer_id en el servicio para mantener consistencia
-          const finalCustomerData = {
-            ...this.customerData,
-            customer_id: this.selectedCustomerId,
-          };
-          this.dccDataService.updateAdministrativeData(
-            'customer',
-            finalCustomerData
-          );
-
-          console.log('✅ Customer reference saved to database successfully');
-          Swal.fire({
-            icon: 'success',
-            title: '¡Cliente Seleccionado!',
-            text: 'La referencia del cliente ha sido guardada correctamente',
-            timer: 2000,
-            showConfirmButton: false,
-            position: 'top-end',
-          });
-          // Salir del modo edición
-          this.editingBlocks['customer'] = false;
-        } else {
-          console.log('❌ Failed to update DCC reference');
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudo guardar la selección del cliente.',
-          });
-        }
-      },
-      error: (error) => {
-        console.log('❌ Error updating DCC reference:', error);
-        Swal.close();
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al guardar la selección.',
-        });
-      },
-    });
+    return `${year}-${month}-${day}`;
   }
 
   // Nueva función para formatear fechas para la base de datos sin problemas de zona horaria
@@ -1692,7 +1079,6 @@ export class AdministrativeDataComponent implements OnInit {
     };
 
     console.log('updateRequest:', updateRequest);
-
     console.log(`Guardando ${blockType}:`, dataToSave);
 
     this.apiService.post(updateRequest, UrlClass.URLNuevo).subscribe({
@@ -1735,12 +1121,237 @@ export class AdministrativeDataComponent implements OnInit {
     const displayNames: { [key: string]: string } = {
       software: 'Software',
       core: 'Datos Principales',
-      identifications: 'Identificaciones',
       laboratory: 'Laboratorio',
       responsible: 'Personas Responsables',
       customer: 'Cliente',
     };
     return displayNames[blockType] || blockType;
+  }
+
+  // Métodos para responsible persons
+  private saveResponsiblePersons(): void {
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    if (!certificateNumber) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Advertencia',
+        text: 'No se puede guardar: Certificate Number no está definido.',
+      });
+      return;
+    }
+
+    this.responsiblePersonsService
+      .saveResponsiblePersons(
+        certificateNumber,
+        this.responsiblePersons,
+        this.listauser
+      )
+      .subscribe({
+        next: (success) => {
+          if (success) {
+            Swal.fire({
+              icon: 'success',
+              title: '¡Guardado!',
+              text: 'Personas Responsables guardadas correctamente',
+              timer: 2000,
+              showConfirmButton: false,
+              position: 'top-end',
+            });
+          } else {
+            Swal.fire({
+              icon: 'warning',
+              title: 'Sin datos válidos',
+              text: 'No hay personas responsables válidas para guardar.',
+            });
+          }
+          this.editingBlocks['responsible'] = false;
+        },
+        error: (error) => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Ocurrió un error al guardar las personas responsables.',
+          });
+        },
+      });
+  }
+
+  // Método para verificar si necesitamos cargar responsible persons desde BD
+  private checkIfNeedToLoadResponsiblePersonsFromDB() {
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    console.log('🔍 Checking if need to load responsible persons from DB');
+    console.log('🔍 Certificate number:', certificateNumber);
+    console.log('🔍 Current responsible persons:', this.responsiblePersons);
+
+    // Si hay un certificate number y los responsible persons están vacíos o son los predeterminados
+    if (
+      certificateNumber &&
+      (this.responsiblePersons.length === 0 ||
+        (this.responsiblePersons.length === 2 &&
+          !this.responsiblePersons[0].role &&
+          (!this.responsiblePersons[0].no_nomina ||
+            !this.responsiblePersons[0].name)))
+    ) {
+      console.log(
+        '📋 Loading responsible persons from database for existing DCC'
+      );
+      this.loadResponsiblePersonsFromDB(certificateNumber);
+    }
+  }
+
+  // Método para cargar responsible persons desde la base de datos por DCC ID
+  loadResponsiblePersonsFromDB(dccId: string) {
+    console.log('📋 Loading responsible persons for DCC:', dccId);
+
+    this.responsiblePersonsService
+      .loadResponsiblePersonsFromDB(dccId)
+      .subscribe({
+        next: (responsibleData) => {
+          console.log(
+            '✅ Loaded responsible persons from DB:',
+            responsibleData
+          );
+
+          // Mapear los datos de la BD con la información de usuarios
+          const mappedResponsiblePersons =
+            this.responsiblePersonsService.mapResponsiblePersonsWithUsers(
+              responsibleData,
+              this.listauser
+            );
+
+          console.log(
+            '✅ Mapped responsible persons:',
+            mappedResponsiblePersons
+          );
+
+          // Actualizar los datos en el servicio DCC y localmente
+          this.responsiblePersons = mappedResponsiblePersons;
+          this.dccDataService.updateAdministrativeData(
+            'responsiblePersons',
+            mappedResponsiblePersons
+          );
+        },
+        error: (error) => {
+          console.error('❌ Error loading responsible persons:', error);
+        },
+      });
+  }
+
+  // Método modificado para manejar la selección de usuario
+  onUserSelect(selectedItem: any, personIndex: number) {
+    console.log(
+      '👤 User selected:',
+      selectedItem,
+      'for person index:',
+      personIndex
+    );
+
+    if (selectedItem) {
+      // Almacenar tanto no_nomina como full_name en el objeto person
+      this.responsiblePersons[personIndex].no_nomina = selectedItem.no_nomina;
+      this.responsiblePersons[personIndex].full_name = selectedItem.name; // 'name' es el campo CONCAT
+
+      // Opcional: llenar automáticamente email y teléfono si están disponibles
+      if (selectedItem.email) {
+        this.responsiblePersons[personIndex].email = selectedItem.email;
+      }
+      if (selectedItem.phone) {
+        this.responsiblePersons[personIndex].phone = selectedItem.phone;
+      }
+
+      console.log(
+        '✅ Updated person data:',
+        this.responsiblePersons[personIndex]
+      );
+    }
+  }
+
+  // Método para manejar cuando se deselecciona un usuario
+  onUserDeselect(deselectedItem: any, personIndex: number) {
+    console.log(
+      '👤 User deselected:',
+      deselectedItem,
+      'for person index:',
+      personIndex
+    );
+
+    // Limpiar los datos del usuario
+    this.responsiblePersons[personIndex].no_nomina = '';
+    this.responsiblePersons[personIndex].full_name = '';
+
+    // Opcional: limpiar email y teléfono también si fueron llenados automáticamente
+    // this.responsiblePersons[personIndex].email = '';
+    // this.responsiblePersons[personIndex].phone = '';
+  }
+
+  // Método para obtener el nombre de pantalla para una persona responsable
+  getResponsiblePersonDisplayName(person: any): string {
+    console.log('🔍 Getting display name for person:', person);
+
+    // Si tiene full_name directamente (desde la BD), usarlo
+    if (person.full_name) {
+      return person.full_name;
+    }
+
+    // Si tiene no_nomina, buscar en la lista de usuarios
+    if (person.no_nomina && this.listauser.length > 0) {
+      const foundUser = this.listauser.find(
+        (user) => user.no_nomina === person.no_nomina
+      );
+      if (foundUser) {
+        return foundUser.name; // Usar 'name' que es el CONCAT del servicio
+      }
+    }
+
+    // Fallback para compatibilidad con formato anterior
+    if (typeof person.name === 'string' && person.name) {
+      return person.name;
+    }
+
+    return 'No asignado';
+  }
+
+  // Métodos de control de estado
+  isEditing(blockName: string): boolean {
+    return this.editingBlocks[blockName] || false;
+  }
+
+  isBlockEditable(blockName: string): boolean {
+    return this.editableBlocks[blockName as keyof typeof this.editableBlocks];
+  }
+
+  // Método para obtener texto del botón guardar laboratorio
+  getLaboratorySaveButtonText(): string {
+    switch (this.laboratoryAction) {
+      case 'edit':
+        return 'Actualizar Laboratorio';
+      case 'select':
+        return 'Seleccionar Laboratorio';
+      case 'create':
+        return 'Crear Laboratorio';
+      default:
+        return 'Guardar';
+    }
+  }
+
+  // Método para verificar si hay laboratorio cargado
+  hasLoadedLaboratory(): boolean {
+    const hasLab =
+      this.laboratoryData.name && this.laboratoryData.name.trim() !== '';
+    return hasLab;
+  }
+
+  // Método para verificar si hay cliente cargado
+  hasLoadedCustomer(): boolean {
+    const hasCustomer =
+      this.customerData.name && this.customerData.name.trim() !== '';
+    return hasCustomer;
   }
 
   // Método para manejar cambios de fecha y actualizar is_range_date
@@ -1762,17 +1373,6 @@ export class AdministrativeDataComponent implements OnInit {
       } else {
         this.coreData.is_range_date = true;
       }
-    }
-  }
-
-  // Método para sincronizar la fecha de fin de rendimiento cuando cambia is_range_date
-  onIsRangeDateChange() {
-    if (this.coreData.is_range_date && this.coreData.performance_date) {
-      // Si es un rango de fechas, establecer la fecha de fin igual a la de inicio
-      this.coreData.end_performance_date = this.coreData.performance_date;
-    } else {
-      // Si no es un rango de fechas, poner null la fecha de fin
-      this.coreData.end_performance_date = null;
     }
   }
 
@@ -1801,6 +1401,7 @@ export class AdministrativeDataComponent implements OnInit {
     return '';
   }
 
+  // Método para cancelar la edición y revertir cambios
   cancelEdit(blockName: string) {
     this.editingBlocks[blockName] = false;
 
@@ -1822,15 +1423,30 @@ export class AdministrativeDataComponent implements OnInit {
         break;
       case 'core':
         this.coreData = { ...currentData.administrativeData.core };
-        break;
-      case 'identifications':
-        this.identifications = [
-          ...currentData.administrativeData.identifications,
-        ];
+        // Formatear fechas nuevamente al cancelar edición
+        if (this.coreData.receipt_date) {
+          this.coreData.receipt_date = this.formatDateForInput(
+            this.coreData.receipt_date
+          );
+        }
+        if (this.coreData.performance_date) {
+          this.coreData.performance_date = this.formatDateForInput(
+            this.coreData.performance_date
+          );
+        }
+        if (this.coreData.end_performance_date) {
+          this.coreData.end_performance_date = this.formatDateForInput(
+            this.coreData.end_performance_date
+          );
+        }
+        if (this.coreData.issue_date) {
+          this.coreData.issue_date = this.formatDateForInput(
+            this.coreData.issue_date
+          );
+        }
         break;
       case 'laboratory':
         this.laboratoryData = { ...currentData.administrativeData.laboratory };
-        // Restaurar selectedLaboratoryId si existe en los datos cargados
         break;
       case 'responsible':
         this.responsiblePersons = [
@@ -1839,371 +1455,7 @@ export class AdministrativeDataComponent implements OnInit {
         break;
       case 'customer':
         this.customerData = { ...currentData.administrativeData.customer };
-        // Restaurar selectedCustomerId si existe en los datos cargados
         break;
-    }
-  }
-
-  addIdentification() {
-    this.identifications.push({ issuer: '', value: '', name: '' });
-  }
-
-  removeIdentification(index: number) {
-    this.identifications.splice(index, 1);
-  }
-
-  addResponsiblePerson() {
-    this.responsiblePersons.push({
-      role: '',
-      name: [], // Inicializar como array para multiselect
-      email: '',
-      phone: '',
-    });
-  }
-
-  removeResponsiblePerson(index: number) {
-    this.responsiblePersons.splice(index, 1);
-  }
-
-  onUserSelect(selectedItem: any, personIndex: number) {
-    // Cuando se selecciona un usuario, actualizar el campo name con full_name
-    if (selectedItem && selectedItem.full_name) {
-      // Almacenar el nombre completo como cadena, pero mantener el formato de array para multiselect
-      const actualName = selectedItem.full_name;
-      this.responsiblePersons[personIndex].name = actualName;
-      console.log('Selected user name:', actualName);
-    }
-  }
-
-  // Método para obtener el nombre de pantalla para una persona responsable
-  getResponsiblePersonDisplayName(person: any): string {
-    // Manejar tanto el formato de array (desde multiselect) como el formato de cadena (desde XML)
-    if (Array.isArray(person.name) && person.name.length > 0) {
-      return (
-        person.name[0].full_name || person.name[0] || 'Usuario seleccionado'
-      );
-    } else if (typeof person.name === 'string' && person.name) {
-      return person.name;
-    }
-    return 'No asignado';
-  }
-
-  isEditing(blockName: string): boolean {
-    return this.editingBlocks[blockName] || false;
-  }
-
-  isBlockEditable(blockName: string): boolean {
-    return this.editableBlocks[blockName as keyof typeof this.editableBlocks];
-  }
-
-  // Nuevo método para vincular laboratorio existente sin modificarlo
-  private linkExistingLaboratory(): void {
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    if (!certificateNumber) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    // Mostrar loading
-    Swal.fire({
-      title: 'Vinculando Laboratorio...',
-      text: 'Por favor espere',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    // Solo actualizar la referencia en dcc_data
-    this.updateDccDataLaboratoryReference(certificateNumber);
-  }
-  // Método para actualizar cliente existente
-  private updateCustomerInDatabase(): void {
-    console.log('🔄 updateCustomerInDatabase() called');
-
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    console.log('🔄 certificateNumber:', certificateNumber);
-    console.log('🔄 selectedCustomerId:', this.selectedCustomerId);
-    console.log('🔄 customerData to update:', this.customerData);
-
-    if (!certificateNumber) {
-      console.log('❌ No certificate number found');
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    // Si no tenemos selectedCustomerId, intentar obtenerlo de los datos
-    if (
-      !this.selectedCustomerId &&
-      currentData.administrativeData.customer.customer_id
-    ) {
-      this.selectedCustomerId =
-        currentData.administrativeData.customer.customer_id;
-      console.log(
-        '🔄 Using customer_id from current data:',
-        this.selectedCustomerId
-      );
-    }
-
-    if (!this.selectedCustomerId) {
-      console.log('❌ No customer ID available for update');
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'No se puede actualizar: no se encontró el ID del cliente.',
-      });
-      return;
-    }
-
-    // Mostrar loading
-    Swal.fire({
-      title: 'Guardando Cliente...',
-      text: 'Por favor espere',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    // Actualizar el cliente en dcc_customer usando el selectedCustomerId
-    const updateCustomerRequest = {
-      action: 'update',
-      bd: this.database,
-      table: 'dcc_customer',
-      opts: {
-        where: { id: this.selectedCustomerId },
-        attributes: {
-          name: this.customerData.name,
-          email: this.customerData.email,
-          phone: this.customerData.phone,
-          fax: this.customerData.fax,
-          postal_code: this.customerData.postal_code,
-          city: this.customerData.city,
-          street: this.customerData.street,
-          number: this.customerData.street_number,
-          state: this.customerData.state,
-          country: this.customerData.country,
-        },
-      },
-    };
-
-    console.log('🔄 updateCustomerRequest:', updateCustomerRequest);
-
-    this.apiService.post(updateCustomerRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        console.log('✅ Update customer response:', response);
-        if (response.result) {
-          console.log(
-            '✅ Customer updated successfully, now updating DCC reference'
-          );
-          // Actualizar la referencia en dcc_data
-          this.updateDccDataCustomerReference(certificateNumber, false);
-        } else {
-          console.log('❌ Failed to update customer');
-          Swal.close();
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudo actualizar el cliente.',
-          });
-        }
-      },
-      error: (error) => {
-        console.log('❌ Error updating customer:', error);
-        Swal.close();
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al actualizar el cliente.',
-        });
-      },
-    });
-  }
-
-  // Nuevo método para guardar responsible persons
-  private saveResponsiblePersons(): void {
-    console.log('💾 saveResponsiblePersons() called');
-
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    console.log('💾 certificateNumber:', certificateNumber);
-    console.log('💾 responsiblePersons to save:', this.responsiblePersons);
-
-    if (!certificateNumber) {
-      console.log('❌ No certificate number found');
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    // Mostrar loading
-    Swal.fire({
-      title: 'Guardando Personas Responsables...',
-      text: 'Por favor espere',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    // Primero eliminar los registros existentes para este DCC
-    const deleteExistingRequest = {
-      action: 'delete',
-      bd: this.database,
-      table: 'dcc_responsiblepersons',
-      opts: {
-        where: { id_dcc: certificateNumber },
-      },
-    };
-
-    this.apiService.post(deleteExistingRequest, UrlClass.URLNuevo).subscribe({
-      next: (deleteResponse: any) => {
-        console.log('✅ Deleted existing responsible persons:', deleteResponse);
-
-        // Ahora insertar los nuevos registros
-        this.insertResponsiblePersons(certificateNumber);
-      },
-      error: (error) => {
-        console.log('❌ Error deleting existing responsible persons:', error);
-        // Continuar con la inserción aunque falle el delete
-        this.insertResponsiblePersons(certificateNumber);
-      },
-    });
-  }
-
-  // Método para insertar responsible persons
-  private insertResponsiblePersons(certificateNumber: string): void {
-    console.log('🆕 insertResponsiblePersons() called');
-
-    if (this.responsiblePersons.length === 0) {
-      // Si no hay personas responsables, terminar el proceso
-      Swal.close();
-      Swal.fire({
-        icon: 'success',
-        title: '¡Guardado!',
-        text: 'Personas Responsables guardadas correctamente (sin registros)',
-        timer: 2000,
-        showConfirmButton: false,
-        position: 'top-end',
-      });
-      this.editingBlocks['responsible'] = false;
-      return;
-    }
-
-    // Preparar los registros para insertar
-    const insertPromises: Promise<any>[] = [];
-
-    this.responsiblePersons.forEach((person) => {
-      // Obtener el no_nomina del usuario seleccionado
-      let noNomina = '';
-      let fullName = '';
-
-      if (typeof person.name === 'string') {
-        // Si es string, buscar en la lista de usuarios
-        fullName = person.name;
-        const foundUser = this.listauser.find(
-          (user) => user.full_name === person.name
-        );
-        if (foundUser) {
-          noNomina = foundUser.no_nomina;
-        }
-      } else if (Array.isArray(person.name) && person.name.length > 0) {
-        // Si es array (multiselect), tomar el primer elemento
-        const selectedUser = person.name[0];
-        if (selectedUser && selectedUser.no_nomina) {
-          noNomina = selectedUser.no_nomina;
-          fullName = selectedUser.full_name;
-        }
-      }
-
-      if (noNomina && person.role) {
-        const insertRequest = {
-          action: 'create',
-          bd: this.database,
-          table: 'dcc_responsiblepersons',
-          opts: {
-            attributes: {
-              no_nomina: noNomina,
-              id_dcc: certificateNumber,
-              role: person.role,
-            },
-          },
-        };
-
-        console.log('🆕 Inserting responsible person:', insertRequest);
-        insertPromises.push(
-          this.apiService.post(insertRequest, UrlClass.URLNuevo).toPromise()
-        );
-      } else {
-        console.log('⚠️ Skipping person without no_nomina or role:', person);
-      }
-    });
-
-    // Ejecutar todas las inserciones
-    if (insertPromises.length > 0) {
-      Promise.all(insertPromises)
-        .then((responses) => {
-          console.log('✅ All responsible persons inserted:', responses);
-          Swal.close();
-
-          const allSuccessful = responses.every(
-            (response: any) => response.result
-          );
-          if (allSuccessful) {
-            Swal.fire({
-              icon: 'success',
-              title: '¡Guardado!',
-              text: 'Personas Responsables guardadas correctamente',
-              timer: 2000,
-              showConfirmButton: false,
-              position: 'top-end',
-            });
-          } else {
-            Swal.fire({
-              icon: 'warning',
-              title: 'Parcialmente guardado',
-              text: 'Algunas personas responsables no se pudieron guardar.',
-            });
-          }
-
-          this.editingBlocks['responsible'] = false;
-        })
-        .catch((error) => {
-          console.log('❌ Error inserting responsible persons:', error);
-          Swal.close();
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Ocurrió un error al guardar las personas responsables.',
-          });
-        });
-    } else {
-      Swal.close();
-      Swal.fire({
-        icon: 'warning',
-        title: 'Sin datos válidos',
-        text: 'No hay personas responsables válidas para guardar.',
-      });
-      this.editingBlocks['responsible'] = false;
     }
   }
 }

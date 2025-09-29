@@ -24,11 +24,6 @@ export interface DCCData {
       issue_date: Date;
       performance_localition: string;
     };
-    identifications: Array<{
-      issuer: string;
-      value: string;
-      name: string;
-    }>;
     laboratory: {
       name: string;
       email: string;
@@ -40,11 +35,13 @@ export interface DCCData {
       street_number: string;
       state: string;
       country: string;
-      laboratory_id: string; // Agregar campo para el ID del laboratorio
+      laboratory_id: string;
     };
     responsiblePersons: Array<{
       role: string;
-      name: string;
+      no_nomina?: string;
+      full_name?: string;
+      name?: string;
       email: string;
       phone: string;
     }>;
@@ -59,7 +56,7 @@ export interface DCCData {
       street_number: string;
       state: string;
       country: string;
-      customer_id: string; // Agregar campo para el ID del cliente
+      customer_id: string;
     };
   };
   items: Array<{
@@ -169,33 +166,6 @@ export class DccDataService {
           issue_date: new Date(),
           performance_localition: '',
         },
-        identifications: [
-          {
-            issuer: 'Calibration Laboratory',
-            value: '',
-            name: 'Object',
-          },
-          {
-            issuer: 'Manufacturer',
-            value: '',
-            name: 'Manufacturer / Brand',
-          },
-          {
-            issuer: 'Manufacturer',
-            value: '',
-            name: 'Type / Model',
-          },
-          {
-            issuer: 'Manufacturer',
-            value: '',
-            name: 'Serial number',
-          },
-          {
-            issuer: 'Calibration Laboratory',
-            value: '',
-            name: "Customer's asset ID",
-          },
-        ],
         laboratory: {
           name: 'HV Test S.A. de C.V.',
           email: '',
@@ -234,7 +204,7 @@ export class DccDataService {
           street_number: '103 y 105',
           state: 'Aguascalientes',
           country: 'México',
-          customer_id: '1', // ID predeterminado
+          customer_id: '1',
         },
       },
       items: [],
@@ -522,70 +492,6 @@ export class DccDataService {
         type: this.getTextContent(softwareNode, 'type') || '',
         description: this.getTextContent(softwareNode, 'description') || '',
       };
-    }
-
-    // Parse Core Data
-    const coreDataNode = this.getElementByTagName(xmlDoc, 'coreData');
-    if (coreDataNode) {
-      const uniqueIdentifier =
-        this.getTextContent(coreDataNode, 'uniqueIdentifier') || '';
-      const ptId = this.extractPTFromUniqueIdentifier(uniqueIdentifier);
-
-      const performanceDate = this.parseDate(
-        this.getTextContent(coreDataNode, 'beginPerformanceDate')
-      );
-      const endPerformanceDate = this.parseDate(
-        this.getTextContent(coreDataNode, 'endPerformanceDate')
-      );
-
-      // Determine if it's a range date based on the dates
-      let isRangeDate = false;
-      if (performanceDate && endPerformanceDate) {
-        isRangeDate =
-          performanceDate.toDateString() !== endPerformanceDate.toDateString();
-      }
-
-      dccData.administrativeData.core = {
-        pt_id: ptId,
-        country_code:
-          this.getTextContent(coreDataNode, 'countryCodeISO3166_1') || 'MX',
-        language:
-          this.getTextContent(coreDataNode, 'usedLangCodeISO639_1') || 'en',
-        certificate_number: uniqueIdentifier,
-        receipt_date:
-          this.parseDate(this.getTextContent(coreDataNode, 'receiptDate')) ||
-          new Date(),
-        is_range_date: isRangeDate,
-        performance_date: performanceDate || new Date(),
-        end_performance_date:
-          endPerformanceDate || performanceDate || new Date(),
-        issue_date:
-          this.parseDate(this.getTextContent(coreDataNode, 'issueDate')) ||
-          new Date(),
-        performance_localition:
-          this.getTextContent(coreDataNode, 'performanceLocation') || '',
-      };
-    }
-
-    // Parse Identifications
-    const identificationsNode = this.getElementByTagName(
-      coreDataNode,
-      'identifications'
-    );
-    if (identificationsNode) {
-      const identificationNodes = this.getElementsByTagName(
-        identificationsNode,
-        'identification'
-      );
-      dccData.administrativeData.identifications = identificationNodes.map(
-        (node) => ({
-          issuer: this.mapIssuerToDisplayCase(
-            this.getTextContent(node, 'issuer') || ''
-          ),
-          value: this.getTextContent(node, 'value') || '',
-          name: this.getContentText(node, 'name') || '',
-        })
-      );
     }
 
     // Parse Laboratory Data

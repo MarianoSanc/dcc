@@ -15,6 +15,8 @@ export class PreviewComponent implements OnInit, OnDestroy {
   dccData: DCCData | null = null;
   viewMode: 'xml' | 'pdf' = 'xml';
   xmlContent: string = '';
+  objectIdentifications: any[] = [];
+  itemIdentifications: any[] = [];
   private subscription: Subscription = new Subscription();
 
   constructor(private dccDataService: DccDataService) {}
@@ -25,6 +27,10 @@ export class PreviewComponent implements OnInit, OnDestroy {
       this.dccDataService.dccData$.subscribe((data) => {
         this.dccData = data;
         this.generateXMLContent();
+
+        // Las identificaciones ahora están en objectIdentifications o en items
+        this.objectIdentifications = data.objectIdentifications || [];
+        this.itemIdentifications = data.items || [];
       })
     );
   }
@@ -117,9 +123,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
       )}</dcc:uniqueIdentifier>
 
       <dcc:identifications>
-        ${this.generateIdentificationsXML(
-          data.administrativeData.identifications
-        )}
+        ${this.generateCoreIdentificationsXML(data)}
       </dcc:identifications>
 
       ${
@@ -207,7 +211,9 @@ export class PreviewComponent implements OnInit, OnDestroy {
       <dcc:respPerson refType="basic_technician">
         <dcc:person>
           <dcc:name>
-            <dcc:content>${this.escapeXml(person.name)}</dcc:content>
+            <dcc:content>${this.escapeXml(
+              this.getPersonDisplayName(person)
+            )}</dcc:content>
           </dcc:name>
         </dcc:person>
         <dcc:role>${this.escapeXml(person.role)}</dcc:role>
@@ -399,16 +405,86 @@ export class PreviewComponent implements OnInit, OnDestroy {
       .join('');
   }
 
+  // Nuevo método para generar las identificaciones del core usando datos del primer item
+  private generateCoreIdentificationsXML(data: DCCData): string {
+    // Crear identificaciones básicas del objeto usando datos del primer item si existe
+    const firstItem =
+      data.items && data.items.length > 0 ? data.items[0] : null;
+    const coreIdentifications = [];
+
+    if (firstItem) {
+      // Objeto
+      coreIdentifications.push({
+        issuer: 'calibrationLaboratory',
+        value: firstItem.name || 'HVAC MEASURING SYSTEM',
+        name: 'Object',
+      });
+
+      // Manufacturer
+      if (firstItem.manufacturer) {
+        coreIdentifications.push({
+          issuer: 'manufacturer',
+          value: firstItem.manufacturer,
+          name: 'Manufacturer / Brand',
+        });
+      }
+
+      // Model
+      if (firstItem.model) {
+        coreIdentifications.push({
+          issuer: 'manufacturer',
+          value: firstItem.model,
+          name: 'Type / Model',
+        });
+      }
+
+      // Serial number (buscar en las identificaciones del item)
+      const serialIdentification = firstItem.identifications?.find((id: any) =>
+        id.name?.toLowerCase().includes('serial')
+      );
+      if (serialIdentification) {
+        coreIdentifications.push({
+          issuer: 'manufacturer',
+          value: serialIdentification.value,
+          name: 'Serial number',
+        });
+      }
+
+      // Customer asset ID (buscar en las identificaciones del item)
+      const assetIdentification = firstItem.identifications?.find(
+        (id: any) =>
+          id.name?.toLowerCase().includes('asset') ||
+          id.name?.toLowerCase().includes('customer')
+      );
+      if (assetIdentification) {
+        coreIdentifications.push({
+          issuer: 'calibrationLaboratory',
+          value: assetIdentification.value,
+          name: "Customer's asset ID",
+        });
+      }
+    } else {
+      // Fallback si no hay items
+      coreIdentifications.push({
+        issuer: 'calibrationLaboratory',
+        value: 'HVAC MEASURING SYSTEM',
+        name: 'Object',
+      });
+    }
+
+    return this.generateIdentificationsXML(coreIdentifications);
+  }
+
   private generateObjectItemXML(data: DCCData): string {
-    const objectItem = data.administrativeData.identifications.find(
-      (item) => item.name === 'Object'
-    );
+    // Usar el primer item como base para el objeto principal
+    const firstItem =
+      data.items && data.items.length > 0 ? data.items[0] : null;
     const objectIdentifications = data.objectIdentifications || [];
 
     return `
       <dcc:name>
         <dcc:content lang="en">${this.escapeXml(
-          objectItem?.value || ''
+          firstItem?.name || 'HVAC MEASURING SYSTEM'
         )}</dcc:content>
       </dcc:name>
       <dcc:identifications>
@@ -425,6 +501,21 @@ export class PreviewComponent implements OnInit, OnDestroy {
           )
           .join('')}
       </dcc:identifications>`;
+  }
+
+  // Método helper para obtener el nombre de una persona responsable
+  private getPersonDisplayName(person: any): string {
+    // Si tiene full_name directamente (desde la BD), usarlo
+    if (person.full_name) {
+      return person.full_name;
+    }
+
+    // Fallback para compatibilidad con formato anterior
+    if (typeof person.name === 'string' && person.name) {
+      return person.name;
+    }
+
+    return 'No asignado';
   }
 
   private generateItemsXML(items: any[]): string {

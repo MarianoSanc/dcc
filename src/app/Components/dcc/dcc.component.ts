@@ -427,8 +427,18 @@ export class DccComponent implements OnInit {
       bd: this.database,
       table: 'dcc_responsiblepersons',
       opts: {
+        relationship: {
+          'administracion.user': [
+            'dcc_responsiblepersons.no_nomina',
+            'administracion.user.no_nomina',
+          ],
+        },
+        customSelect: `
+      dcc_responsiblepersons.*,
+      CONCAT(administracion.user.first_name, ' ', administracion.user.last_name) AS name
+    `,
         where: { id_dcc: dccId },
-        order_by: ['id', 'ASC'],
+        order_by: ['dcc_responsiblepersons.id', 'ASC'],
       },
     };
 
@@ -528,12 +538,15 @@ export class DccComponent implements OnInit {
         );
       }
 
+      console.log('🔍dccData.responsibleInfo', dccData.responsibleInfo);
+
       // Asignar datos de responsible persons si existen
       if (dccData.responsibleInfo && dccData.responsibleInfo.length > 0) {
         mergedData.administrativeData.responsiblePersons =
           dccData.responsibleInfo.map((person: any) => ({
             role: person.role || '',
-            name: person.no_nomina || '', // Usar no_nomina como name inicialmente
+            no_nomina: person.no_nomina || '', // Usar no_nomina como name inicialmente
+            name: person.name || '',
             email: '', // Los datos adicionales del usuario se cargarán después si es necesario
             phone: '',
           }));

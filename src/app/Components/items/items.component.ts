@@ -27,9 +27,9 @@ export class ItemsComponent implements OnInit, OnDestroy {
       this.dccDataService.dccData$.subscribe((data) => {
         this.items = data.items || [];
         this.objectIdentifications = data.objectIdentifications || [];
-        this.objectData = this.getObjectData(
-          data.administrativeData.identifications
-        );
+
+        // Cambiar de administrativeData.identifications a usar el nombre del primer item
+        this.objectData = this.getObjectData(data.items);
 
         // Apply naming logic on load
         this.renumberAllGroups();
@@ -42,10 +42,13 @@ export class ItemsComponent implements OnInit, OnDestroy {
     this.subscription.unsubscribe();
   }
 
-  // Helper method to get object data
-  getObjectData(identifications: any[]): any {
-    const objectItem = identifications?.find((item) => item.name === 'Object');
-    return objectItem || { value: 'No especificado' };
+  // Helper method to get object data - actualizado para usar items en lugar de identifications
+  getObjectData(items: any[]): any {
+    // Si hay items, usar el primer item como objeto principal
+    if (items && items.length > 0) {
+      return { value: items[0].name || 'No especificado' };
+    }
+    return { value: 'No especificado' };
   }
 
   // Object block editing methods

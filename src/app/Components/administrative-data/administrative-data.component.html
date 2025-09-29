@@ -267,110 +267,6 @@
     </div>
   </div>
 
-  <!-- Identifications Block -->
-  <div
-    class="data-block"
-    [class.non-editable]="!isBlockEditable('identifications')"
-  >
-    <div class="block-header">
-      <h4>
-        Identifications
-        <span *ngIf="!isBlockEditable('identifications')" class="readonly-badge"
-          >Solo lectura</span
-        >
-      </h4>
-      <div class="block-actions">
-        <button
-          *ngIf="isBlockEditable('identifications')"
-          class="add-btn"
-          (click)="addIdentification()"
-        >
-          <i class="material-icons">add</i>
-          Agregar
-        </button>
-        <button
-          *ngIf="isBlockEditable('identifications')"
-          class="edit-btn"
-          (click)="toggleEdit('identifications')"
-          [class.active]="isEditing('identifications')"
-        >
-          <i class="material-icons">{{
-            isEditing("identifications") ? "close" : "edit"
-          }}</i>
-          {{ isEditing("identifications") ? "Cancelar" : "Editar" }}
-        </button>
-        <span
-          *ngIf="!isBlockEditable('identifications')"
-          class="no-edit-message"
-        >
-          <i class="material-icons">lock</i>
-          No editable
-        </span>
-      </div>
-    </div>
-
-    <div class="block-content">
-      <table class="data-table" *ngIf="!isEditing('identifications')">
-        <thead>
-          <tr>
-            <th>Issuer</th>
-            <th>Value</th>
-            <th>Name</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let item of identifications">
-            <td>{{ item.issuer }}</td>
-            <td>{{ item.value }}</td>
-            <td>{{ item.name }}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="edit-form" *ngIf="isEditing('identifications')">
-        <div
-          class="identification-item"
-          *ngFor="let item of identifications; let i = index"
-        >
-          <div class="form-group">
-            <label>Issuer:</label>
-            <select [(ngModel)]="item.issuer">
-              <option value="">Seleccione el emisor</option>
-              <option value="Manufacturer">Manufacturer</option>
-              <option value="Calibration Laboratory">
-                Calibration Laboratory
-              </option>
-              <option value="Customer">Customer</option>
-              <option value="Owner">Owner</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Value:</label>
-            <input type="text" [(ngModel)]="item.value" />
-          </div>
-          <div class="form-group">
-            <label>Name:</label>
-            <input type="text" [(ngModel)]="item.name" />
-          </div>
-          <div class="form-group delete-action">
-            <button class="remove-btn" (click)="removeIdentification(i)">
-              <i class="material-icons">delete</i>
-            </button>
-          </div>
-        </div>
-        <div class="form-actions">
-          <button class="save-btn" (click)="saveBlock('identifications')">
-            Guardar
-          </button>
-          <button class="cancel-btn" (click)="cancelEdit('identifications')">
-            Cancelar
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Calibration Laboratory Block -->
   <div class="data-block" [class.non-editable]="!isBlockEditable('laboratory')">
     <div class="block-header">
@@ -690,7 +586,7 @@
               class="fixed-width-dropdown"
               [settings]="dropdownuser"
               [data]="listauser"
-              [(ngModel)]="person.name"
+              [(ngModel)]="person.no_nomina"
               (onSelect)="onUserSelect($event, i)"
               (onDeSelect)="onUserDeselect($event, i)"
             >
