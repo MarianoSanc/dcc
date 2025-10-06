@@ -44,6 +44,7 @@ export interface DCCData {
       name?: string;
       email: string;
       phone: string;
+      mainSigner?: boolean; // Nueva propiedad para identificar al responsable principal
     }>;
     customer: {
       name: string;
@@ -61,28 +62,73 @@ export interface DCCData {
   };
   items: Array<{
     id: string;
-    name: string;
+    name: string; // Object name
     model: string;
     manufacturer: string;
+    serialNumber: string; // Nuevo campo específico
+    customerAssetId: string; // Nuevo campo específico
     identifications: Array<{
       issuer: string;
       value: string;
       name: string;
     }>;
+    itemQuantities: Array<{
+      refType: string;
+      name: string;
+      value: string;
+      unit: string;
+    }>;
+    subItems: Array<{
+      id: string;
+      name: string;
+      model: string;
+      manufacturer: string;
+      identifications: Array<{
+        issuer: string;
+        value: string;
+        name: string;
+      }>;
+      itemQuantities: Array<{
+        refType: string;
+        name: string;
+        value: string;
+        unit: string;
+      }>;
+    }>;
   }>;
   objectIdentifications?: Array<{
-    issuer: string;
-    value: string;
-    name: string;
-    groupName?: string;
-    groupIndex?: number;
+    id: string;
+    groupId: string;
+    groupName: string;
+    groupIndex: number;
+    // Removido: name field
+    assignedMeasurementRange: {
+      label: string;
+      value: string;
+      unit: string;
+    };
+    assignedScaleFactor: {
+      label: string;
+      value: string;
+      unit: string;
+    };
+    ratedFrequency: {
+      label: string;
+      value: string;
+      unit: string;
+    };
   }>;
   statements?: Array<{
     id: string;
-    refType: string;
-    norm: string;
-    reference: string;
-    content: string;
+    convention?: string;
+    traceable?: boolean;
+    declaration?: string;
+    norm?: string;
+    reference?: string;
+    valid?: 1 | null;
+    respAuthority_name?: string;
+    respAuthority_countryCode?: string;
+    respAuthority_postCode?: string;
   }>;
   measurementResult?: {
     name: string;
@@ -207,88 +253,146 @@ export class DccDataService {
           customer_id: '1',
         },
       },
-      items: [],
+      items: [
+        {
+          id: this.generateId(),
+          name: 'HVAC MEASURING SYSTEM',
+          model: '',
+          manufacturer: '',
+          serialNumber: '',
+          customerAssetId: '',
+          identifications: [],
+          itemQuantities: [
+            {
+              refType: 'voltage_measurement_range',
+              name: 'Assigned measurement range(s)',
+              value: '',
+              unit: '\\volt',
+            },
+            {
+              refType: 'scale_factor',
+              name: 'Assigned scale factor(s)',
+              value: '',
+              unit: '\\one',
+            },
+          ],
+          subItems: [],
+        },
+      ],
       objectIdentifications: [
         {
-          issuer: 'manufacturer',
-          value: '',
-          name: 'Assigned measurement range(s) [kV]',
+          id: this.generateId(),
+          groupId: 'group_1',
           groupName: 'Grupo 1',
           groupIndex: 0,
-        },
-        {
-          issuer: 'manufacturer',
-          value: '',
-          name: 'Assigned scale factor(s)',
-          groupName: 'Grupo 1',
-          groupIndex: 0,
-        },
-        {
-          issuer: 'manufacturer',
-          value: '',
-          name: 'Rated frequency [Hz]',
-          groupName: 'Grupo 1',
-          groupIndex: 0,
+          assignedMeasurementRange: {
+            label: 'Rated voltage',
+            value: '',
+            unit: '\\volt',
+          },
+          assignedScaleFactor: {
+            label: 'Scale factor',
+            value: '',
+            unit: '\\one',
+          },
+          ratedFrequency: {
+            label: 'Rated Frequency',
+            value: '',
+            unit: '\\one',
+          },
         },
       ],
       statements: [
         {
           id: 'stmt_default_1',
-          refType: 'accreditation',
+          convention: '',
+          traceable: false,
+          declaration:
+            'HV Test is a laboratory accredited by the Mexican accreditation body EMA (Entidad Mexicana de Acrediatión) and by the American accreditation body ANAB (ANSI National Accreditation Board), for calibrations in accordance with the International Standard.',
           norm: 'ISO/IEC',
           reference: '17025:2017',
-          content:
-            'HV Test is a laboratory accredited by the Mexican accreditation body EMA (Entidad Mexicana de Acrediatión) and by the American accreditation body ANAB (ANSI National Accreditation Board), for calibrations in accordance with the International Standard.',
+          valid: 1,
+          respAuthority_name: '',
+          respAuthority_countryCode: '',
+          respAuthority_postCode: '',
         },
         {
           id: 'stmt_default_2',
-          refType: 'results_scope',
+          convention: '',
+          traceable: false,
+          declaration:
+            'The results in this document relate only to the device under calibration, at the time and conditions in which the measurments were made. The issuing Laboratory assumes no responsibility for any damages ensuing on account of misuse of the calibrated instruments.',
           norm: '',
           reference: '',
-          content:
-            'The results in this document relate only to the device under calibration, at the time and conditions in which the measurments were made. The issuing Laboratory assumes no responsibility for any damages ensuing on account of misuse of the calibrated instruments.',
+          valid: null,
+          respAuthority_name: '',
+          respAuthority_countryCode: '',
+          respAuthority_postCode: '',
         },
         {
           id: 'stmt_default_3',
-          refType: 'reproduction',
+          convention: '',
+          traceable: false,
+          declaration:
+            'The Certificate may not be partially reproduced unless it is permitted in writing by the issuing laboratory.',
           norm: '',
           reference: '',
-          content:
-            'The Certificate may not be partially reproduced unless it is permitted in writing by the issuing laboratory.',
+          valid: null,
+          respAuthority_name: '',
+          respAuthority_countryCode: '',
+          respAuthority_postCode: '',
         },
         {
           id: 'stmt_default_4',
-          refType: 'stabilization',
+          convention: '',
+          traceable: false,
+          declaration:
+            'The calibrand was in the test room for at least two hours prior to the calibration measurements.',
           norm: '',
           reference: '',
-          content:
-            'The calibrand was in the test room for at least two hours prior to the calibration measurements.',
+          valid: null,
+          respAuthority_name: '',
+          respAuthority_countryCode: '',
+          respAuthority_postCode: '',
         },
-
         {
           id: 'stmt_default_5',
-          refType: 'traceability',
+          convention: '',
+          traceable: false,
+          declaration:
+            'The traceability of the measurements is proven by means of unbroken chain of suitable and periodic calibration by national metrology institutes and designated institutes within the CIPM MRA (International Committee of Weights and Measures Mutual Recognition Arrangement), or calibration laboratories that have been accredited by an accreditation body subject to the ILAC (International Laboratory Accreditation Corporation) Arrangement or equivalent.',
           norm: '',
           reference: '',
-          content:
-            'The traceability of the measurements is proven by means of unbroken chain of suitable and periodic calibration by national metrology institutes and designated institutes within the CIPM MRA (International Committee of Weights and Measures Mutual Recognition Arrangement), or calibration laboratories that have been accredited by an accreditation body subject to the ILAC (International Laboratory Accreditation Corporation) Arrangement or equivalent.',
+          valid: null,
+          respAuthority_name: '',
+          respAuthority_countryCode: '',
+          respAuthority_postCode: '',
         },
         {
           id: 'stmt_default_6',
-          refType: 'si_traceability',
+          convention: '',
+          traceable: false,
+          declaration:
+            'The calibrations within this certificate are traceable to the International System of Units (SI).',
           norm: '',
           reference: '',
-          content:
-            'The calibrations within this certificate are traceable to the International System of Units (SI).',
+          valid: null,
+          respAuthority_name: '',
+          respAuthority_countryCode: '',
+          respAuthority_postCode: '',
         },
-
         {
           id: 'stmt_default_7',
-          refType: 'adjustments',
+          convention: '',
+          traceable: false,
+          declaration:
+            'No adjustments of the device under test were made before, during or after the calibration tests.',
           norm: '',
           reference: '',
-          content:
-            'No adjustments of the device under test were made before, during or after the calibration tests.',
+          valid: null,
+          respAuthority_name: '',
+          respAuthority_countryCode: '',
+          respAuthority_postCode: '',
         },
       ],
       usedMethods: [
@@ -458,7 +562,21 @@ export class DccDataService {
   }
 
   resetData(): void {
-    this.dccDataSubject.next(this.getInitialData());
+    console.log('🔄 === DCC Data Service Reset DEBUG START ===');
+    console.log('🔄 Resetting to initial data state');
+
+    const initialData = this.getInitialData();
+    console.log('🔄 Initial data prepared:', {
+      certificateNumber: initialData.administrativeData.core.certificate_number,
+      responsiblePersonsCount:
+        initialData.administrativeData.responsiblePersons.length,
+      itemsCount: initialData.items.length,
+    });
+
+    this.dccDataSubject.next(initialData);
+
+    console.log('🔄 Data reset completed - all subscribers notified');
+    console.log('🔄 === DCC Data Service Reset DEBUG END ===');
   }
 
   loadFromXML(xmlContent: string): void {
@@ -520,17 +638,42 @@ export class DccDataService {
         respPersonsNode,
         'respPerson'
       );
-      dccData.administrativeData.responsiblePersons = respPersonNodes.map(
-        (node) => {
-          const personNode = this.getElementByTagName(node, 'person');
-          return {
-            role: this.getTextContent(node, 'role') || '',
-            name: this.getContentText(personNode, 'name') || '',
-            email: this.getTextContent(personNode, 'eMail') || '',
-            phone: this.getTextContent(personNode, 'phone') || '',
-          };
-        }
-      );
+
+      console.log('🔧 Parsing responsible persons from XML');
+      console.log('🔧 Found respPerson nodes:', respPersonNodes.length);
+
+      if (respPersonNodes.length > 0) {
+        dccData.administrativeData.responsiblePersons = respPersonNodes.map(
+          (node) => {
+            const personNode = this.getElementByTagName(node, 'person');
+
+            // Verificar si es el mainSigner
+            const mainSignerNode = this.getElementByTagName(node, 'mainSigner');
+            const isMainSigner =
+              mainSignerNode?.textContent?.trim().toLowerCase() === 'true';
+
+            const personData = {
+              role: this.getTextContent(node, 'role') || '',
+              name: this.getContentText(personNode, 'name') || '',
+              full_name: this.getContentText(personNode, 'name') || '', // Usar el nombre del XML como full_name
+              no_nomina: '', // Se llenará después si se encuentra en la BD de usuarios
+              email: this.getTextContent(personNode, 'eMail') || '',
+              phone: this.getTextContent(personNode, 'phone') || '',
+              mainSigner: isMainSigner, // Nueva propiedad
+            };
+            console.log('🔧 Parsed person:', personData);
+            return personData;
+          }
+        );
+      } else {
+        console.log(
+          '🔧 No responsible persons found in XML - will use empty array'
+        );
+        dccData.administrativeData.responsiblePersons = [];
+      }
+    } else {
+      console.log('🔧 No respPersons node found in XML - will use empty array');
+      dccData.administrativeData.responsiblePersons = [];
     }
 
     // Parse Customer Data
@@ -557,53 +700,30 @@ export class DccDataService {
       };
     }
 
-    // Parse Object Identifications (from items root level)
-    const itemsNode = this.getElementByTagName(xmlDoc, 'items');
-    if (itemsNode) {
-      const objectIdentificationsNode = this.getElementByTagName(
-        itemsNode,
-        'identifications'
-      );
-      if (objectIdentificationsNode) {
-        const objectIdentificationNodes = this.getElementsByTagName(
-          objectIdentificationsNode,
-          'identification'
-        );
-        dccData.objectIdentifications = objectIdentificationNodes.map(
-          (node) => ({
-            issuer: this.mapIssuerToDisplayCase(
-              this.getTextContent(node, 'issuer') || ''
-            ),
-            value: this.getTextContent(node, 'value') || '',
-            name: this.getContentText(node, 'name') || '',
-          })
-        );
-      }
-    }
+    // Parse Items and Object Identifications - Mejorado para ambos formatos
+    const itemsRootNode = this.getElementByTagName(xmlDoc, 'items');
+    if (itemsRootNode) {
+      console.log('🔧 Parsing items and object identifications from XML');
 
-    // Parse Items
-    if (itemsNode) {
-      const itemNodes = this.getElementsByTagName(itemsNode, 'item');
-      dccData.items = itemNodes.map((node) => {
-        const identificationNodes = this.getElementsByTagName(
-          node,
-          'identification'
-        );
-        const manufacturerNode = this.getElementByTagName(node, 'manufacturer');
-        return {
-          id: this.generateId(),
-          name: this.getContentText(node, 'name') || '',
-          model: this.getTextContent(node, 'model') || '',
-          manufacturer: this.getContentText(manufacturerNode, 'name') || '',
-          identifications: identificationNodes.map((idNode) => ({
-            issuer: this.mapIssuerToDisplayCase(
-              this.getTextContent(idNode, 'issuer') || ''
-            ),
-            value: this.getTextContent(idNode, 'value') || '',
-            name: this.getContentText(idNode, 'name') || '',
-          })),
-        };
-      });
+      // Verificar si es el formato nuevo (3.3.0) o viejo (3.2.1)
+      const mainItemNode = this.getElementsByTagName(itemsRootNode, 'item')[0];
+      const isNewFormat =
+        mainItemNode && this.getElementByTagName(mainItemNode, 'subItems');
+
+      if (isNewFormat) {
+        // Formato nuevo: items > item > subItems > item
+        console.log('🔧 Detected new XML format (3.3.0+)');
+        this.parseNewFormatItems(xmlDoc, dccData, mainItemNode);
+      } else {
+        // Formato viejo: items > item (múltiples items al mismo nivel)
+        console.log('🔧 Detected old XML format (3.2.1)');
+        this.parseOldFormatItems(xmlDoc, dccData, itemsRootNode);
+      }
+    } else {
+      console.log('🔧 No items node found in XML');
+      dccData.items = this.getInitialData().items;
+      dccData.objectIdentifications =
+        this.getInitialData().objectIdentifications;
     }
 
     // Parse Statements
@@ -615,10 +735,33 @@ export class DccDataService {
       );
       dccData.statements = statementNodes.map((node) => ({
         id: this.generateId(),
-        refType: node.getAttribute('refType') || '',
+        convention: this.getTextContent(node, 'convention') || '',
+        traceable:
+          (this.getTextContent(node, 'traceable') || '').toLowerCase() ===
+          'true',
+        declaration: this.getContentText(node, 'declaration') || '',
         norm: this.getTextContent(node, 'norm') || '',
         reference: this.getTextContent(node, 'reference') || '',
-        content: this.getContentText(node, 'declaration') || '',
+        valid:
+          this.getTextContent(node, 'valid') === 'true' ||
+          this.getTextContent(node, 'valid') === '1'
+            ? 1
+            : null,
+        respAuthority_name:
+          this.getContentText(
+            this.getElementByTagName(node, 'respAuthority'),
+            'name'
+          ) || '',
+        respAuthority_countryCode:
+          this.getTextContent(
+            this.getElementByTagName(node, 'respAuthority'),
+            'countryCode'
+          ) || '',
+        respAuthority_postCode:
+          this.getTextContent(
+            this.getElementByTagName(node, 'respAuthority'),
+            'postCode'
+          ) || '',
       }));
     }
 
@@ -653,6 +796,12 @@ export class DccDataService {
             id: this.generateId(),
             name: this.getContentText(node, 'name') || '',
             refType: node.getAttribute('refType') || '',
+            manufacturer:
+              this.getContentText(
+                this.getElementByTagName(node, 'manufacturer'),
+                'name'
+              ) || '',
+            model: this.getTextContent(node, 'model') || '',
             identifications: identificationNodes.map((idNode) => ({
               issuer: this.getTextContent(idNode, 'issuer') || '',
               value: this.getTextContent(idNode, 'value') || '',
@@ -675,8 +824,20 @@ export class DccDataService {
         dccData.influenceConditions = conditionNodes.map((node) => {
           const dataNode = this.getElementByTagName(node, 'data');
           const quantityNode = this.getElementByTagName(dataNode, 'quantity');
-          const valueNode = this.getElementByTagName(quantityNode, 'value');
-          const unitNode = this.getElementByTagName(quantityNode, 'unit');
+
+          // Parse hybrid/real structure
+          const hybridNode = this.getElementByTagName(quantityNode, 'hybrid');
+          const realNode = hybridNode
+            ? this.getElementByTagName(hybridNode, 'real')
+            : this.getElementByTagName(quantityNode, 'real');
+
+          let value = '';
+          let unit = '';
+
+          if (realNode) {
+            value = this.getTextContent(realNode, 'value') || '';
+            unit = this.getTextContent(realNode, 'unit') || '';
+          }
 
           return {
             id: this.generateId(),
@@ -685,8 +846,8 @@ export class DccDataService {
             status: 'beforeAdjustment',
             subBlock: {
               name: this.getContentText(quantityNode, 'name') || '',
-              value: valueNode?.textContent?.trim() || '',
-              unit: unitNode?.textContent?.trim() || '',
+              value: value,
+              unit: unit,
             },
           };
         });
@@ -702,7 +863,21 @@ export class DccDataService {
         dccData.results = resultNodes.map((node) => {
           const dataNode = this.getElementByTagName(node, 'data');
           const listNode = this.getElementByTagName(dataNode, 'list');
-          const quantityNodes = this.getElementsByTagName(listNode, 'quantity');
+
+          let quantityNodes: Element[] = [];
+
+          if (listNode) {
+            quantityNodes = this.getElementsByTagName(listNode, 'quantity');
+          } else {
+            // Single quantity case
+            const singleQuantity = this.getElementByTagName(
+              dataNode,
+              'quantity'
+            );
+            if (singleQuantity) {
+              quantityNodes = [singleQuantity];
+            }
+          }
 
           return {
             id: this.generateId(),
@@ -791,6 +966,488 @@ export class DccDataService {
     return dccData;
   }
 
+  // Nuevo método para parsear formato 3.3.0+
+  private parseNewFormatItems(
+    xmlDoc: Document,
+    dccData: DCCData,
+    mainItemNode: Element
+  ) {
+    console.log('🔧 Parsing main item from XML (new format)');
+
+    const manufacturerNode = this.getElementByTagName(
+      mainItemNode,
+      'manufacturer'
+    );
+    const mainItemIdentificationsNode = this.getElementByTagName(
+      mainItemNode,
+      'identifications'
+    );
+    const subItemsNode = this.getElementByTagName(mainItemNode, 'subItems');
+
+    let identificationNodes: Element[] = [];
+    if (mainItemIdentificationsNode) {
+      identificationNodes = this.getElementsByTagName(
+        mainItemIdentificationsNode,
+        'identification'
+      );
+      console.log(
+        '🔧 Found main item identifications:',
+        identificationNodes.length
+      );
+    }
+
+    // Extraer serial number y customer asset ID del main item
+    let serialNumber = '';
+    let customerAssetId = '';
+    const objectGroups: any[] = [];
+
+    // Procesar itemQuantities del main item para object groups
+    const itemQuantityNodes = this.getElementsByTagName(
+      mainItemNode,
+      'itemQuantity'
+    );
+    console.log('🔧 Found itemQuantity nodes:', itemQuantityNodes.length);
+
+    let currentGroup: any = null;
+    let groupIndex = 0;
+
+    itemQuantityNodes.forEach((qNode, index) => {
+      const refType = qNode.getAttribute('refType') || '';
+      const realNode = this.getElementByTagName(qNode, 'real');
+      let value = '';
+      let label = '';
+
+      if (realNode) {
+        value = this.getTextContent(realNode, 'value') || '';
+        label = this.getTextContent(realNode, 'label') || '';
+      }
+
+      console.log(`🔧 Processing itemQuantity ${index + 1}:`, {
+        refType,
+        label,
+        value,
+      });
+
+      if (refType === 'voltage_measurement_range') {
+        currentGroup = {
+          id: this.generateId(),
+          groupId: `group_${groupIndex + 1}`,
+          groupName: `Grupo ${groupIndex + 1}`,
+          groupIndex: groupIndex,
+          assignedMeasurementRange: {
+            label: 'Rated voltage',
+            value: value,
+            unit: '\\volt',
+          },
+          assignedScaleFactor: {
+            label: 'Scale factor',
+            value: '',
+            unit: '\\one',
+          },
+          ratedFrequency: {
+            label: 'Rated Frequency',
+            value: '',
+            unit: '\\one',
+          },
+        };
+        objectGroups.push(currentGroup);
+        groupIndex++;
+      } else if (refType === 'scale_factor' && currentGroup) {
+        currentGroup.assignedScaleFactor = {
+          label: 'Scale factor',
+          value: value,
+          unit: '\\one',
+        };
+      }
+    });
+
+    // Procesar identificaciones del main item
+    identificationNodes.forEach((idNode, index) => {
+      const name = this.getContentText(idNode, 'name') || '';
+      const value = this.getTextContent(idNode, 'value') || '';
+
+      console.log(`🔧 Processing main item identification ${index + 1}:`, {
+        name,
+        value,
+      });
+
+      if (name.toLowerCase().includes('serial')) {
+        serialNumber = value;
+      } else if (
+        name.toLowerCase().includes('asset') ||
+        (name.toLowerCase().includes('customer') &&
+          name.toLowerCase().includes('id'))
+      ) {
+        customerAssetId = value;
+      }
+    });
+
+    // Crear grupos por defecto si es necesario
+    if (objectGroups.length === 0) {
+      objectGroups.push({
+        id: this.generateId(),
+        groupId: 'group_1',
+        groupName: 'Grupo 1',
+        groupIndex: 0,
+        assignedMeasurementRange: {
+          label: 'Rated voltage',
+          value: '',
+          unit: '\\volt',
+        },
+        assignedScaleFactor: {
+          label: 'Scale factor',
+          value: '',
+          unit: '\\one',
+        },
+        ratedFrequency: { label: 'Rated Frequency', value: '', unit: '\\one' },
+      });
+    }
+
+    // Actualizar nombres de grupos
+    if (objectGroups.length === 2) {
+      objectGroups[0].groupName = 'BEFORE ADJUSTMENT';
+      objectGroups[1].groupName = 'AFTER ADJUSTMENT';
+    }
+
+    dccData.objectIdentifications = objectGroups;
+
+    // Crear main item
+    const mainItem = {
+      id: this.generateId(),
+      name: this.getContentText(mainItemNode, 'name') || '',
+      model: this.getTextContent(mainItemNode, 'model') || '',
+      manufacturer: this.getContentText(manufacturerNode, 'name') || '',
+      serialNumber: serialNumber,
+      customerAssetId: customerAssetId,
+      identifications: [],
+      itemQuantities: [],
+      subItems: [] as any[],
+    };
+
+    // Parse subitems
+    if (subItemsNode) {
+      const subItemNodes = this.getElementsByTagName(subItemsNode, 'item');
+      console.log('🔧 Found subitems:', subItemNodes.length);
+
+      mainItem.subItems = subItemNodes.map((node, index) => {
+        console.log(`🔧 Processing subitem ${index + 1}`);
+
+        const subManufacturerNode = this.getElementByTagName(
+          node,
+          'manufacturer'
+        );
+        const subIdentificationNodes = this.getElementsByTagName(
+          node,
+          'identification'
+        );
+        const subItemQuantityNodes = this.getElementsByTagName(
+          node,
+          'itemQuantity'
+        );
+
+        const subItem = {
+          id: this.generateId(),
+          name: this.getContentText(node, 'name') || '',
+          model: this.getTextContent(node, 'model') || '',
+          manufacturer: this.getContentText(subManufacturerNode, 'name') || '',
+          identifications: [] as any[],
+          itemQuantities: [] as any[],
+        };
+
+        // Procesar identificaciones del subitem
+        subIdentificationNodes.forEach((idNode, idIndex) => {
+          const issuer =
+            this.getTextContent(idNode, 'issuer') || 'manufacturer';
+          const name = this.getContentText(idNode, 'name') || '';
+          const value = this.getTextContent(idNode, 'value') || '';
+
+          console.log(
+            `🔧 Processing subitem ${index + 1} identification ${idIndex + 1}:`,
+            { issuer, name, value }
+          );
+
+          // Normalizar el name para que coincida exactamente con nuestras opciones
+          const normalizedName = this.normalizeIdentificationName(name);
+          const mappedIssuer = this.mapIssuerToDisplayCase(issuer);
+
+          // Buscar la opción exacta
+          const selectedOption = this.findExactOptionByNameAndIssuer(
+            normalizedName,
+            mappedIssuer
+          );
+
+          console.log(
+            `🔧 Normalized name: "${normalizedName}", Mapped issuer: "${mappedIssuer}"`
+          );
+          console.log(`🔧 Found selectedOption:`, selectedOption);
+
+          if (selectedOption) {
+            if (selectedOption.saveAs === 'identification') {
+              subItem.identifications.push({
+                issuer: mappedIssuer,
+                value: value,
+                name: normalizedName,
+                selectedOption: selectedOption,
+              });
+              console.log(`🔧 Added to identifications: ${normalizedName}`);
+            } else {
+              // Es itemQuantity - mover a itemQuantities
+              const refType = this.generateRefTypeFromName(normalizedName);
+
+              subItem.itemQuantities.push({
+                refType: refType,
+                name: normalizedName,
+                value: value,
+                unit: selectedOption.unit || '',
+                selectedOption: selectedOption,
+                originalIssuer: mappedIssuer,
+              });
+              console.log(`🔧 Added to itemQuantities: ${normalizedName}`);
+            }
+          } else {
+            // Si no encontramos una opción exacta, usar como identification genérica
+            console.log(
+              `🔧 No exact match found, using as generic identification: ${name}`
+            );
+            subItem.identifications.push({
+              issuer: mappedIssuer,
+              value: value,
+              name: name,
+              selectedOption: null, // Sin opción predefinida
+            });
+          }
+        });
+
+        // Procesar itemQuantities del subitem
+        subItemQuantityNodes.forEach((qNode, qIndex) => {
+          const realNode = this.getElementByTagName(qNode, 'real');
+          let value = '';
+          let unit = '';
+
+          if (realNode) {
+            value = this.getTextContent(realNode, 'value') || '';
+            unit = this.getTextContent(realNode, 'unit') || '';
+          }
+
+          const name = this.getContentText(qNode, 'name') || '';
+          const refType = qNode.getAttribute('refType') || '';
+
+          console.log(
+            `🔧 Processing subitem ${index + 1} itemQuantity ${qIndex + 1}:`,
+            { name, value, unit }
+          );
+
+          // Normalizar el name y buscar opción
+          const normalizedName = this.normalizeIdentificationName(name);
+          const selectedOption = this.findOptionByName(normalizedName);
+
+          subItem.itemQuantities.push({
+            refType: refType,
+            name: normalizedName,
+            value: value,
+            unit: unit,
+            selectedOption: selectedOption,
+            originalIssuer: 'manufacturer',
+          });
+        });
+
+        console.log(`🔧 Subitem ${index + 1} final structure:`, {
+          name: subItem.name,
+          identifications: subItem.identifications.length,
+          itemQuantities: subItem.itemQuantities.length,
+        });
+
+        return subItem;
+      });
+    }
+
+    dccData.items = [mainItem];
+    console.log('🔧 Main item parsing completed (new format):', mainItem);
+  }
+
+  // Método para parsear formato viejo (mantener el código existente como está)
+  private parseOldFormatItems(
+    xmlDoc: Document,
+    dccData: DCCData,
+    itemsRootNode: Element
+  ) {
+    // Usar la lógica existente para el formato viejo
+    const allItemNodes = this.getElementsByTagName(itemsRootNode, 'item');
+    console.log('🔧 Found items (old format):', allItemNodes.length);
+
+    if (allItemNodes.length > 0) {
+      const mainItemNode = allItemNodes[0];
+
+      // Parse main item basic info
+      const manufacturerNode = this.getElementByTagName(
+        mainItemNode,
+        'manufacturer'
+      );
+
+      // Extraer serial number y customer asset ID del primer item (formato viejo)
+      let serialNumber = '';
+      let customerAssetId = '';
+
+      // En formato viejo, las identificaciones están en coreData
+      const coreDataNode = this.getElementByTagName(xmlDoc, 'coreData');
+      if (coreDataNode) {
+        const coreIdentificationsNode = this.getElementByTagName(
+          coreDataNode,
+          'identifications'
+        );
+        if (coreIdentificationsNode) {
+          const coreIdentificationNodes = this.getElementsByTagName(
+            coreIdentificationsNode,
+            'identification'
+          );
+
+          coreIdentificationNodes.forEach((idNode) => {
+            const name = this.getContentText(idNode, 'name') || '';
+            const value = this.getTextContent(idNode, 'value') || '';
+
+            if (name.toLowerCase().includes('serial')) {
+              serialNumber = value;
+            } else if (
+              name.toLowerCase().includes('asset') ||
+              (name.toLowerCase().includes('customer') &&
+                name.toLowerCase().includes('id'))
+            ) {
+              customerAssetId = value;
+            }
+          });
+        }
+      }
+
+      // Crear main item
+      const mainItem = {
+        id: this.generateId(),
+        name: this.getContentText(mainItemNode, 'name') || '',
+        model: this.getTextContent(mainItemNode, 'model') || '',
+        manufacturer: this.getContentText(manufacturerNode, 'name') || '',
+        serialNumber: serialNumber,
+        customerAssetId: customerAssetId,
+        identifications: [],
+        itemQuantities: [],
+        subItems: [] as any[],
+      };
+
+      // Parse otros items como subitems
+      for (let i = 1; i < allItemNodes.length; i++) {
+        const subItemNode = allItemNodes[i];
+        const subManufacturerNode = this.getElementByTagName(
+          subItemNode,
+          'manufacturer'
+        );
+        const subIdentificationNodes = this.getElementsByTagName(
+          subItemNode,
+          'identification'
+        );
+
+        const subItem = {
+          id: this.generateId(),
+          name: this.getContentText(subItemNode, 'name') || '',
+          model: this.getTextContent(subItemNode, 'model') || '',
+          manufacturer: this.getContentText(subManufacturerNode, 'name') || '',
+          identifications: [] as any[],
+          itemQuantities: [] as any[],
+        };
+
+        // Procesar identificaciones del subitem (formato viejo)
+        subIdentificationNodes.forEach((idNode) => {
+          const issuer =
+            this.getTextContent(idNode, 'issuer') || 'manufacturer';
+          const name = this.getContentText(idNode, 'name') || '';
+          const value = this.getTextContent(idNode, 'value') || '';
+
+          const normalizedName = this.normalizeIdentificationName(name);
+          const mappedIssuer = this.mapIssuerToDisplayCase(issuer);
+          const selectedOption = this.findExactOptionByNameAndIssuer(
+            normalizedName,
+            mappedIssuer
+          );
+
+          if (selectedOption) {
+            if (selectedOption.saveAs === 'identification') {
+              subItem.identifications.push({
+                issuer: mappedIssuer,
+                value: value,
+                name: normalizedName,
+                selectedOption: selectedOption,
+              });
+            } else {
+              subItem.itemQuantities.push({
+                refType: this.generateRefTypeFromName(normalizedName),
+                name: normalizedName,
+                value: value,
+                unit: selectedOption.unit || '',
+                selectedOption: selectedOption,
+                originalIssuer: mappedIssuer,
+              });
+            }
+          } else {
+            subItem.identifications.push({
+              issuer: mappedIssuer,
+              value: value,
+              name: name,
+              selectedOption: null,
+            });
+          }
+        });
+
+        mainItem.subItems.push(subItem);
+      }
+
+      dccData.items = [mainItem];
+
+      // Crear grupos por defecto para formato viejo
+      dccData.objectIdentifications = [
+        {
+          id: this.generateId(),
+          groupId: 'group_1',
+          groupName: 'Grupo 1',
+          groupIndex: 0,
+          assignedMeasurementRange: {
+            label: 'Rated voltage',
+            value: '',
+            unit: '\\volt',
+          },
+          assignedScaleFactor: {
+            label: 'Scale factor',
+            value: '',
+            unit: '\\one',
+          },
+          ratedFrequency: {
+            label: 'Rated Frequency',
+            value: '',
+            unit: '\\one',
+          },
+        },
+      ];
+    }
+  }
+
+  // Método para determinar unidad basada en el nombre
+  private determineUnitFromName(name: string): string {
+    const unitMap: { [key: string]: string } = {
+      'Rated voltage': '\\volt',
+      Length: '\\meter',
+      'Characteristic impedance': '\\ohm',
+    };
+    return unitMap[name] || '';
+  }
+
+  // Método mejorado para generar refType
+  private generateRefTypeFromName(name: string): string {
+    const refTypeMap: { [key: string]: string } = {
+      'Rated voltage': 'hv_ratedVoltage',
+      Length: 'basic_length',
+      'Characteristic impedance': 'basic_impedance',
+      'Serial Number': 'basic_serialNumber',
+      "Customer's asset ID": 'basic_customerAsset',
+    };
+    return refTypeMap[name] || 'basic_property';
+  }
+
   // Helper methods for XML parsing
   private getElementByTagName(
     parent: Document | Element | null,
@@ -801,11 +1458,9 @@ export class DccDataService {
     // Try with namespace prefix first
     let element = parent.querySelector(`dcc\\:${tagName}`);
     if (!element) {
-      // Try without namespace prefix
       element = parent.querySelector(tagName);
     }
     if (!element) {
-      // Try with getElementsByTagName (works better with namespaces)
       const elements = parent.getElementsByTagName(`dcc:${tagName}`);
       if (elements.length > 0) {
         element = elements[0];
@@ -825,10 +1480,8 @@ export class DccDataService {
   ): Element[] {
     if (!parent) return [];
 
-    // Try with namespace prefix first
     let elements = parent.getElementsByTagName(`dcc:${tagName}`);
     if (elements.length === 0) {
-      // Try without namespace prefix
       elements = parent.getElementsByTagName(tagName);
     }
     return Array.from(elements);
@@ -851,21 +1504,12 @@ export class DccDataService {
     const element = this.getElementByTagName(parent, tagName);
     if (!element) return null;
 
-    // Try to find content element first
     const contentElement = this.getElementByTagName(element, 'content');
     if (contentElement) {
       return contentElement.textContent?.trim() || null;
     }
 
-    // Fallback to element text content
     return element.textContent?.trim() || null;
-  }
-
-  // Remove the old getElementText method and update other helper methods
-  private parseDate(dateString: string | null): Date | null {
-    if (!dateString) return null;
-    const date = new Date(dateString);
-    return isNaN(date.getTime()) ? null : date;
   }
 
   private mapIssuerToDisplayCase(issuer: string): string {
@@ -883,38 +1527,7 @@ export class DccDataService {
     return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
 
-  private extractPTFromUniqueIdentifier(uniqueIdentifier: string): string {
-    if (!uniqueIdentifier) return 'PT-23'; // Default value
-
-    // Split by spaces and get all parts
-    const parts = uniqueIdentifier.trim().split(/\s+/);
-
-    // Look for the penultimate number in the identifier
-    // Example: "PC0434-00 CC 24 01" -> parts = ["PC0434-00", "CC", "24", "01"]
-    // We want the second to last part that is a number
-    if (parts.length >= 2) {
-      // Get the penultimate part (second to last)
-      const penultimatePart = parts[parts.length - 2];
-
-      // Check if it's a valid number
-      if (/^\d+$/.test(penultimatePart)) {
-        return `PT-${penultimatePart}`;
-      }
-    }
-
-    // Fallback: try to find any number pattern that could be PT
-    const numberMatches = uniqueIdentifier.match(/\b(\d{1,2})\b/g);
-    if (numberMatches && numberMatches.length >= 2) {
-      // Get the second to last number found
-      const ptNumber = numberMatches[numberMatches.length - 2];
-      return `PT-${ptNumber}`;
-    }
-
-    // Final fallback
-    return 'PT-23';
-  }
-
-  // Nuevo método para cargar un DCC desde un objeto (por ejemplo, desde la BD)
+  // Nuevo método para cargar un DCC desde un objeto
   loadFromObject(dccData: DCCData): void {
     this.dccDataSubject.next(dccData);
   }
@@ -924,9 +1537,7 @@ export class DccDataService {
       action: 'get',
       bd: database,
       table: 'dcc_data',
-      opts: {
-        where: { id: dccId },
-      },
+      opts: { where: { id: dccId } },
     };
 
     return this.apiService.post(getDcc, UrlClass.URLNuevo).pipe(
@@ -939,7 +1550,6 @@ export class DccDataService {
         const defaultData = this.getCurrentData();
         const mergedData = this.deepMerge(defaultData, dccData);
 
-        // Asignar el certificate_number con el id si no existe
         if (!mergedData.administrativeData.core.certificate_number) {
           mergedData.administrativeData.core.certificate_number = dccData.id;
         }
@@ -950,7 +1560,34 @@ export class DccDataService {
     );
   }
 
-  // Deep merge (recursivo)
+  // Método para obtener todos los statements desde la tabla dcc_statement
+  getAllStatementsFromDatabase(database: string): Observable<any[]> {
+    const getStatements = {
+      action: 'get',
+      bd: database,
+      table: 'dcc_statement',
+      opts: {},
+    };
+    return this.apiService
+      .post(getStatements, UrlClass.URLNuevo)
+      .pipe(map((response: any) => response?.result || []));
+  }
+
+  // Actualiza un statement en la base de datos
+  updateStatementInDatabase(database: string, statement: any): Observable<any> {
+    const { deleted, ...cleanStatement } = statement;
+    const updateStatement = {
+      action: 'update',
+      bd: database,
+      table: 'dcc_statement',
+      opts: {
+        attributes: { ...cleanStatement },
+        where: { id: statement.id },
+      },
+    };
+    return this.apiService.post(updateStatement, UrlClass.URLNuevo);
+  }
+
   private deepMerge(defaultData: any, loadedData: any): any {
     if (!loadedData) return defaultData;
     if (typeof loadedData !== 'object' || Array.isArray(loadedData)) {
@@ -982,5 +1619,149 @@ export class DccDataService {
       }
     }
     return merged;
+  }
+
+  // Nuevos métodos helper para el parsing unificado
+  private determineSaveAsType(name: string): string {
+    const itemQuantityNames = [
+      'Rated voltage',
+      'Length',
+      'Characteristic impedance',
+    ];
+    return itemQuantityNames.includes(name) ? 'itemQuantity' : 'identification';
+  }
+
+  private findOptionByName(name: string): any {
+    return this.getIdentificationOptions().find(
+      (option) => option.name === name
+    );
+  }
+
+  private findOptionByNameAndIssuer(name: string, issuer: string): any {
+    return this.getIdentificationOptions().find(
+      (option) => option.name === name && option.issuer === issuer
+    );
+  }
+
+  private getIdentificationOptions() {
+    return [
+      {
+        issuer: 'Manufacturer',
+        name: 'Serial Number',
+        displayText: 'Serial Number (Manufacturer)',
+        saveAs: 'identification',
+      },
+      {
+        issuer: 'Customer',
+        name: "Customer's asset ID",
+        displayText: "Customer's asset ID (Customer)",
+        saveAs: 'identification',
+      },
+      {
+        issuer: 'Manufacturer',
+        name: 'Rated voltage',
+        displayText: 'Rated voltage (Manufacturer)',
+        saveAs: 'itemQuantity',
+        unit: '\\volt',
+      },
+      {
+        issuer: 'Manufacturer',
+        name: 'Length',
+        displayText: 'Length (Manufacturer)',
+        saveAs: 'itemQuantity',
+        unit: '\\meter',
+      },
+      {
+        issuer: 'Manufacturer',
+        name: 'Characteristic impedance',
+        displayText: 'Characteristic impedance (Manufacturer)',
+        saveAs: 'itemQuantity',
+        unit: '\\ohm',
+      },
+    ];
+  }
+
+  // Nuevo método para normalizar nombres de identificaciones
+  private normalizeIdentificationName(name: string): string {
+    // Mapeo de variaciones comunes a nombres estándar
+    const nameMapping: { [key: string]: string } = {
+      // Variaciones de Serial Number
+      'serial number': 'Serial Number',
+      'serial no': 'Serial Number',
+      serialnumber: 'Serial Number',
+      'Serial number': 'Serial Number',
+      'Serial No': 'Serial Number',
+      SerialNumber: 'Serial Number',
+
+      // Variaciones de Customer's asset ID
+      "customer's asset id": "Customer's asset ID",
+      'customer asset id': "Customer's asset ID",
+      "customer's asset": "Customer's asset ID",
+      'customer asset': "Customer's asset ID",
+      "Customer's asset or ID": "Customer's asset ID",
+      "customer's asset or id": "Customer's asset ID",
+
+      // Variaciones de Rated voltage
+      'rated voltage': 'Rated voltage',
+      'Rated Voltage': 'Rated voltage',
+      'rated voltage [kv]': 'Rated voltage',
+      'Rated voltage [kV]': 'Rated voltage',
+
+      // Variaciones de Length
+      length: 'Length',
+      'Length [m]': 'Length',
+      'length [m]': 'Length',
+
+      // Variaciones de Characteristic impedance
+      'characteristic impedance': 'Characteristic impedance',
+      'Characteristic Impedance': 'Characteristic impedance',
+    };
+
+    // Limpiar el nombre (remover espacios extra, convertir a lowercase para comparación)
+    const cleanName = name.trim();
+    const lowerName = cleanName.toLowerCase();
+
+    // Buscar mapeo exacto primero
+    if (nameMapping[cleanName]) {
+      return nameMapping[cleanName];
+    }
+
+    // Buscar mapeo por lowercase
+    if (nameMapping[lowerName]) {
+      return nameMapping[lowerName];
+    }
+
+    // Si no encuentra mapeo, devolver el nombre original limpio
+    return cleanName;
+  }
+
+  // Método mejorado para buscar opción exacta
+  private findExactOptionByNameAndIssuer(name: string, issuer: string): any {
+    const identificationOptions = this.getIdentificationOptions();
+
+    // Buscar coincidencia exacta
+    const exactMatch = identificationOptions.find(
+      (option) => option.name === name && option.issuer === issuer
+    );
+
+    if (exactMatch) {
+      console.log(`🔧 Found exact match: ${name} (${issuer})`);
+      return exactMatch;
+    }
+
+    // Si no hay coincidencia exacta con issuer, buscar solo por name
+    const nameMatch = identificationOptions.find(
+      (option) => option.name === name
+    );
+
+    if (nameMatch) {
+      console.log(
+        `🔧 Found name match: ${name}, but issuer mismatch. Expected: ${nameMatch.issuer}, Got: ${issuer}`
+      );
+      return nameMatch;
+    }
+
+    console.log(`🔧 No match found for: ${name} (${issuer})`);
+    return null;
   }
 }

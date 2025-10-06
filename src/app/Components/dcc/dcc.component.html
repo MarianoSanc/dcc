@@ -177,9 +177,13 @@
   <div *ngIf="showMainInterface" class="main-interface">
     <!-- Header with back button -->
     <div class="main-header">
-      <button class="back-btn" (click)="backToOptions()">
+      <button
+        class="back-btn"
+        (click)="backToOptions()"
+        title="Volver al menú principal y limpiar datos"
+      >
         <i class="material-icons">arrow_back</i>
-        Volver
+        <span>Volver</span>
       </button>
       <h2>Digital Calibration Certificate</h2>
     </div>

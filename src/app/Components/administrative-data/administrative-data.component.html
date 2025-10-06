@@ -551,14 +551,24 @@
             <th>Name</th>
             <th>Email</th>
             <th>Phone</th>
+            <th>Main Signer</th>
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let person of responsiblePersons">
+          <tr
+            *ngFor="let person of responsiblePersons"
+            [class.main-signer-row]="person.mainSigner"
+          >
             <td>{{ person.role }}</td>
             <td>{{ getResponsiblePersonDisplayName(person) }}</td>
             <td>{{ person.email }}</td>
             <td>{{ person.phone }}</td>
+            <td>
+              <span *ngIf="person.mainSigner" class="main-signer-badge">
+                Principal
+              </span>
+              <span *ngIf="!person.mainSigner" class="no-main-signer"> - </span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -586,9 +596,10 @@
               class="fixed-width-dropdown"
               [settings]="dropdownuser"
               [data]="listauser"
-              [(ngModel)]="person.no_nomina"
+              [(ngModel)]="selectedUsers[i]"
               (onSelect)="onUserSelect($event, i)"
               (onDeSelect)="onUserDeselect($event, i)"
+              [placeholder]="'Seleccionar usuario...'"
             >
             </ng-multiselect-dropdown>
           </div>
@@ -599,6 +610,25 @@
           <div class="form-group">
             <label>Phone:</label>
             <input type="text" [(ngModel)]="person.phone" />
+          </div>
+          <div class="form-group main-signer-group">
+            <label>Main Signer:</label>
+            <div class="main-signer-checkbox">
+              <input
+                type="checkbox"
+                [(ngModel)]="person.mainSigner"
+                (ngModelChange)="onMainSignerChange(i)"
+                [id]="'mainSigner_' + i"
+              />
+              <label [for]="'mainSigner_' + i" class="checkbox-label">
+                <span *ngIf="person.mainSigner" class="main-signer-text">
+                  Responsable Principal
+                </span>
+                <span *ngIf="!person.mainSigner" class="not-main-signer-text">
+                  Marcar como principal
+                </span>
+              </label>
+            </div>
           </div>
           <div class="form-group delete-action">
             <button class="remove-btn" (click)="removeResponsiblePerson(i)">

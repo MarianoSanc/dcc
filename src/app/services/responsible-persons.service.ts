@@ -64,35 +64,6 @@ export class ResponsiblePersonsService {
     });
   }
 
-  mapResponsiblePersonsWithUsers(
-    responsibleData: any[],
-    listauser: any[]
-  ): any[] {
-    return responsibleData.map((person) => {
-      const foundUser = listauser.find(
-        (user) => user.no_nomina === person.no_nomina
-      );
-
-      if (foundUser) {
-        return {
-          role: person.role || '',
-          no_nomina: person.no_nomina,
-          full_name: foundUser.name,
-          email: foundUser.email || '',
-          phone: foundUser.phone || '',
-        };
-      } else {
-        return {
-          role: person.role || '',
-          no_nomina: person.no_nomina,
-          full_name: person.no_nomina,
-          email: '',
-          phone: '',
-        };
-      }
-    });
-  }
-
   saveResponsiblePersons(
     certificateNumber: string,
     responsiblePersons: any[],
@@ -106,22 +77,13 @@ export class ResponsiblePersonsService {
         didOpen: () => Swal.showLoading(),
       });
 
-      // Primero marcar como eliminados los existentes
-      const deleteExistingRequest = {
-        action: 'update',
-        bd: this.database,
-        table: 'dcc_responsiblepersons',
-        opts: {
-          where: { id_dcc: certificateNumber },
-          attributes: { deleted: 1 },
-        },
-      };
-
-      this.apiService.post(deleteExistingRequest, UrlClass.URLNuevo).subscribe({
-        next: () => {
-          this.insertResponsiblePersons(
+      // Primero obtener las personas responsables existentes
+      this.loadResponsiblePersonsFromDB(certificateNumber).subscribe({
+        next: (existingPersons) => {
+          this.syncResponsiblePersons(
             certificateNumber,
             responsiblePersons,
+            existingPersons,
             listauser
           ).subscribe({
             next: (success) => {
@@ -136,7 +98,7 @@ export class ResponsiblePersonsService {
           });
         },
         error: (error) => {
-          // Continuar con la inserción aunque falle el delete
+          // Si falla cargar los existentes, insertar todos como nuevos
           this.insertResponsiblePersons(
             certificateNumber,
             responsiblePersons,
@@ -154,6 +116,198 @@ export class ResponsiblePersonsService {
           });
         },
       });
+    });
+  }
+
+  private syncResponsiblePersons(
+    certificateNumber: string,
+    newPersons: any[],
+    existingPersons: any[],
+    listauser: any[]
+  ): Observable<boolean> {
+    return new Observable((observer) => {
+      console.log('🔄 Syncing responsible persons');
+      console.log('🔄 New persons:', newPersons);
+      console.log('🔄 Existing persons:', existingPersons);
+
+      const operations: Promise<any>[] = [];
+
+      // 1. Preparar datos de nuevas personas con no_nomina
+      const preparedNewPersons = newPersons
+        .map((person) => {
+          let noNomina = '';
+
+          if (typeof person.name === 'string' && person.name) {
+            const foundUser = listauser.find(
+              (user) => user.name === person.name
+            );
+            if (foundUser) {
+              noNomina = foundUser.no_nomina;
+            }
+          } else if (person.no_nomina) {
+            noNomina = person.no_nomina;
+          }
+
+          return {
+            ...person,
+            no_nomina: noNomina,
+            mainSigner: person.mainSigner || false,
+          };
+        })
+        .filter((person) => person.no_nomina && person.role); // Solo personas válidas
+
+      console.log('🔄 Prepared new persons:', preparedNewPersons);
+
+      // 2. Encontrar personas a eliminar (que están en BD pero no en nueva lista)
+      const personsToDelete = existingPersons.filter(
+        (existingPerson) =>
+          !preparedNewPersons.some(
+            (newPerson) => newPerson.no_nomina === existingPerson.no_nomina
+          )
+      );
+
+      console.log('🗑️ Persons to delete:', personsToDelete);
+
+      // 3. Encontrar personas a actualizar (que están en ambas listas)
+      const personsToUpdate = preparedNewPersons.filter((newPerson) =>
+        existingPersons.some(
+          (existingPerson) => existingPerson.no_nomina === newPerson.no_nomina
+        )
+      );
+
+      console.log('🔄 Persons to update:', personsToUpdate);
+
+      // 4. Encontrar personas a insertar (que están en nueva lista pero no en BD)
+      const personsToInsert = preparedNewPersons.filter(
+        (newPerson) =>
+          !existingPersons.some(
+            (existingPerson) => existingPerson.no_nomina === newPerson.no_nomina
+          )
+      );
+
+      console.log('➕ Persons to insert:', personsToInsert);
+
+      // 5. Eliminar personas que ya no están
+      personsToDelete.forEach((person) => {
+        const deleteRequest = {
+          action: 'update',
+          bd: this.database,
+          table: 'dcc_responsiblepersons',
+          opts: {
+            where: {
+              id_dcc: certificateNumber,
+              no_nomina: person.no_nomina,
+              deleted: 0,
+            },
+            attributes: { deleted: 1 },
+          },
+        };
+
+        console.log('🗑️ Delete request:', deleteRequest);
+        operations.push(
+          this.apiService.post(deleteRequest, UrlClass.URLNuevo).toPromise()
+        );
+      });
+
+      // 6. Actualizar personas existentes
+      personsToUpdate.forEach((person) => {
+        const updateRequest = {
+          action: 'update',
+          bd: this.database,
+          table: 'dcc_responsiblepersons',
+          opts: {
+            where: {
+              id_dcc: certificateNumber,
+              no_nomina: person.no_nomina,
+              deleted: 0,
+            },
+            attributes: {
+              role: person.role,
+              main: person.mainSigner ? 1 : 0,
+            },
+          },
+        };
+
+        console.log('🔄 Update request:', updateRequest);
+        operations.push(
+          this.apiService.post(updateRequest, UrlClass.URLNuevo).toPromise()
+        );
+      });
+
+      // 7. Insertar nuevas personas
+      personsToInsert.forEach((person) => {
+        const insertRequest = {
+          action: 'create',
+          bd: this.database,
+          table: 'dcc_responsiblepersons',
+          opts: {
+            attributes: {
+              no_nomina: person.no_nomina,
+              id_dcc: certificateNumber,
+              role: person.role,
+              main: person.mainSigner ? 1 : 0,
+              deleted: 0,
+            },
+          },
+        };
+
+        console.log('➕ Insert request:', insertRequest);
+        operations.push(
+          this.apiService.post(insertRequest, UrlClass.URLNuevo).toPromise()
+        );
+      });
+
+      // 8. Ejecutar todas las operaciones
+      if (operations.length > 0) {
+        Promise.all(operations)
+          .then((responses) => {
+            console.log('✅ All operations completed:', responses);
+            const allSuccessful = responses.every(
+              (response: any) => response.result
+            );
+            observer.next(allSuccessful);
+            observer.complete();
+          })
+          .catch((error) => {
+            console.error('❌ Error in sync operations:', error);
+            observer.error(error);
+          });
+      } else {
+        console.log('ℹ️ No operations needed');
+        observer.next(true);
+        observer.complete();
+      }
+    });
+  }
+
+  mapResponsiblePersonsWithUsers(
+    responsibleData: any[],
+    listauser: any[]
+  ): any[] {
+    return responsibleData.map((person) => {
+      const foundUser = listauser.find(
+        (user) => user.no_nomina === person.no_nomina
+      );
+
+      if (foundUser) {
+        return {
+          role: person.role || '',
+          no_nomina: person.no_nomina,
+          full_name: foundUser.name,
+          email: foundUser.email || '',
+          phone: foundUser.phone || '',
+          mainSigner: Boolean(person.main), // Mapear el campo 'main' de la BD
+        };
+      } else {
+        return {
+          role: person.role || '',
+          no_nomina: person.no_nomina,
+          full_name: person.no_nomina,
+          email: '',
+          phone: '',
+          mainSigner: Boolean(person.main), // Mapear el campo 'main' de la BD
+        };
+      }
     });
   }
 
@@ -193,6 +347,7 @@ export class ResponsiblePersonsService {
                 no_nomina: noNomina,
                 id_dcc: certificateNumber,
                 role: person.role,
+                main: person.mainSigner ? 1 : 0,
                 deleted: 0,
               },
             },

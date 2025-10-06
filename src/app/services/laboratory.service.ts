@@ -56,9 +56,6 @@ export class LaboratoryService {
         console.log('🔍 Found laboratory ID:', existingLab.id);
         return existingLab.id;
       } else {
-        console.log(
-          '🔍 Laboratory not found in database, might need to create new one'
-        );
         return null;
       }
     }

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -9,8 +9,7 @@ import { DccDataService } from '../../services/dcc-data.service';
 import { LaboratoryService } from '../../services/laboratory.service';
 import { CustomerService } from '../../services/customer.service';
 import { ResponsiblePersonsService } from '../../services/responsible-persons.service';
-import { ApiService } from '../../api/api.service';
-import { UrlClass } from '../../shared/models/url.model';
+import { AdministrativeDataService } from '../../services/administrative-data.service';
 import Swal from 'sweetalert2';
 
 @Component({
@@ -23,7 +22,6 @@ import Swal from 'sweetalert2';
 export class AdministrativeDataComponent implements OnInit {
   editingBlocks: { [key: string]: boolean } = {};
 
-  // Configuración para qué bloques son editables (removido identifications)
   editableBlocks = {
     software: false,
     core: true,
@@ -32,7 +30,7 @@ export class AdministrativeDataComponent implements OnInit {
     customer: true,
   };
 
-  // Propiedades de datos (removido identifications)
+  // Propiedades de datos
   softwareData: any = {};
   coreData: any = {};
   laboratoryData: any = {};
@@ -41,12 +39,11 @@ export class AdministrativeDataComponent implements OnInit {
 
   // Datos de usuario para el dropdown
   listauser: any[] = [];
-  selectedUsers: any[] = [];
+  selectedUsers: any[] = []; // Agregar esta línea
 
-  // Configuración del dropdown CORREGIDA
   dropdownuser: IDropdownSettings = {
-    idField: 'no_nomina', // El ID interno sigue siendo no_nomina
-    textField: 'name', // Pero muestra el 'name' (que es el CONCAT)
+    idField: 'no_nomina',
+    textField: 'name',
     allowSearchFilter: true,
     searchPlaceholderText: 'Buscar usuario',
     enableCheckAll: false,
@@ -55,115 +52,134 @@ export class AdministrativeDataComponent implements OnInit {
     noFilteredDataAvailablePlaceholderText: 'No Existe el Usuario',
   };
 
-  // Nueva lista para laboratorios
+  // Listas y variables de estado
   laboratoryList: any[] = [];
   selectedLaboratoryId: string = '';
-
-  // Nuevas variables para manejar acciones del laboratorio
   laboratoryAction: 'edit' | 'select' | 'create' | null = null;
   tempLaboratoryId: string = '';
 
-  // Nueva lista para clientes
   customerList: any[] = [];
   selectedCustomerId: string = '';
-
-  // Nuevas variables para manejar acciones del cliente
   customerAction: 'edit' | 'select' | 'create' | null = null;
   tempCustomerId: string = '';
-
-  // Configuración de base de datos
-  isTesting: boolean = false;
-  database: string = this.isTesting ? 'prueba' : 'calibraciones';
 
   constructor(
     private dccDataService: DccDataService,
     private laboratoryService: LaboratoryService,
     private customerService: CustomerService,
     private responsiblePersonsService: ResponsiblePersonsService,
-    private apiService: ApiService
+    private administrativeDataService: AdministrativeDataService
   ) {}
 
   ngOnInit() {
     this.dccDataService.dccData$.subscribe((data) => {
+      console.log('🔧 === ngOnInit dccData subscription DEBUG START ===');
+      console.log(
+        '📄 New DCC data received:',
+        JSON.stringify(data.administrativeData.core.certificate_number, null, 2)
+      );
+
       this.softwareData = { ...data.administrativeData.software };
-      this.coreData = { ...data.administrativeData.core };
-
-      // Formatear fechas para inputs de tipo date
-      if (this.coreData.receipt_date) {
-        this.coreData.receipt_date = this.formatDateForInput(
-          this.coreData.receipt_date
-        );
-      }
-      if (this.coreData.performance_date) {
-        this.coreData.performance_date = this.formatDateForInput(
-          this.coreData.performance_date
-        );
-      }
-      if (this.coreData.end_performance_date) {
-        this.coreData.end_performance_date = this.formatDateForInput(
-          this.coreData.end_performance_date
-        );
-      }
-      if (this.coreData.issue_date) {
-        this.coreData.issue_date = this.formatDateForInput(
-          this.coreData.issue_date
-        );
-      }
-
+      this.coreData = this.administrativeDataService.formatCoreDates(
+        data.administrativeData.core
+      );
       this.laboratoryData = { ...data.administrativeData.laboratory };
 
-      console.log('🔍 Loaded laboratory data:', this.laboratoryData);
-
-      // Usar directamente el laboratory_id si está disponible
-      if (data.administrativeData.laboratory.laboratory_id) {
-        this.selectedLaboratoryId =
-          data.administrativeData.laboratory.laboratory_id;
-        console.log(
-          '🔍 Using laboratory_id from data:',
-          this.selectedLaboratoryId
-        );
-      } else if (this.laboratoryData.name) {
-        console.log(
-          '🔍 Laboratory data found, but no ID. Searching in list...'
-        );
-        // Solo buscar en la lista si no tenemos el ID directo
-        this.findLaboratoryId();
-      }
+      // Limpiar personas responsables antes de cargar las nuevas
+      console.log('👥 Clearing previous responsible persons');
+      console.log(
+        '👥 Previous responsible persons:',
+        JSON.stringify(this.responsiblePersons, null, 2)
+      );
 
       this.responsiblePersons = [...data.administrativeData.responsiblePersons];
+      this.selectedUsers = []; // Limpiar también los usuarios seleccionados
+
       console.log(
-        '🔍 Loaded responsible persons data:',
-        this.responsiblePersons
+        '👥 New responsible persons loaded:',
+        JSON.stringify(this.responsiblePersons, null, 2)
       );
+
       this.customerData = { ...data.administrativeData.customer };
 
-      console.log(
-        '🔍 Loaded responsible persons data:',
-        this.responsiblePersons
-      );
+      // Inicializar selectedUsers array después de cargar los nuevos datos
+      this.initializeSelectedUsers();
 
-      // Usar directamente el customer_id si está disponible
-      if (data.administrativeData.customer.customer_id) {
-        this.selectedCustomerId = data.administrativeData.customer.customer_id;
-      } else if (
-        this.customerData.name &&
-        this.customerData.name.trim() !== '' &&
-        this.customerData.name !== 'HV Test'
-      ) {
-        console.log(
-          '🔍 Customer data found from XML, but no ID. Searching in list...'
-        );
-        // Solo buscar en la lista si no tenemos el ID directo y hay datos reales (no predeterminados)
-        this.findCustomerId();
-      } else {
-        // Solo usar ID predeterminado si realmente no hay datos de customer o son los predeterminados
-        this.selectedCustomerId = '1';
-        console.log(
-          '🔍 No customer data found or default data, using default ID: 1'
-        );
-      }
+      this.initializeIds(data);
+      console.log('🔧 === ngOnInit dccData subscription DEBUG END ===');
     });
 
+    this.loadInitialData();
+  }
+
+  // Nuevo método para inicializar selectedUsers
+  private initializeSelectedUsers() {
+    console.log('🔧 === initializeSelectedUsers DEBUG START ===');
+    console.log(
+      '👥 Current responsible persons:',
+      JSON.stringify(this.responsiblePersons, null, 2)
+    );
+    console.log('👥 Current listauser length:', this.listauser.length);
+
+    // Limpiar el array completamente
+    this.selectedUsers = [];
+
+    // Crear un nuevo array con la longitud correcta
+    for (let i = 0; i < this.responsiblePersons.length; i++) {
+      const person = this.responsiblePersons[i];
+      console.log(`👥 Processing person ${i}:`, person);
+
+      if (person.no_nomina && this.listauser.length > 0) {
+        // Buscar el usuario correspondiente en listauser
+        const foundUser = this.listauser.find(
+          (user) => user.no_nomina === person.no_nomina
+        );
+        if (foundUser) {
+          this.selectedUsers[i] = [foundUser];
+          console.log(`👥 Found and set user for index ${i}:`, foundUser.name);
+        } else {
+          this.selectedUsers[i] = [];
+          console.log(`👥 User not found for no_nomina: ${person.no_nomina}`);
+        }
+      } else {
+        this.selectedUsers[i] = [];
+        console.log(`👥 No no_nomina or no users loaded for index ${i}`);
+      }
+    }
+
+    console.log('👥 Final selectedUsers array:', this.selectedUsers);
+    console.log('👥 selectedUsers length:', this.selectedUsers.length);
+    console.log(
+      '👥 responsiblePersons length:',
+      this.responsiblePersons.length
+    );
+    console.log('🔧 === initializeSelectedUsers DEBUG END ===');
+  }
+
+  private initializeIds(data: any) {
+    // Laboratory ID
+    if (data.administrativeData.laboratory.laboratory_id) {
+      this.selectedLaboratoryId =
+        data.administrativeData.laboratory.laboratory_id;
+    } else if (this.laboratoryData.name) {
+      this.findLaboratoryId();
+    }
+
+    // Customer ID
+    if (data.administrativeData.customer.customer_id) {
+      this.selectedCustomerId = data.administrativeData.customer.customer_id;
+    } else if (
+      this.customerData.name &&
+      this.customerData.name.trim() !== '' &&
+      this.customerData.name !== 'HV Test'
+    ) {
+      this.findCustomerId();
+    } else {
+      this.selectedCustomerId = '1';
+    }
+  }
+
+  private loadInitialData() {
     this.loadUsers();
     this.loadLaboratories();
     this.loadCustomers();
@@ -171,14 +187,28 @@ export class AdministrativeDataComponent implements OnInit {
 
   // Método simplificado para cargar usuarios
   loadUsers() {
+    console.log('🔧 === loadUsers DEBUG START ===');
     this.responsiblePersonsService.loadUsers().subscribe({
       next: (users) => {
         this.listauser = users;
-        console.log('✅ Loaded users:', this.listauser);
+        console.log('✅ Loaded users count:', this.listauser.length);
+        console.log('✅ First 3 users sample:', this.listauser.slice(0, 3));
+        console.log(
+          '✅ Users structure check - first user keys:',
+          this.listauser.length > 0
+            ? Object.keys(this.listauser[0])
+            : 'No users'
+        );
+
+        // Después de cargar usuarios, sincronizar selectedUsers
+        this.initializeSelectedUsers();
+
         this.checkIfNeedToLoadResponsiblePersonsFromDB();
+        console.log('🔧 === loadUsers DEBUG END ===');
       },
       error: (error) => {
-        console.error('Error loading users:', error);
+        console.error('❌ Error loading users:', error);
+        console.log('🔧 === loadUsers DEBUG END (ERROR) ===');
       },
     });
   }
@@ -188,6 +218,12 @@ export class AdministrativeDataComponent implements OnInit {
     // Solo alternar si el bloque es editable
     if (this.editableBlocks[blockName as keyof typeof this.editableBlocks]) {
       this.editingBlocks[blockName] = !this.editingBlocks[blockName];
+
+      // Si se está abriendo la edición de responsible persons, sincronizar selectedUsers
+      if (blockName === 'responsible' && this.editingBlocks[blockName]) {
+        console.log('👥 Opening responsible persons edit mode');
+        this.initializeSelectedUsers();
+      }
 
       // Si se está abriendo la edición del laboratorio, determinar acción inicial
       if (blockName === 'laboratory' && this.editingBlocks[blockName]) {
@@ -369,21 +405,8 @@ export class AdministrativeDataComponent implements OnInit {
   }
 
   // Método simplificado para crear nuevo laboratorio
-  private createNewLaboratory(): void {
+  private createNewLaboratory(certificateNumber: string): void {
     console.log('🆕 createNewLaboratory() called');
-
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    if (!certificateNumber) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
 
     this.laboratoryService.createLaboratory(this.laboratoryData).subscribe({
       next: (labId) => {
@@ -410,29 +433,12 @@ export class AdministrativeDataComponent implements OnInit {
   }
 
   // Método simplificado para actualizar laboratorio
-  private updateLaboratoryInDatabase(): void {
+  private updateLaboratoryInDatabase(certificateNumber: string): void {
     console.log('🔄 updateLaboratoryInDatabase() called');
 
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    // Si no tenemos selectedLaboratoryId, intentar obtenerlo de los datos
-    if (
-      !this.selectedLaboratoryId &&
-      currentData.administrativeData.laboratory.laboratory_id
-    ) {
+    if (!this.selectedLaboratoryId) {
       this.selectedLaboratoryId =
-        currentData.administrativeData.laboratory.laboratory_id;
-    }
-
-    if (!certificateNumber) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
+        this.dccDataService.getCurrentData().administrativeData.laboratory.laboratory_id;
     }
 
     this.laboratoryService
@@ -440,8 +446,6 @@ export class AdministrativeDataComponent implements OnInit {
       .subscribe({
         next: (success) => {
           if (success) {
-            console.log('✅ Laboratory updated successfully');
-            // Vincular al DCC
             this.linkLaboratoryToDcc(certificateNumber, false);
           } else {
             Swal.fire({
@@ -462,14 +466,14 @@ export class AdministrativeDataComponent implements OnInit {
   }
 
   // Método simplificado para seleccionar laboratorio
-  private selectLaboratory(): void {
+  private selectLaboratory(certificateNumber: string): void {
     console.log('🔄 selectLaboratory() called');
 
     const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
+    const certificateNumbera =
       currentData.administrativeData.core.certificate_number;
 
-    this.linkLaboratoryToDcc(certificateNumber, false);
+    this.linkLaboratoryToDcc(certificateNumbera, false);
   }
 
   // Método helper para vincular laboratorio al DCC
@@ -479,7 +483,6 @@ export class AdministrativeDataComponent implements OnInit {
       .subscribe({
         next: (success) => {
           if (success) {
-            // Actualizar el laboratory_id en el servicio
             const finalLaboratoryData = {
               ...this.laboratoryData,
               laboratory_id: this.selectedLaboratoryId,
@@ -515,7 +518,415 @@ export class AdministrativeDataComponent implements OnInit {
       });
   }
 
-  // Método para inicializar la edición del cliente
+  // Customer methods
+  private createNewCustomer(certificateNumber: string): void {
+    this.customerService.createCustomer(this.customerData).subscribe({
+      next: (customerId) => {
+        this.selectedCustomerId = customerId;
+        this.linkCustomerToDcc(certificateNumber, true);
+        this.loadCustomers();
+      },
+      error: (error) => {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: error.message,
+        });
+      },
+    });
+  }
+
+  private updateCustomerInDatabase(certificateNumber: string): void {
+    if (!this.selectedCustomerId) {
+      this.selectedCustomerId =
+        this.dccDataService.getCurrentData().administrativeData.customer.customer_id;
+    }
+
+    this.customerService
+      .updateCustomer(this.selectedCustomerId, this.customerData)
+      .subscribe({
+        next: (success) => {
+          if (success) {
+            this.linkCustomerToDcc(certificateNumber, false);
+          } else {
+            Swal.fire({
+              icon: 'error',
+              title: 'Error',
+              text: 'No se pudo actualizar el cliente.',
+            });
+          }
+        },
+        error: (error) => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message,
+          });
+        },
+      });
+  }
+
+  private selectCustomer(certificateNumber: string): void {
+    this.linkCustomerToDcc(certificateNumber, false);
+  }
+
+  private linkCustomerToDcc(certificateNumber: string, isNew: boolean): void {
+    this.customerService
+      .linkCustomerToDcc(certificateNumber, this.selectedCustomerId)
+      .subscribe({
+        next: (success) => {
+          if (success) {
+            const finalCustomerData = {
+              ...this.customerData,
+              customer_id: this.selectedCustomerId,
+            };
+            this.dccDataService.updateAdministrativeData(
+              'customer',
+              finalCustomerData
+            );
+
+            const successMessage = isNew
+              ? 'Cliente creado y vinculado correctamente'
+              : 'Cliente guardado correctamente';
+
+            Swal.fire({
+              icon: 'success',
+              title: '¡Guardado!',
+              text: successMessage,
+              timer: 2000,
+              showConfirmButton: false,
+              position: 'top-end',
+            });
+
+            this.editingBlocks['customer'] = false;
+          }
+        },
+        error: (error) => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message,
+          });
+        },
+      });
+  }
+
+  // Métodos de cancelación simplificados
+  cancelEdit(blockName: string) {
+    this.editingBlocks[blockName] = false;
+
+    if (blockName === 'laboratory') {
+      this.resetLaboratoryAction();
+    }
+    if (blockName === 'customer') {
+      this.resetCustomerAction();
+    }
+
+    // Revertir cambios
+    const currentData = this.dccDataService.getCurrentData();
+    switch (blockName) {
+      case 'software':
+        this.softwareData = { ...currentData.administrativeData.software };
+        break;
+      case 'core':
+        this.coreData = this.administrativeDataService.formatCoreDates(
+          currentData.administrativeData.core
+        );
+        break;
+      case 'laboratory':
+        this.laboratoryData = { ...currentData.administrativeData.laboratory };
+        break;
+      case 'responsible':
+        this.responsiblePersons = [
+          ...currentData.administrativeData.responsiblePersons,
+        ];
+        break;
+      case 'customer':
+        this.customerData = { ...currentData.administrativeData.customer };
+        break;
+    }
+  }
+
+  // Date handling methods
+  onIsRangeDateChange() {
+    if (this.coreData.is_range_date && this.coreData.performance_date) {
+      this.coreData.end_performance_date = this.coreData.performance_date;
+    } else {
+      this.coreData.end_performance_date = null;
+    }
+  }
+
+  onDateChange() {
+    this.updateIsRangeDate();
+  }
+
+  onEndDateChange() {
+    if (
+      this.coreData.is_range_date &&
+      this.coreData.performance_date &&
+      this.coreData.end_performance_date
+    ) {
+      const performanceDate = new Date(this.coreData.performance_date);
+      const endDate = new Date(this.coreData.end_performance_date);
+
+      if (endDate < performanceDate) {
+        this.coreData.end_performance_date = this.coreData.performance_date;
+      }
+    }
+  }
+
+  getMinEndDate(): string {
+    if (this.coreData.is_range_date && this.coreData.performance_date) {
+      return this.coreData.performance_date;
+    }
+    return '';
+  }
+
+  private updateIsRangeDate() {
+    if (this.coreData.performance_date && this.coreData.end_performance_date) {
+      const performanceDate = new Date(this.coreData.performance_date);
+      const endPerformanceDate = new Date(this.coreData.end_performance_date);
+      const isSameDate =
+        performanceDate.toDateString() === endPerformanceDate.toDateString();
+      this.coreData.is_range_date = !isSameDate;
+    }
+  }
+
+  // Métodos simplificados de guardado
+  saveBlock(blockType: string): void {
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    switch (blockType) {
+      case 'software':
+        this.saveSoftwareBlock(certificateNumber);
+        break;
+      case 'core':
+        this.saveCoreBlock(certificateNumber);
+        break;
+      case 'laboratory':
+        this.saveLaboratoryBlock();
+        break;
+      case 'responsible':
+        this.saveResponsibleBlock();
+        break;
+      case 'customer':
+        this.saveCustomerBlock();
+        break;
+    }
+  }
+
+  private saveSoftwareBlock(certificateNumber: string) {
+    this.dccDataService.updateAdministrativeData('software', this.softwareData);
+    const dataToSave =
+      this.administrativeDataService.prepareSoftwareDataForSave(
+        this.softwareData
+      );
+
+    this.administrativeDataService
+      .saveToDatabase(dataToSave, 'software', certificateNumber)
+      .subscribe({
+        next: (success) => {
+          if (success) this.editingBlocks['software'] = false;
+        },
+      });
+  }
+
+  private saveCoreBlock(certificateNumber: string) {
+    this.dccDataService.updateAdministrativeData('core', this.coreData);
+    const dataToSave = this.administrativeDataService.prepareCoreDataForSave(
+      this.coreData
+    );
+
+    this.administrativeDataService
+      .saveToDatabase(dataToSave, 'core', certificateNumber)
+      .subscribe({
+        next: (success) => {
+          if (success) this.editingBlocks['core'] = false;
+        },
+      });
+  }
+
+  private saveLaboratoryBlock() {
+    this.dccDataService.updateAdministrativeData(
+      'laboratory',
+      this.laboratoryData
+    );
+
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    if (!certificateNumber) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Advertencia',
+        text: 'No se puede guardar: Certificate Number no está definido.',
+      });
+      return;
+    }
+
+    if (this.laboratoryAction === 'edit') {
+      this.updateLaboratoryInDatabase(certificateNumber);
+    } else if (
+      this.laboratoryAction === 'select' &&
+      this.selectedLaboratoryId
+    ) {
+      this.selectLaboratory(certificateNumber);
+    } else if (this.laboratoryAction === 'create') {
+      this.createNewLaboratory(certificateNumber);
+    } else {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Acción requerida',
+        text: 'Seleccione una acción válida para el laboratorio.',
+      });
+    }
+  }
+
+  private saveResponsibleBlock() {
+    console.log('🔧 === saveResponsibleBlock DEBUG START ===');
+    console.log('💾 Starting saveResponsibleBlock');
+    console.log(
+      '💾 Current responsible persons to save:',
+      JSON.stringify(this.responsiblePersons, null, 2)
+    );
+
+    this.dccDataService.updateAdministrativeData(
+      'responsiblePersons',
+      this.responsiblePersons
+    );
+
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    console.log('💾 Certificate number:', certificateNumber);
+
+    if (!certificateNumber) {
+      console.log('❌ No certificate number found');
+      Swal.fire({
+        icon: 'warning',
+        title: 'Advertencia',
+        text: 'No se puede guardar: Certificate Number no está definido.',
+      });
+      return;
+    }
+
+    console.log(
+      '💾 Calling responsiblePersonsService.saveResponsiblePersons...'
+    );
+    console.log('💾 Parameters:');
+    console.log('  - certificateNumber:', certificateNumber);
+    console.log(
+      '  - responsiblePersons:',
+      JSON.stringify(this.responsiblePersons, null, 2)
+    );
+    console.log('  - listauser length:', this.listauser.length);
+
+    this.responsiblePersonsService
+      .saveResponsiblePersons(
+        certificateNumber,
+        this.responsiblePersons,
+        this.listauser
+      )
+      .subscribe({
+        next: (success) => {
+          console.log('💾 Save operation result:', success);
+          if (success) {
+            console.log('✅ Responsible persons saved successfully');
+            Swal.fire({
+              icon: 'success',
+              title: '¡Guardado!',
+              text: 'Personas Responsables guardadas correctamente',
+              timer: 2000,
+              showConfirmButton: false,
+              position: 'top-end',
+            });
+          } else {
+            console.log('⚠️ Save operation returned false');
+            Swal.fire({
+              icon: 'warning',
+              title: 'Sin datos válidos',
+              text: 'No hay personas responsables válidas para guardar.',
+            });
+          }
+          this.editingBlocks['responsible'] = false;
+          console.log('🔧 === saveResponsibleBlock DEBUG END ===');
+        },
+        error: (error) => {
+          console.error('❌ Error saving responsible persons:', error);
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Ocurrió un error al guardar las personas responsables.',
+          });
+          console.log('🔧 === saveResponsibleBlock DEBUG END (ERROR) ===');
+        },
+      });
+  }
+
+  private saveCustomerBlock() {
+    this.dccDataService.updateAdministrativeData('customer', this.customerData);
+
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    if (!certificateNumber) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Advertencia',
+        text: 'No se puede guardar: Certificate Number no está definido.',
+      });
+      return;
+    }
+
+    if (this.customerAction === 'edit') {
+      this.updateCustomerInDatabase(certificateNumber);
+    } else if (this.customerAction === 'select' && this.selectedCustomerId) {
+      this.selectCustomer(certificateNumber);
+    } else if (this.customerAction === 'create') {
+      this.createNewCustomer(certificateNumber);
+    } else {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Acción requerida',
+        text: 'Seleccione una acción válida para el cliente.',
+      });
+    }
+  }
+
+  // Métodos para inicializar edición
+  private initializeLaboratoryEdit(): void {
+    // Verificar si hay datos del laboratorio cargado
+    const hasLaboratoryData =
+      this.laboratoryData.name && this.laboratoryData.name.trim() !== '';
+
+    if (hasLaboratoryData) {
+      // Si hay datos del laboratorio, establecer como "editar" por defecto
+      this.laboratoryAction = 'edit';
+
+      // Si no tenemos el selectedLaboratoryId, intentar encontrarlo
+      if (!this.selectedLaboratoryId) {
+        const existingLab = this.laboratoryList.find(
+          (lab) =>
+            lab.name === this.laboratoryData.name &&
+            lab.email === this.laboratoryData.email
+        );
+        if (existingLab) {
+          this.selectedLaboratoryId = existingLab.id;
+        }
+      }
+    } else {
+      // Si no hay datos del laboratorio, crear nuevo
+      this.laboratoryAction = 'create';
+    }
+
+    this.tempLaboratoryId = '';
+  }
+
   private initializeCustomerEdit(): void {
     // Verificar si hay datos del cliente cargado
     const hasCustomerData =
@@ -550,7 +961,7 @@ export class AdministrativeDataComponent implements OnInit {
     this.tempCustomerId = '';
   }
 
-  // Nuevo método para resetear la acción del cliente
+  // Método para resetear la acción del cliente
   private resetCustomerAction(): void {
     this.customerAction = null;
     this.tempCustomerId = '';
@@ -632,581 +1043,190 @@ export class AdministrativeDataComponent implements OnInit {
     }
   }
 
-  // Nuevo método para crear nuevo cliente
-  private createNewCustomer(): void {
-    console.log('🆕 createNewCustomer() called');
-
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    if (!certificateNumber) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    this.customerService.createCustomer(this.customerData).subscribe({
-      next: (customerId) => {
-        this.selectedCustomerId = customerId;
-        console.log('✅ Customer created with ID:', this.selectedCustomerId);
-
-        // Vincular al DCC y mostrar mensaje de éxito
-        this.linkCustomerToDcc(certificateNumber, true);
-
-        // Recargar la lista de clientes
-        this.loadCustomers();
-      },
-      error: (error) => {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: error.message,
-        });
-      },
-    });
-  }
-
-  // Método simplificado para actualizar cliente
-  private updateCustomerInDatabase(): void {
-    console.log('🔄 updateCustomerInDatabase() called');
-
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    // Si no tenemos selectedCustomerId, intentar obtenerlo de los datos
-    if (
-      !this.selectedCustomerId &&
-      currentData.administrativeData.customer.customer_id
-    ) {
-      this.selectedCustomerId =
-        currentData.administrativeData.customer.customer_id;
-    }
-
-    if (!certificateNumber) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    this.customerService
-      .updateCustomer(this.selectedCustomerId, this.customerData)
-      .subscribe({
-        next: (success) => {
-          if (success) {
-            console.log('✅ Customer updated successfully');
-            // Vincular al DCC
-            this.linkCustomerToDcc(certificateNumber, false);
-          } else {
-            Swal.fire({
-              icon: 'error',
-              title: 'Error',
-              text: 'No se pudo actualizar el cliente.',
-            });
-          }
-        },
-        error: (error) => {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: error.message,
-          });
-        },
-      });
-  }
-
-  // Método simplificado para seleccionar cliente
-  private selectCustomer(): void {
-    console.log('🔄 selectCustomer() called');
-
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    this.linkCustomerToDcc(certificateNumber, false);
-  }
-
-  // Método helper para vincular cliente al DCC
-  private linkCustomerToDcc(certificateNumber: string, isNew: boolean): void {
-    this.customerService
-      .linkCustomerToDcc(certificateNumber, this.selectedCustomerId)
-      .subscribe({
-        next: (success) => {
-          if (success) {
-            // Actualizar el customer_id en el servicio
-            const finalCustomerData = {
-              ...this.customerData,
-              customer_id: this.selectedCustomerId,
-            };
-            this.dccDataService.updateAdministrativeData(
-              'customer',
-              finalCustomerData
-            );
-
-            const successMessage = isNew
-              ? 'Cliente creado y vinculado correctamente'
-              : 'Cliente guardado correctamente';
-
-            Swal.fire({
-              icon: 'success',
-              title: '¡Guardado!',
-              text: successMessage,
-              timer: 2000,
-              showConfirmButton: false,
-              position: 'top-end',
-            });
-
-            this.editingBlocks['customer'] = false;
-          }
-        },
-        error: (error) => {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: error.message,
-          });
-        },
-      });
-  }
-
-  // Método para obtener texto del botón guardar cliente
-  getCustomerSaveButtonText(): string {
-    switch (this.customerAction) {
-      case 'edit':
-        return 'Actualizar Cliente';
-      case 'select':
-        return 'Seleccionar Cliente';
-      case 'create':
-        return 'Crear Cliente';
-      default:
-        return 'Guardar';
-    }
-  }
-
-  saveBlock(blockType: string): void {
-    console.log('💾 saveBlock called with blockType:', blockType);
-
-    let dataToSave: any = {};
-
-    switch (blockType) {
-      case 'software':
-        this.dccDataService.updateAdministrativeData(
-          'software',
-          this.softwareData
-        );
-        dataToSave = {
-          software_name: this.softwareData.name,
-          software_version: this.softwareData.version,
-          software_type: this.softwareData.type,
-          software_description: this.softwareData.description,
-        };
-        break;
-
-      case 'core':
-        this.dccDataService.updateAdministrativeData('core', this.coreData);
-        dataToSave = {
-          pt: this.coreData.pt_id,
-          country: this.coreData.country_code,
-          language: this.coreData.language,
-          receipt_date: this.coreData.receipt_date
-            ? this.formatDateForDatabase(this.coreData.receipt_date)
-            : null,
-          date_calibration: this.coreData.performance_date
-            ? this.formatDateForDatabase(this.coreData.performance_date)
-            : null,
-          date_range: this.coreData.is_range_date ? 1 : 0,
-          date_end: this.coreData.end_performance_date
-            ? this.formatDateForDatabase(this.coreData.end_performance_date)
-            : null,
-          location: this.coreData.performance_localition, // Cambiar a 'location' para coincidir con la BD
-          issue_date: this.coreData.issue_date
-            ? this.formatDateForDatabase(this.coreData.issue_date)
-            : null,
-        };
-        break;
-
-      case 'laboratory':
-        console.log('💾 Laboratory save block entered');
-        console.log('💾 laboratoryAction:', this.laboratoryAction);
-        console.log('💾 selectedLaboratoryId:', this.selectedLaboratoryId);
-        console.log('💾 laboratoryData:', this.laboratoryData);
-
-        this.dccDataService.updateAdministrativeData(
-          'laboratory',
-          this.laboratoryData
-        );
-
-        // Manejar según la acción seleccionada
-        if (this.laboratoryAction === 'edit') {
-          console.log('💾 Calling updateLaboratoryInDatabase()');
-          this.updateLaboratoryInDatabase();
-        } else if (
-          this.laboratoryAction === 'select' &&
-          this.selectedLaboratoryId
-        ) {
-          console.log('💾 Calling selectLaboratory()');
-          this.selectLaboratory();
-        } else if (this.laboratoryAction === 'create') {
-          console.log('💾 Calling createNewLaboratory()');
-          this.createNewLaboratory();
-        } else {
-          console.log('💾 No valid action or missing data');
-          Swal.fire({
-            icon: 'warning',
-            title: 'Acción requerida',
-            text: 'Seleccione una acción válida para el laboratorio.',
-          });
-        }
-        return;
-
-      case 'responsible':
-        console.log('💾 Responsible save block entered');
-        console.log('💾 responsiblePersons:', this.responsiblePersons);
-
-        this.dccDataService.updateAdministrativeData(
-          'responsiblePersons',
-          this.responsiblePersons
-        );
-        console.log(
-          '💾 responsiblePersons after update:',
-          this.responsiblePersons
-        );
-
-        // Llamar al método específico para guardar responsible persons
-        this.saveResponsiblePersons();
-        return;
-
-      case 'customer':
-        console.log('💾 Customer save block entered');
-        console.log('💾 customerAction:', this.customerAction);
-        console.log('💾 selectedCustomerId:', this.selectedCustomerId);
-        console.log('💾 customerData:', this.customerData);
-
-        this.dccDataService.updateAdministrativeData(
-          'customer',
-          this.customerData
-        );
-
-        // Manejar según la acción seleccionada
-        if (this.customerAction === 'edit') {
-          console.log('💾 Calling updateCustomerInDatabase()');
-          this.updateCustomerInDatabase();
-        } else if (
-          this.customerAction === 'select' &&
-          this.selectedCustomerId
-        ) {
-          console.log('💾 Calling selectCustomer()');
-          this.selectCustomer();
-        } else if (this.customerAction === 'create') {
-          console.log('💾 Calling createNewCustomer()');
-          this.createNewCustomer();
-        } else {
-          console.log('💾 No valid action or missing data');
-          Swal.fire({
-            icon: 'warning',
-            title: 'Acción requerida',
-            text: 'Seleccione una acción válida para el cliente.',
-          });
-        }
-        return;
-    }
-
-    // Guardar en base de datos solo los datos específicos del bloque
-    this.saveToDatabaseById(dataToSave, blockType);
-
-    // Salir del modo edición
-    this.editingBlocks[blockType] = false;
-  }
-
-  // Método para verificar si los campos deben estar deshabilitados
-  areFieldsDisabled(): boolean {
-    return this.laboratoryAction === 'select';
-  }
-
-  // Método para verificar si los campos del cliente deben estar deshabilitados
-  areCustomerFieldsDisabled(): boolean {
-    return this.customerAction === 'select';
-  }
-
-  // Método para inicializar la edición del laboratorio
-  private initializeLaboratoryEdit(): void {
-    // Verificar si hay datos del laboratorio cargado
-    const hasLaboratoryData =
-      this.laboratoryData.name && this.laboratoryData.name.trim() !== '';
-
-    if (hasLaboratoryData) {
-      // Si hay datos del laboratorio, establecer como "editar" por defecto
-      this.laboratoryAction = 'edit';
-
-      // Si no tenemos el selectedLaboratoryId, intentar encontrarlo
-      if (!this.selectedLaboratoryId) {
-        const existingLab = this.laboratoryList.find(
-          (lab) =>
-            lab.name === this.laboratoryData.name &&
-            lab.email === this.laboratoryData.email
-        );
-        if (existingLab) {
-          this.selectedLaboratoryId = existingLab.id;
-        }
-      }
-    } else {
-      // Si no hay datos del laboratorio, crear nuevo
-      this.laboratoryAction = 'create';
-    }
-
-    this.tempLaboratoryId = '';
-  }
-
-  // Método para sincronizar la fecha de fin de rendimiento cuando cambia is_range_date
-  onIsRangeDateChange() {
-    if (this.coreData.is_range_date && this.coreData.performance_date) {
-      // Si es un rango de fechas, establecer la fecha de fin igual a la de inicio
-      this.coreData.end_performance_date = this.coreData.performance_date;
-    } else {
-      // Si no es un rango de fechas, poner null la fecha de fin
-      this.coreData.end_performance_date = null;
-    }
-  }
-
-  // Función para formatear fechas para inputs de tipo date
-  private formatDateForInput(dateValue: any): string {
-    if (!dateValue) return '';
-
-    // Si ya es string en formato YYYY-MM-DD, devolverlo directamente
-    if (
-      typeof dateValue === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
-    ) {
-      return dateValue;
-    }
-
-    // Si es Date object o string de fecha, convertir cuidadosamente
-    let date: Date;
-    if (typeof dateValue === 'string') {
-      // Agregar tiempo para evitar problemas de zona horaria
-      date = new Date(dateValue + 'T12:00:00');
-    } else if (dateValue instanceof Date) {
-      date = dateValue;
-    } else {
-      return '';
-    }
-
-    if (isNaN(date.getTime())) {
-      return '';
-    }
-
-    // Formatear usando métodos locales
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
-  }
-
-  // Nueva función para formatear fechas para la base de datos sin problemas de zona horaria
-  private formatDateForDatabase(dateValue: any): string {
-    if (!dateValue) return '';
-
-    // Si es string en formato YYYY-MM-DD (desde input type="date"), devolverlo directamente
-    if (
-      typeof dateValue === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
-    ) {
-      return dateValue;
-    }
-
-    // Para cualquier otro formato, convertir cuidadosamente
-    let date: Date;
-    if (typeof dateValue === 'string') {
-      date = new Date(dateValue + 'T12:00:00');
-    } else if (dateValue instanceof Date) {
-      date = dateValue;
-    } else {
-      return '';
-    }
-
-    if (isNaN(date.getTime())) {
-      return '';
-    }
-
-    // Formatear usando métodos locales para evitar problemas de zona horaria
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
-  }
-
-  private saveToDatabaseById(dataToSave: any, blockType: string): void {
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    if (!certificateNumber) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    // Mostrar loading
-    Swal.fire({
-      title: `Guardando ${this.getBlockDisplayName(blockType)}...`,
-      text: 'Por favor espere',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    const updateRequest = {
-      action: 'update',
-      bd: this.database,
-      table: 'dcc_data',
-      opts: {
-        where: { id: certificateNumber },
-        attributes: dataToSave,
-      },
-    };
-
-    console.log('updateRequest:', updateRequest);
-    console.log(`Guardando ${blockType}:`, dataToSave);
-
-    this.apiService.post(updateRequest, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        Swal.close();
-        if (response.result) {
-          Swal.fire({
-            icon: 'success',
-            title: '¡Guardado!',
-            text: `${this.getBlockDisplayName(
-              blockType
-            )} guardado correctamente`,
-            timer: 2000,
-            showConfirmButton: false,
-            position: 'top-end',
-          });
-        } else {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: `No se pudo guardar ${this.getBlockDisplayName(blockType)}.`,
-          });
-        }
-      },
-      error: (error) => {
-        Swal.close();
-        console.error(`Error al guardar ${blockType}:`, error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: `Ocurrió un error al guardar ${this.getBlockDisplayName(
-            blockType
-          )}.`,
-        });
-      },
-    });
-  }
-
-  private getBlockDisplayName(blockType: string): string {
-    const displayNames: { [key: string]: string } = {
-      software: 'Software',
-      core: 'Datos Principales',
-      laboratory: 'Laboratorio',
-      responsible: 'Personas Responsables',
-      customer: 'Cliente',
-    };
-    return displayNames[blockType] || blockType;
-  }
-
-  // Métodos para responsible persons
-  private saveResponsiblePersons(): void {
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    if (!certificateNumber) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    this.responsiblePersonsService
-      .saveResponsiblePersons(
-        certificateNumber,
-        this.responsiblePersons,
-        this.listauser
-      )
-      .subscribe({
-        next: (success) => {
-          if (success) {
-            Swal.fire({
-              icon: 'success',
-              title: '¡Guardado!',
-              text: 'Personas Responsables guardadas correctamente',
-              timer: 2000,
-              showConfirmButton: false,
-              position: 'top-end',
-            });
-          } else {
-            Swal.fire({
-              icon: 'warning',
-              title: 'Sin datos válidos',
-              text: 'No hay personas responsables válidas para guardar.',
-            });
-          }
-          this.editingBlocks['responsible'] = false;
-        },
-        error: (error) => {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Ocurrió un error al guardar las personas responsables.',
-          });
-        },
-      });
-  }
-
   // Método para verificar si necesitamos cargar responsible persons desde BD
   private checkIfNeedToLoadResponsiblePersonsFromDB() {
+    console.log(
+      '🔧 === checkIfNeedToLoadResponsiblePersonsFromDB DEBUG START ==='
+    );
     const currentData = this.dccDataService.getCurrentData();
     const certificateNumber =
       currentData.administrativeData.core.certificate_number;
 
     console.log('🔍 Checking if need to load responsible persons from DB');
     console.log('🔍 Certificate number:', certificateNumber);
-    console.log('🔍 Current responsible persons:', this.responsiblePersons);
+    console.log(
+      '🔍 Current responsible persons:',
+      JSON.stringify(this.responsiblePersons, null, 2)
+    );
+    console.log(
+      '🔍 Responsible persons length:',
+      this.responsiblePersons.length
+    );
 
-    // Si hay un certificate number y los responsible persons están vacíos o son los predeterminados
-    if (
-      certificateNumber &&
-      (this.responsiblePersons.length === 0 ||
-        (this.responsiblePersons.length === 2 &&
-          !this.responsiblePersons[0].role &&
-          (!this.responsiblePersons[0].no_nomina ||
-            !this.responsiblePersons[0].name)))
-    ) {
+    // Verificar si necesita cargar desde BD
+    const needsToLoad = certificateNumber && this.shouldLoadFromDatabase();
+
+    console.log('🔍 Needs to load from DB:', needsToLoad);
+
+    if (needsToLoad) {
       console.log(
         '📋 Loading responsible persons from database for existing DCC'
       );
       this.loadResponsiblePersonsFromDB(certificateNumber);
+    } else {
+      console.log('📋 No need to load from DB - using default or XML data');
+      // Si no hay datos válidos de responsible persons, crear los predeterminados
+      if (this.responsiblePersons.length === 0) {
+        console.log('📋 Creating default responsible persons');
+        this.createDefaultResponsiblePersons();
+      }
     }
+    console.log(
+      '🔧 === checkIfNeedToLoadResponsiblePersonsFromDB DEBUG END ==='
+    );
+  }
+
+  // Nuevo método para determinar si debe cargar desde base de datos
+  private shouldLoadFromDatabase(): boolean {
+    // Si no hay responsible persons, definitivamente necesita cargar desde BD (si existe)
+    if (this.responsiblePersons.length === 0) {
+      console.log('🔍 No responsible persons found - will check DB');
+      return true;
+    }
+
+    // Si hay responsible persons pero son los predeterminados vacíos, cargar desde BD
+    const hasValidData = this.responsiblePersons.some(
+      (person) =>
+        person.role ||
+        person.full_name ||
+        person.name ||
+        person.email ||
+        person.phone
+    );
+
+    if (!hasValidData) {
+      console.log(
+        '🔍 Only default empty responsible persons found - will check DB'
+      );
+      return true;
+    }
+
+    // Si hay datos válidos del XML, no cargar desde BD
+    console.log('🔍 Valid responsible persons data found - using XML data');
+    return false;
+  }
+
+  // Método para manejar el cambio de mainSigner
+  onMainSignerChange(personIndex: number) {
+    console.log('🔧 === onMainSignerChange DEBUG START ===');
+    console.log('👤 Person index:', personIndex);
+    console.log(
+      '👤 Current mainSigner value:',
+      this.responsiblePersons[personIndex].mainSigner
+    );
+
+    // Si se está marcando como principal, desmarcar a todos los demás
+    if (this.responsiblePersons[personIndex].mainSigner) {
+      console.log('👤 Marking as main signer - unmarking others');
+      this.responsiblePersons.forEach((person, index) => {
+        if (index !== personIndex) {
+          person.mainSigner = false;
+        }
+      });
+
+      // Mostrar mensaje informativo
+      Swal.fire({
+        icon: 'info',
+        title: 'Responsable Principal',
+        text: 'Solo puede haber un responsable principal. Los demás han sido desmarcados.',
+        timer: 3000,
+        showConfirmButton: false,
+        position: 'top-end',
+      });
+    }
+
+    console.log(
+      '👤 Final responsible persons state:',
+      JSON.stringify(this.responsiblePersons, null, 2)
+    );
+    console.log('🔧 === onMainSignerChange DEBUG END ===');
+  }
+
+  // Métodos para responsible persons
+  addResponsiblePerson() {
+    const newIndex = this.responsiblePersons.length;
+    this.responsiblePersons.push({
+      role: '',
+      no_nomina: '',
+      full_name: '',
+      email: '',
+      phone: '',
+      mainSigner: false, // Nueva propiedad inicializada en false
+    });
+    // Agregar un elemento vacío al array de usuarios seleccionados
+    this.selectedUsers[newIndex] = [];
+    console.log('👥 Added new responsible person at index:', newIndex);
+    console.log('👥 Updated selectedUsers array:', this.selectedUsers);
+  }
+
+  // Método para verificar si una persona es el responsable principal
+  isMainSigner(person: any): boolean {
+    return person.mainSigner === true;
+  }
+
+  // Método para obtener el responsable principal
+  getMainSigner(): any | null {
+    return (
+      this.responsiblePersons.find((person) => person.mainSigner === true) ||
+      null
+    );
+  }
+
+  // Nuevo método para crear personas responsables predeterminadas
+  private createDefaultResponsiblePersons(): void {
+    console.log('🔧 === createDefaultResponsiblePersons DEBUG START ===');
+
+    this.responsiblePersons = [
+      {
+        role: '',
+        no_nomina: '',
+        full_name: '',
+        name: '',
+        email: '',
+        phone: '',
+        mainSigner: false, // Agregar propiedad mainSigner
+      },
+      {
+        role: '',
+        no_nomina: '',
+        full_name: '',
+        name: '',
+        email: '',
+        phone: '',
+        mainSigner: false, // Agregar propiedad mainSigner
+      },
+    ];
+
+    // Inicializar selectedUsers para las personas predeterminadas
+    this.selectedUsers = [[], []];
+
+    // Actualizar en el servicio DCC
+    this.dccDataService.updateAdministrativeData(
+      'responsiblePersons',
+      this.responsiblePersons
+    );
+
+    console.log(
+      '👥 Created default responsible persons:',
+      JSON.stringify(this.responsiblePersons, null, 2)
+    );
+    console.log('👥 Initialized selectedUsers:', this.selectedUsers);
+    console.log('🔧 === createDefaultResponsiblePersons DEBUG END ===');
   }
 
   // Método para cargar responsible persons desde la base de datos por DCC ID
   loadResponsiblePersonsFromDB(dccId: string) {
+    console.log('🔧 === loadResponsiblePersonsFromDB DEBUG START ===');
     console.log('📋 Loading responsible persons for DCC:', dccId);
 
     this.responsiblePersonsService
@@ -1214,9 +1234,21 @@ export class AdministrativeDataComponent implements OnInit {
       .subscribe({
         next: (responsibleData) => {
           console.log(
-            '✅ Loaded responsible persons from DB:',
-            responsibleData
+            '✅ Raw responsible persons from DB:',
+            JSON.stringify(responsibleData, null, 2)
           );
+
+          // Si no hay datos en la BD, crear los predeterminados
+          if (!responsibleData || responsibleData.length === 0) {
+            console.log(
+              '📋 No responsible persons found in DB - creating defaults'
+            );
+            this.createDefaultResponsiblePersons();
+            console.log(
+              '🔧 === loadResponsiblePersonsFromDB DEBUG END (NO DATA) ==='
+            );
+            return;
+          }
 
           // Mapear los datos de la BD con la información de usuarios
           const mappedResponsiblePersons =
@@ -1227,73 +1259,155 @@ export class AdministrativeDataComponent implements OnInit {
 
           console.log(
             '✅ Mapped responsible persons:',
-            mappedResponsiblePersons
+            JSON.stringify(mappedResponsiblePersons, null, 2)
           );
 
           // Actualizar los datos en el servicio DCC y localmente
           this.responsiblePersons = mappedResponsiblePersons;
+
+          // Inicializar selectedUsers después de cargar los datos
+          this.initializeSelectedUsers();
+
           this.dccDataService.updateAdministrativeData(
             'responsiblePersons',
             mappedResponsiblePersons
           );
+
+          console.log(
+            '✅ Final responsible persons in component:',
+            JSON.stringify(this.responsiblePersons, null, 2)
+          );
+          console.log('🔧 === loadResponsiblePersonsFromDB DEBUG END ===');
         },
         error: (error) => {
           console.error('❌ Error loading responsible persons:', error);
+          console.log('📋 Error loading from DB - creating defaults');
+          this.createDefaultResponsiblePersons();
+          console.log(
+            '🔧 === loadResponsiblePersonsFromDB DEBUG END (ERROR) ==='
+          );
         },
       });
   }
 
   // Método modificado para manejar la selección de usuario
   onUserSelect(selectedItem: any, personIndex: number) {
+    console.log('🔧 === onUserSelect DEBUG START ===');
+    console.log('👤 User selected:', selectedItem);
+    console.log('👤 Person index:', personIndex);
+    console.log('👤 selectedUsers array before update:', this.selectedUsers);
+    console.log('👤 selectedUsers length:', this.selectedUsers.length);
     console.log(
-      '👤 User selected:',
-      selectedItem,
-      'for person index:',
-      personIndex
+      '👤 responsiblePersons length:',
+      this.responsiblePersons.length
+    );
+    console.log(
+      '👤 Current responsible persons before update:',
+      JSON.stringify(this.responsiblePersons, null, 2)
     );
 
     if (selectedItem) {
-      // Almacenar tanto no_nomina como full_name en el objeto person
-      this.responsiblePersons[personIndex].no_nomina = selectedItem.no_nomina;
-      this.responsiblePersons[personIndex].full_name = selectedItem.name; // 'name' es el campo CONCAT
+      console.log('👤 selectedItem.no_nomina:', selectedItem.no_nomina);
+      console.log('👤 selectedItem.name (CONCAT):', selectedItem.name);
+      console.log('👤 selectedItem.email:', selectedItem.email);
+      console.log('👤 selectedItem.phone:', selectedItem.phone);
 
-      // Opcional: llenar automáticamente email y teléfono si están disponibles
-      if (selectedItem.email) {
-        this.responsiblePersons[personIndex].email = selectedItem.email;
-      }
-      if (selectedItem.phone) {
-        this.responsiblePersons[personIndex].phone = selectedItem.phone;
+      // Asegurar que el índice existe en el array
+      while (personIndex >= this.selectedUsers.length) {
+        this.selectedUsers.push([]);
+        console.log(
+          `👤 Extended selectedUsers to index ${this.selectedUsers.length - 1}`
+        );
       }
 
+      // Almacenar el usuario seleccionado
+      this.selectedUsers[personIndex] = [selectedItem];
       console.log(
-        '✅ Updated person data:',
-        this.responsiblePersons[personIndex]
+        `👤 Set selectedUsers[${personIndex}] =`,
+        this.selectedUsers[personIndex]
       );
+
+      // Asegurar que el responsiblePersons existe
+      if (personIndex < this.responsiblePersons.length) {
+        // Actualizar los datos de la persona responsable
+        this.responsiblePersons[personIndex].no_nomina = selectedItem.no_nomina;
+        this.responsiblePersons[personIndex].full_name = selectedItem.name;
+
+        console.log('👤 After setting no_nomina and full_name:');
+        console.log(
+          '👤 - no_nomina:',
+          this.responsiblePersons[personIndex].no_nomina
+        );
+        console.log(
+          '👤 - full_name:',
+          this.responsiblePersons[personIndex].full_name
+        );
+
+        // Llenar automáticamente email y teléfono si están disponibles
+        if (selectedItem.email) {
+          this.responsiblePersons[personIndex].email = selectedItem.email;
+          console.log(
+            '👤 Auto-filled email:',
+            this.responsiblePersons[personIndex].email
+          );
+        }
+        if (selectedItem.phone) {
+          this.responsiblePersons[personIndex].phone = selectedItem.phone;
+          console.log(
+            '👤 Auto-filled phone:',
+            this.responsiblePersons[personIndex].phone
+          );
+        }
+
+        console.log(
+          '✅ Final updated person data:',
+          JSON.stringify(this.responsiblePersons[personIndex], null, 2)
+        );
+      } else {
+        console.log(
+          '❌ personIndex out of bounds for responsiblePersons array'
+        );
+      }
+
+      console.log('✅ Final selectedUsers array:', this.selectedUsers);
+    } else {
+      console.log('⚠️ selectedItem is null or undefined');
     }
+    console.log('🔧 === onUserSelect DEBUG END ===');
   }
 
   // Método para manejar cuando se deselecciona un usuario
   onUserDeselect(deselectedItem: any, personIndex: number) {
+    console.log('🔧 === onUserDeselect DEBUG START ===');
+    console.log('👤 User deselected:', deselectedItem);
+    console.log('👤 Person index:', personIndex);
     console.log(
-      '👤 User deselected:',
-      deselectedItem,
-      'for person index:',
-      personIndex
+      '👤 Person before clearing:',
+      JSON.stringify(this.responsiblePersons[personIndex], null, 2)
     );
 
-    // Limpiar los datos del usuario
+    // Limpiar el usuario seleccionado
+    this.selectedUsers[personIndex] = [];
+
+    // Limpiar los datos del usuario pero mantener email y phone si fueron editados manualmente
     this.responsiblePersons[personIndex].no_nomina = '';
     this.responsiblePersons[personIndex].full_name = '';
 
-    // Opcional: limpiar email y teléfono también si fueron llenados automáticamente
-    // this.responsiblePersons[personIndex].email = '';
-    // this.responsiblePersons[personIndex].phone = '';
+    console.log(
+      '👤 Person after clearing user data:',
+      JSON.stringify(this.responsiblePersons[personIndex], null, 2)
+    );
+    console.log(
+      '👤 Cleared selectedUsers for index',
+      personIndex,
+      ':',
+      this.selectedUsers[personIndex]
+    );
+    console.log('🔧 === onUserDeselect DEBUG END ===');
   }
 
   // Método para obtener el nombre de pantalla para una persona responsable
   getResponsiblePersonDisplayName(person: any): string {
-    console.log('🔍 Getting display name for person:', person);
-
     // Si tiene full_name directamente (desde la BD), usarlo
     if (person.full_name) {
       return person.full_name;
@@ -1301,19 +1415,35 @@ export class AdministrativeDataComponent implements OnInit {
 
     // Si tiene no_nomina, buscar en la lista de usuarios
     if (person.no_nomina && this.listauser.length > 0) {
+      console.log('🔍 Searching user by no_nomina:', person.no_nomina);
+      console.log(
+        '🔍 Available users:',
+        this.listauser.map((u) => ({ no_nomina: u.no_nomina, name: u.name }))
+      );
+
       const foundUser = this.listauser.find(
         (user) => user.no_nomina === person.no_nomina
       );
+
       if (foundUser) {
+        console.log('✅ Found user:', foundUser);
+        console.log('✅ Using found user name:', foundUser.name);
+        console.log('🔧 === getResponsiblePersonDisplayName DEBUG END ===');
         return foundUser.name; // Usar 'name' que es el CONCAT del servicio
+      } else {
+        console.log('❌ User not found in listauser');
       }
     }
 
     // Fallback para compatibilidad con formato anterior
     if (typeof person.name === 'string' && person.name) {
+      console.log('⚠️ Using fallback person.name:', person.name);
+      console.log('🔧 === getResponsiblePersonDisplayName DEBUG END ===');
       return person.name;
     }
 
+    console.log('❌ No display name found, returning "No asignado"');
+    console.log('🔧 === getResponsiblePersonDisplayName DEBUG END ===');
     return 'No asignado';
   }
 
@@ -1340,6 +1470,20 @@ export class AdministrativeDataComponent implements OnInit {
     }
   }
 
+  // Método para obtener texto del botón guardar cliente
+  getCustomerSaveButtonText(): string {
+    switch (this.customerAction) {
+      case 'edit':
+        return 'Actualizar Cliente';
+      case 'select':
+        return 'Seleccionar Cliente';
+      case 'create':
+        return 'Crear Cliente';
+      default:
+        return 'Guardar';
+    }
+  }
+
   // Método para verificar si hay laboratorio cargado
   hasLoadedLaboratory(): boolean {
     const hasLab =
@@ -1354,108 +1498,13 @@ export class AdministrativeDataComponent implements OnInit {
     return hasCustomer;
   }
 
-  // Método para manejar cambios de fecha y actualizar is_range_date
-  onDateChange() {
-    this.updateIsRangeDate();
+  // Método para verificar si los campos deben estar deshabilitados
+  areFieldsDisabled(): boolean {
+    return this.laboratoryAction === 'select';
   }
 
-  private updateIsRangeDate() {
-    if (this.coreData.performance_date && this.coreData.end_performance_date) {
-      const performanceDate = new Date(this.coreData.performance_date);
-      const endPerformanceDate = new Date(this.coreData.end_performance_date);
-
-      // Comparar fechas (ignorar componente de tiempo)
-      const isSameDate =
-        performanceDate.toDateString() === endPerformanceDate.toDateString();
-
-      if (isSameDate) {
-        this.coreData.is_range_date = false;
-      } else {
-        this.coreData.is_range_date = true;
-      }
-    }
-  }
-
-  // Nuevo método para validar la fecha de fin
-  onEndDateChange() {
-    if (
-      this.coreData.is_range_date &&
-      this.coreData.performance_date &&
-      this.coreData.end_performance_date
-    ) {
-      const performanceDate = new Date(this.coreData.performance_date);
-      const endDate = new Date(this.coreData.end_performance_date);
-
-      // Si la fecha de fin es menor que la de inicio, resetearla a la de inicio
-      if (endDate < performanceDate) {
-        this.coreData.end_performance_date = this.coreData.performance_date;
-      }
-    }
-  }
-
-  // Método para obtener la fecha mínima permitida para end_performance_date
-  getMinEndDate(): string {
-    if (this.coreData.is_range_date && this.coreData.performance_date) {
-      return this.coreData.performance_date;
-    }
-    return '';
-  }
-
-  // Método para cancelar la edición y revertir cambios
-  cancelEdit(blockName: string) {
-    this.editingBlocks[blockName] = false;
-
-    // Resetear acción del laboratorio si es necesario
-    if (blockName === 'laboratory') {
-      this.resetLaboratoryAction();
-    }
-
-    // Resetear acción del cliente si es necesario
-    if (blockName === 'customer') {
-      this.resetCustomerAction();
-    }
-
-    // Recargar datos del servicio para revertir cambios
-    const currentData = this.dccDataService.getCurrentData();
-    switch (blockName) {
-      case 'software':
-        this.softwareData = { ...currentData.administrativeData.software };
-        break;
-      case 'core':
-        this.coreData = { ...currentData.administrativeData.core };
-        // Formatear fechas nuevamente al cancelar edición
-        if (this.coreData.receipt_date) {
-          this.coreData.receipt_date = this.formatDateForInput(
-            this.coreData.receipt_date
-          );
-        }
-        if (this.coreData.performance_date) {
-          this.coreData.performance_date = this.formatDateForInput(
-            this.coreData.performance_date
-          );
-        }
-        if (this.coreData.end_performance_date) {
-          this.coreData.end_performance_date = this.formatDateForInput(
-            this.coreData.end_performance_date
-          );
-        }
-        if (this.coreData.issue_date) {
-          this.coreData.issue_date = this.formatDateForInput(
-            this.coreData.issue_date
-          );
-        }
-        break;
-      case 'laboratory':
-        this.laboratoryData = { ...currentData.administrativeData.laboratory };
-        break;
-      case 'responsible':
-        this.responsiblePersons = [
-          ...currentData.administrativeData.responsiblePersons,
-        ];
-        break;
-      case 'customer':
-        this.customerData = { ...currentData.administrativeData.customer };
-        break;
-    }
+  // Método para verificar si los campos del cliente deben estar deshabilitados
+  areCustomerFieldsDisabled(): boolean {
+    return this.customerAction === 'select';
   }
 }

@@ -161,8 +161,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
 
     <!-- 3️ Equipos y objetos calibrados -->
     <dcc:items>
-      ${this.generateObjectItemXML(data)}
-      ${this.generateItemsXML(data.items)}
+      ${this.generateItemsXML(data)}
     </dcc:items>
 
     <!-- 4️ Laboratorio de calibración -->
@@ -217,6 +216,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
           </dcc:name>
         </dcc:person>
         <dcc:role>${this.escapeXml(person.role)}</dcc:role>
+        ${person.mainSigner ? '<dcc:mainSigner>true</dcc:mainSigner>' : ''}
       </dcc:respPerson>`
         )
         .join('')}
@@ -257,7 +257,21 @@ export class PreviewComponent implements OnInit, OnDestroy {
         data.statements
           ?.map(
             (statement) => `
-      <dcc:statement refType="${this.escapeXml(statement.refType)}">
+      <dcc:statement>
+        ${
+          statement.convention
+            ? `<dcc:convention>${this.escapeXml(
+                statement.convention
+              )}</dcc:convention>`
+            : ''
+        }
+        ${
+          typeof statement.traceable === 'boolean'
+            ? `<dcc:traceable>${
+                statement.traceable ? 'true' : 'false'
+              }</dcc:traceable>`
+            : ''
+        }
         ${
           statement.norm
             ? `<dcc:norm>${this.escapeXml(statement.norm)}</dcc:norm>`
@@ -270,9 +284,47 @@ export class PreviewComponent implements OnInit, OnDestroy {
               )}</dcc:reference>`
             : ''
         }
+        ${
+          typeof statement.valid !== 'undefined' && statement.valid !== null
+            ? `<dcc:valid>${
+                statement.valid === 1 ? 'true' : 'false'
+              }</dcc:valid>`
+            : ''
+        }
+        ${
+          statement.respAuthority_name ||
+          statement.respAuthority_countryCode ||
+          statement.respAuthority_postCode
+            ? `<dcc:respAuthority>
+                ${
+                  statement.respAuthority_name
+                    ? `<dcc:name><dcc:content lang="en">${this.escapeXml(
+                        statement.respAuthority_name
+                      )}</dcc:content></dcc:name>`
+                    : ''
+                }
+                <dcc:location>
+                  ${
+                    statement.respAuthority_countryCode
+                      ? `<dcc:countryCode>${this.escapeXml(
+                          statement.respAuthority_countryCode
+                        )}</dcc:countryCode>`
+                      : ''
+                  }
+                  ${
+                    statement.respAuthority_postCode
+                      ? `<dcc:postCode>${this.escapeXml(
+                          statement.respAuthority_postCode
+                        )}</dcc:postCode>`
+                      : ''
+                  }
+                </dcc:location>
+              </dcc:respAuthority>`
+            : ''
+        }
         <dcc:declaration>
           <dcc:content lang="en">${this.escapeXml(
-            statement.content
+            statement.declaration || ''
           )}</dcc:content>
         </dcc:declaration>
       </dcc:statement>`
@@ -334,6 +386,198 @@ export class PreviewComponent implements OnInit, OnDestroy {
       ${this.generateInfluenceConditionsXML(data)}
       ${this.generateResultsXML(data)}
     </dcc:measurementResult>`;
+  }
+
+  // =======================
+  // Generador de equipos de medición XML
+  // =======================
+  private generateMeasuringEquipmentsXML(data: DCCData): string {
+    if (!data.measuringEquipments || data.measuringEquipments.length === 0) {
+      return '';
+    }
+
+    return `
+    <dcc:measuringEquipments>
+      ${data.measuringEquipments
+        .map(
+          (equipment) => `
+      <dcc:measuringEquipment refType="${this.escapeXml(equipment.refType)}">
+        <dcc:name>
+          <dcc:content lang="en">${this.escapeXml(equipment.name)}</dcc:content>
+        </dcc:name>
+        ${
+          equipment.manufacturer
+            ? `
+        <dcc:manufacturer>
+          <dcc:name>
+            <dcc:content>${this.escapeXml(equipment.manufacturer)}</dcc:content>
+          </dcc:name>
+        </dcc:manufacturer>`
+            : ''
+        }
+        ${
+          equipment.model
+            ? `<dcc:model>${this.escapeXml(equipment.model)}</dcc:model>`
+            : ''
+        }
+        ${
+          equipment.identifications && equipment.identifications.length > 0
+            ? `
+        <dcc:identifications>
+          ${equipment.identifications
+            .map(
+              (identification) => `
+          <dcc:identification>
+            <dcc:issuer>${this.escapeXml(identification.issuer)}</dcc:issuer>
+            <dcc:value>${this.escapeXml(identification.value)}</dcc:value>
+            <dcc:name>
+              <dcc:content lang="en">${this.escapeXml(
+                identification.name
+              )}</dcc:content>
+            </dcc:name>
+          </dcc:identification>`
+            )
+            .join('')}
+        </dcc:identifications>`
+            : ''
+        }
+      </dcc:measuringEquipment>`
+        )
+        .join('')}
+    </dcc:measuringEquipments>`;
+  }
+
+  // =======================
+  // Generador de condiciones de influencia XML
+  // =======================
+  private generateInfluenceConditionsXML(data: DCCData): string {
+    if (!data.influenceConditions || data.influenceConditions.length === 0) {
+      return '';
+    }
+
+    return `
+    <dcc:influenceConditions>
+      ${data.influenceConditions
+        .map(
+          (condition) => `
+      <dcc:influenceCondition refType="${this.escapeXml(condition.refType)}">
+        <dcc:name>
+          <dcc:content lang="en">${this.escapeXml(condition.name)}</dcc:content>
+        </dcc:name>
+        <dcc:data>
+          <dcc:quantity>
+            <dcc:name>
+              <dcc:content lang="en">${this.escapeXml(
+                condition.subBlock.name
+              )}</dcc:content>
+            </dcc:name>
+            <si:hybrid>
+              <si:real>
+                <si:value>${this.escapeXml(condition.subBlock.value)}</si:value>
+                <si:unit>${this.escapeXml(condition.subBlock.unit)}</si:unit>
+              </si:real>
+            </si:hybrid>
+          </dcc:quantity>
+        </dcc:data>
+      </dcc:influenceCondition>`
+        )
+        .join('')}
+    </dcc:influenceConditions>`;
+  }
+
+  // =======================
+  // Generador de resultados XML
+  // =======================
+  private generateResultsXML(data: DCCData): string {
+    if (!data.results || data.results.length === 0) {
+      return '';
+    }
+
+    return `
+    <dcc:results>
+      ${data.results
+        .map(
+          (result) => `
+      <dcc:result refType="${this.escapeXml(result.refType)}">
+        <dcc:name>
+          <dcc:content lang="en">${this.escapeXml(result.name)}</dcc:content>
+        </dcc:name>
+        <dcc:data>
+          ${this.generateResultDataXML(result.data)}
+        </dcc:data>
+      </dcc:result>`
+        )
+        .join('')}
+    </dcc:results>`;
+  }
+
+  // =======================
+  // Generador de datos de resultado XML
+  // =======================
+  private generateResultDataXML(resultData: any[]): string {
+    if (!resultData || resultData.length === 0) {
+      return '';
+    }
+
+    // Verificar si hay datos de lista (múltiples cantidades)
+    const hasListData =
+      resultData.length > 1 ||
+      resultData.some((data) => data.dataType === 'realListXMLList');
+
+    if (hasListData) {
+      return `
+        <dcc:list>
+          ${resultData
+            .map(
+              (data) => `
+          <dcc:quantity refType="${this.escapeXml(data.refType)}">
+            <dcc:name>
+              <dcc:content lang="en">${this.escapeXml(data.name)}</dcc:content>
+            </dcc:name>
+            ${this.generateQuantityValueXML(data)}
+          </dcc:quantity>`
+            )
+            .join('')}
+        </dcc:list>`;
+    } else {
+      // Datos simples (una sola cantidad)
+      const data = resultData[0];
+      return `
+        <dcc:quantity refType="${this.escapeXml(data.refType)}">
+          <dcc:name>
+            <dcc:content lang="en">${this.escapeXml(data.name)}</dcc:content>
+          </dcc:name>
+          ${this.generateQuantityValueXML(data)}
+        </dcc:quantity>`;
+    }
+  }
+
+  // =======================
+  // Generador de valores de cantidad XML
+  // =======================
+  private generateQuantityValueXML(data: any): string {
+    if (data.dataType === 'realListXMLList') {
+      return `
+            <si:hybrid>
+              <si:realListXMLList>
+                <si:valueXMLList>${this.escapeXml(
+                  data.valueXMLList
+                )}</si:valueXMLList>
+                <si:unitXMLList>${this.escapeXml(
+                  data.unitXMLList
+                )}</si:unitXMLList>
+              </si:realListXMLList>
+            </si:hybrid>`;
+    } else {
+      // dataType === 'real' o valor simple
+      return `
+            <si:hybrid>
+              <si:real>
+                <si:value>${this.escapeXml(data.value)}</si:value>
+                <si:unit>${this.escapeXml(data.unit)}</si:unit>
+              </si:real>
+            </si:hybrid>`;
+    }
   }
 
   // Helper methods for XML generation
@@ -405,7 +649,11 @@ export class PreviewComponent implements OnInit, OnDestroy {
       .join('');
   }
 
-  // Nuevo método para generar las identificaciones del core usando datos del primer item
+  private generateObjectItemXML(data: DCCData): string {
+    // No generamos nada aquí ya que los object identifications ahora son itemQuantities
+    return '';
+  }
+
   private generateCoreIdentificationsXML(data: DCCData): string {
     // Crear identificaciones básicas del objeto usando datos del primer item si existe
     const firstItem =
@@ -438,28 +686,20 @@ export class PreviewComponent implements OnInit, OnDestroy {
         });
       }
 
-      // Serial number (buscar en las identificaciones del item)
-      const serialIdentification = firstItem.identifications?.find((id: any) =>
-        id.name?.toLowerCase().includes('serial')
-      );
-      if (serialIdentification) {
+      // Serial number
+      if (firstItem.serialNumber) {
         coreIdentifications.push({
           issuer: 'manufacturer',
-          value: serialIdentification.value,
+          value: firstItem.serialNumber,
           name: 'Serial number',
         });
       }
 
-      // Customer asset ID (buscar en las identificaciones del item)
-      const assetIdentification = firstItem.identifications?.find(
-        (id: any) =>
-          id.name?.toLowerCase().includes('asset') ||
-          id.name?.toLowerCase().includes('customer')
-      );
-      if (assetIdentification) {
+      // Customer asset ID
+      if (firstItem.customerAssetId) {
         coreIdentifications.push({
           issuer: 'calibrationLaboratory',
-          value: assetIdentification.value,
+          value: firstItem.customerAssetId,
           name: "Customer's asset ID",
         });
       }
@@ -475,227 +715,270 @@ export class PreviewComponent implements OnInit, OnDestroy {
     return this.generateIdentificationsXML(coreIdentifications);
   }
 
-  private generateObjectItemXML(data: DCCData): string {
-    // Usar el primer item como base para el objeto principal
-    const firstItem =
-      data.items && data.items.length > 0 ? data.items[0] : null;
-    const objectIdentifications = data.objectIdentifications || [];
-
-    return `
-      <dcc:name>
-        <dcc:content lang="en">${this.escapeXml(
-          firstItem?.name || 'HVAC MEASURING SYSTEM'
-        )}</dcc:content>
-      </dcc:name>
-      <dcc:identifications>
-        ${objectIdentifications
-          .map(
-            (id) => `
-        <dcc:identification>
-          <dcc:issuer>${this.mapIssuerToLowerCase(id.issuer)}</dcc:issuer>
-          <dcc:value>${this.escapeXml(id.value)}</dcc:value>
-          <dcc:name>
-            <dcc:content lang="en">${this.escapeXml(id.name)}</dcc:content>
-          </dcc:name>
-        </dcc:identification>`
-          )
-          .join('')}
-      </dcc:identifications>`;
-  }
-
-  // Método helper para obtener el nombre de una persona responsable
-  private getPersonDisplayName(person: any): string {
-    // Si tiene full_name directamente (desde la BD), usarlo
-    if (person.full_name) {
-      return person.full_name;
+  private generateItemsXML(data: any): string {
+    if (!data.items || data.items.length === 0) {
+      return '';
     }
 
-    // Fallback para compatibilidad con formato anterior
-    if (typeof person.name === 'string' && person.name) {
-      return person.name;
-    }
+    const mainItem = data.items[0];
 
-    return 'No asignado';
-  }
-
-  private generateItemsXML(items: any[]): string {
-    return items
-      .map(
-        (item) => `
-      <dcc:item refType="${this.generateRefType(item.name)}">
+    let itemsXML = `
+      <dcc:item>
         <dcc:name>
-          <dcc:content lang="en">${this.escapeXml(item.name)}</dcc:content>
-        </dcc:name>
-        ${
-          item.manufacturer
-            ? `
+          <dcc:content lang="en">${this.escapeXml(mainItem.name)}</dcc:content>
+        </dcc:name>`;
+
+    // Manufacturer del item principal
+    if (mainItem.manufacturer) {
+      itemsXML += `
         <dcc:manufacturer>
           <dcc:name>
-            <dcc:content>${this.escapeXml(item.manufacturer)}</dcc:content>
+            <dcc:content>${this.escapeXml(mainItem.manufacturer)}</dcc:content>
           </dcc:name>
-        </dcc:manufacturer>`
-            : ''
-        }
-        ${
-          item.model
-            ? `<dcc:model>${this.escapeXml(item.model)}</dcc:model>`
-            : ''
-        }
-        <dcc:identifications>
-          ${
-            item.identifications
-              ?.map(
-                (id: any) => `
+        </dcc:manufacturer>`;
+    }
+
+    // Model del item principal
+    if (mainItem.model) {
+      itemsXML += `
+        <dcc:model>${this.escapeXml(mainItem.model)}</dcc:model>`;
+    }
+
+    // Identifications del item principal - incluir campos específicos solamente
+    let allIdentifications = [];
+
+    // Agregar Serial Number si existe
+    if (mainItem.serialNumber) {
+      allIdentifications.push({
+        issuer: 'manufacturer',
+        value: mainItem.serialNumber,
+        name: 'Serial number',
+      });
+    }
+
+    // Agregar Customer Asset ID si existe
+    if (mainItem.customerAssetId) {
+      allIdentifications.push({
+        issuer: 'customer',
+        value: mainItem.customerAssetId,
+        name: "Customer's asset ID",
+      });
+    }
+
+    if (allIdentifications.length > 0) {
+      itemsXML += `
+        <dcc:identifications>`;
+      allIdentifications.forEach((identification: any) => {
+        itemsXML += `
           <dcc:identification>
-            <dcc:issuer>${this.mapIssuerToLowerCase(id.issuer)}</dcc:issuer>
-            <dcc:value>${this.escapeXml(id.value)}</dcc:value>
+            <dcc:issuer>${this.mapIssuerToLowerCase(
+              identification.issuer
+            )}</dcc:issuer>
+            <dcc:value>${this.escapeXml(identification.value)}</dcc:value>
             <dcc:name>
-              <dcc:content lang="en">${this.escapeXml(id.name)}</dcc:content>
+              <dcc:content lang="en">${this.escapeXml(
+                identification.name
+              )}</dcc:content>
             </dcc:name>
-          </dcc:identification>`
-              )
-              .join('') || ''
-          }
-        </dcc:identifications>
-      </dcc:item>`
-      )
-      .join('');
-  }
-
-  private generateMeasuringEquipmentsXML(data: DCCData): string {
-    if (!data.measuringEquipments || data.measuringEquipments.length === 0) {
-      return '';
+          </dcc:identification>`;
+      });
+      itemsXML += `
+        </dcc:identifications>`;
     }
 
-    return `
-      <dcc:measuringEquipments>
-        ${data.measuringEquipments
-          .map(
-            (equipment) => `
-        <dcc:measuringEquipment refType="${this.escapeXml(equipment.refType)}">
-          <dcc:name>
-            <dcc:content lang="en">${this.escapeXml(
-              equipment.name
-            )}</dcc:content>
-          </dcc:name>
-          <dcc:identifications>
-            ${
-              equipment.identifications
-                ?.map(
-                  (id: any) => `
-            <dcc:identification>
-              <dcc:issuer>${this.escapeXml(id.issuer)}</dcc:issuer>
-              <dcc:value>${this.escapeXml(id.value)}</dcc:value>
-              <dcc:name>
-                <dcc:content lang="en">${this.escapeXml(id.name)}</dcc:content>
-              </dcc:name>
-            </dcc:identification>`
-                )
-                .join('') || ''
-            }
-          </dcc:identifications>
-        </dcc:measuringEquipment>`
-          )
-          .join('')}
-      </dcc:measuringEquipments>`;
-  }
+    // Item Quantities del item principal - generar desde object groups
+    const validItemQuantities: string[] = [];
 
-  private generateInfluenceConditionsXML(data: DCCData): string {
-    if (!data.influenceConditions || data.influenceConditions.length === 0) {
-      return '';
+    if (data.objectIdentifications && data.objectIdentifications.length > 0) {
+      data.objectIdentifications.forEach((group: any) => {
+        // Solo agregar itemQuantity para measurement range si tiene valor válido
+        if (
+          group.assignedMeasurementRange &&
+          group.assignedMeasurementRange.value &&
+          group.assignedMeasurementRange.value.trim() !== ''
+        ) {
+          validItemQuantities.push(`
+          <dcc:itemQuantity refType="voltage_measurement_range">
+            <dcc:name>
+              <dcc:content lang="en">Assigned measurement range(s)</dcc:content>
+            </dcc:name>
+            <si:real>
+              ${
+                group.assignedMeasurementRange.label &&
+                group.assignedMeasurementRange.label.trim() !== ''
+                  ? `<si:label>${this.escapeXml(
+                      group.assignedMeasurementRange.label
+                    )}</si:label>`
+                  : ''
+              }
+              <si:value>${this.escapeXml(
+                group.assignedMeasurementRange.value
+              )}</si:value>
+              <si:unit>${this.escapeXml(
+                group.assignedMeasurementRange.unit || '\\volt'
+              )}</si:unit>
+            </si:real>
+          </dcc:itemQuantity>`);
+        }
+
+        // Solo agregar itemQuantity para scale factor si tiene valor válido
+        if (
+          group.assignedScaleFactor &&
+          group.assignedScaleFactor.value &&
+          group.assignedScaleFactor.value.trim() !== ''
+        ) {
+          validItemQuantities.push(`
+          <dcc:itemQuantity refType="scale_factor">
+            <dcc:name>
+              <dcc:content lang="en">Assigned scale factor(s)</dcc:content>
+            </dcc:name>
+            <si:real>
+              ${
+                group.assignedScaleFactor.label &&
+                group.assignedScaleFactor.label.trim() !== ''
+                  ? `<si:label>${this.escapeXml(
+                      group.assignedScaleFactor.label
+                    )}</si:label>`
+                  : ''
+              }
+              <si:value>${this.escapeXml(
+                group.assignedScaleFactor.value
+              )}</si:value>
+              <si:unit>${this.escapeXml(
+                group.assignedScaleFactor.unit || '\\one'
+              )}</si:unit>
+            </si:real>
+          </dcc:itemQuantity>`);
+        }
+      });
     }
 
-    return `
-      <dcc:influenceConditions>
-        ${data.influenceConditions
-          .map(
-            (condition) => `
-        <dcc:influenceCondition refType="${this.escapeXml(condition.refType)}">
-          <dcc:name>
-            <dcc:content lang="en">${this.escapeXml(
-              condition.name
-            )}</dcc:content>
-          </dcc:name>
-          <dcc:data>
-            <dcc:quantity>
+    // Solo agregar el bloque itemQuantities si hay cantidades válidas
+    if (validItemQuantities.length > 0) {
+      itemsXML += `
+        <dcc:itemQuantities>`;
+      itemsXML += validItemQuantities.join('');
+      itemsXML += `
+        </dcc:itemQuantities>`;
+    }
+
+    // SubItems (sin cambios)
+    if (mainItem.subItems && mainItem.subItems.length > 0) {
+      itemsXML += `
+        <dcc:subItems>`;
+
+      mainItem.subItems.forEach((subItem: any) => {
+        itemsXML += `
+          <dcc:item>
+            <dcc:name>
+              <dcc:content lang="en">${this.escapeXml(
+                subItem.name
+              )}</dcc:content>
+            </dcc:name>`;
+
+        // Manufacturer del subitem
+        if (subItem.manufacturer) {
+          itemsXML += `
+            <dcc:manufacturer>
               <dcc:name>
-                <dcc:content lang="en">${this.escapeXml(
-                  condition.subBlock.name
+                <dcc:content>${this.escapeXml(
+                  subItem.manufacturer
                 )}</dcc:content>
               </dcc:name>
-              <si:hybrid>
-                <si:real>
-                  <si:value>${this.escapeXml(
-                    condition.subBlock.value
-                  )}</si:value>
-                  <si:unit>${this.escapeXml(condition.subBlock.unit)}</si:unit>
-                </si:real>
-              </si:hybrid>
-            </dcc:quantity>
-          </dcc:data>
-        </dcc:influenceCondition>`
-          )
-          .join('')}
-      </dcc:influenceConditions>`;
-  }
+            </dcc:manufacturer>`;
+        }
 
-  private generateResultsXML(data: DCCData): string {
-    if (!data.results || data.results.length === 0) {
-      return '';
+        // Model del subitem
+        if (subItem.model) {
+          itemsXML += `
+            <dcc:model>${this.escapeXml(subItem.model)}</dcc:model>`;
+        }
+
+        // Identifications del subitem - solo si hay identificaciones válidas
+        if (subItem.identifications && subItem.identifications.length > 0) {
+          const validIdentifications = subItem.identifications.filter(
+            (id: any) => id.value && id.value.trim() !== ''
+          );
+
+          if (validIdentifications.length > 0) {
+            itemsXML += `
+            <dcc:identifications>`;
+            validIdentifications.forEach((identification: any) => {
+              itemsXML += `
+              <dcc:identification>
+                <dcc:issuer>${this.mapIssuerToLowerCase(
+                  identification.issuer
+                )}</dcc:issuer>
+                <dcc:value>${this.escapeXml(identification.value)}</dcc:value>
+                ${
+                  identification.name && identification.name.trim() !== ''
+                    ? `<dcc:name>
+                  <dcc:content lang="en">${this.escapeXml(
+                    identification.name
+                  )}</dcc:content>
+                </dcc:name>`
+                    : ''
+                }
+              </dcc:identification>`;
+            });
+            itemsXML += `
+            </dcc:identifications>`;
+          }
+        }
+
+        // Item Quantities del subitem - solo si hay cantidades válidas
+        if (subItem.itemQuantities && subItem.itemQuantities.length > 0) {
+          const validQuantities = subItem.itemQuantities.filter(
+            (q: any) => q.value && q.value.trim() !== ''
+          );
+
+          if (validQuantities.length > 0) {
+            itemsXML += `
+            <dcc:itemQuantities>`;
+            validQuantities.forEach((quantity: any) => {
+              itemsXML += `
+              <dcc:itemQuantity${
+                quantity.refType
+                  ? ` refType="${this.escapeXml(quantity.refType)}"`
+                  : ''
+              }>
+                ${
+                  quantity.name && quantity.name.trim() !== ''
+                    ? `<dcc:name>
+                  <dcc:content lang="en">${this.escapeXml(
+                    quantity.name
+                  )}</dcc:content>
+                </dcc:name>`
+                    : ''
+                }
+                <si:real>
+                  <si:value>${this.escapeXml(quantity.value)}</si:value>
+                  <si:unit>${this.escapeXml(quantity.unit || '')}</si:unit>
+                </si:real>
+              </dcc:itemQuantity>`;
+            });
+            itemsXML += `
+            </dcc:itemQuantities>`;
+          }
+        }
+
+        itemsXML += `
+          </dcc:item>`;
+      });
+
+      itemsXML += `
+        </dcc:subItems>`;
     }
 
-    return `
-      <dcc:results>
-        ${data.results
-          .map(
-            (result) => `
-        <dcc:result refType="${this.escapeXml(result.refType)}">
-          <dcc:name>
-            <dcc:content lang="en">${this.escapeXml(result.name)}</dcc:content>
-          </dcc:name>
-          <dcc:data>
-            <dcc:list>
-              ${result.data
-                .map(
-                  (dataItem) => `
-              <dcc:quantity refType="${this.escapeXml(dataItem.refType)}">
-                <dcc:name>
-                  <dcc:content lang="en">${this.escapeXml(
-                    dataItem.name
-                  )}</dcc:content>
-                </dcc:name>
-                <si:hybrid>
-                  ${
-                    dataItem.dataType === 'realListXMLList'
-                      ? `
-                  <si:realListXMLList>
-                    <si:valueXMLList>${this.escapeXml(
-                      dataItem.valueXMLList
-                    )}</si:valueXMLList>
-                    <si:unitXMLList>${this.escapeXml(
-                      dataItem.unitXMLList
-                    )}</si:unitXMLList>
-                  </si:realListXMLList>
-                  `
-                      : `
-                  <si:real>
-                    <si:value>${this.escapeXml(dataItem.value)}</si:value>
-                    <si:unit>${this.escapeXml(dataItem.unit)}</si:unit>
-                  </si:real>
-                  `
-                  }
-                </si:hybrid>
-              </dcc:quantity>`
-                )
-                .join('')}
-            </dcc:list>
-          </dcc:data>
-        </dcc:result>`
-          )
-          .join('')}
-      </dcc:results>`;
+    itemsXML += `
+      </dcc:item>`;
+
+    return itemsXML;
   }
 
+  // =======================
+  // Generador de métodos usados XML
+  // =======================
   private generateUsedMethodsXML(data: DCCData): string {
     if (!data.usedMethods || data.usedMethods.length === 0) {
       return '';
@@ -738,7 +1021,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
       Manufacturer: 'manufacturer',
       'Calibration Laboratory': 'calibrationLaboratory',
       Customer: 'customer',
-      Owner: 'owner',
+      Owner: 'other',
       Other: 'other',
     };
     return mapping[issuer] || issuer.toLowerCase();
@@ -753,5 +1036,20 @@ export class PreviewComponent implements OnInit, OnDestroy {
       return 'kilovoltmeter';
     if (name.includes('measurement')) return 'measurement_equipment';
     return 'basic_item';
+  }
+
+  // Método helper para obtener el nombre de una persona responsable
+  private getPersonDisplayName(person: any): string {
+    // Si tiene full_name directamente (desde la BD), usarlo
+    if (person.full_name) {
+      return person.full_name;
+    }
+
+    // Fallback para compatibilidad con formato anterior
+    if (typeof person.name === 'string' && person.name) {
+      return person.name;
+    }
+
+    return 'No asignado';
   }
 }

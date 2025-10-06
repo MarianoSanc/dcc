@@ -2,10 +2,6 @@
   <div class="section-header">
     <h3>Statements</h3>
     <p>Declaraciones y referencias normativas del certificado de calibración</p>
-    <button class="add-statement-btn" (click)="addStatement()">
-      <i class="material-icons">add</i>
-      Agregar Statement
-    </button>
   </div>
 
   <!-- Statements List -->
@@ -17,10 +13,7 @@
       <!-- Statement Block -->
       <div class="data-block">
         <div class="block-header">
-          <h4>
-            Statement {{ statementIndex + 1 }}:
-            {{ statement.refType || "Sin RefType" }}
-          </h4>
+          <h4>Statement {{ statementIndex + 1 }}</h4>
           <div class="statement-actions">
             <button
               class="edit-btn"
@@ -32,7 +25,7 @@
             </button>
             <button
               class="save-btn"
-              (click)="saveStatement(statement.id)"
+              (click)="saveStatement(statement)"
               *ngIf="isEditing(statement.id)"
             >
               <i class="material-icons">save</i>
@@ -46,10 +39,7 @@
               <i class="material-icons">close</i>
               Cancelar
             </button>
-            <button class="remove-btn" (click)="removeStatement(statement.id)">
-              <i class="material-icons">delete</i>
-              Eliminar
-            </button>
+            <!-- Botón de eliminar eliminado -->
           </div>
         </div>
 
@@ -58,8 +48,20 @@
           <div *ngIf="!isEditing(statement.id)" class="statement-view">
             <table class="data-table">
               <tr>
-                <td class="label">RefType:</td>
-                <td>{{ statement.refType || "No especificado" }}</td>
+                <td class="label">Convention:</td>
+                <td>{{ statement.convention || "No especificado" }}</td>
+              </tr>
+              <tr>
+                <td class="label">Traceable:</td>
+                <td>
+                  {{
+                    statement.traceable === true
+                      ? "Sí"
+                      : statement.traceable === false
+                      ? "No"
+                      : "No especificado"
+                  }}
+                </td>
               </tr>
               <tr>
                 <td class="label">Norm:</td>
@@ -70,9 +72,41 @@
                 <td>{{ statement.reference || "No especificado" }}</td>
               </tr>
               <tr>
-                <td class="label">Content:</td>
+                <td class="label">Valid:</td>
+                <td>
+                  {{
+                    statement.valid === 1
+                      ? "Sí"
+                      : statement.valid === null
+                      ? "No especificado"
+                      : "No"
+                  }}
+                </td>
+              </tr>
+              <tr>
+                <td class="label">Declaration:</td>
                 <td class="content-cell">
-                  {{ statement.content || "No especificado" }}
+                  {{
+                    statement.declaration ||
+                      statement.content ||
+                      "No especificado"
+                  }}
+                </td>
+              </tr>
+              <tr>
+                <td class="label">Resp. Authority Name:</td>
+                <td>{{ statement.respAuthority_name || "No especificado" }}</td>
+              </tr>
+              <tr>
+                <td class="label">Resp. Authority Country Code:</td>
+                <td>
+                  {{ statement.respAuthority_countryCode || "No especificado" }}
+                </td>
+              </tr>
+              <tr>
+                <td class="label">Resp. Authority Post Code:</td>
+                <td>
+                  {{ statement.respAuthority_postCode || "No especificado" }}
                 </td>
               </tr>
             </table>
@@ -82,16 +116,19 @@
           <div *ngIf="isEditing(statement.id)" class="statement-edit">
             <div class="edit-form">
               <div class="form-group">
-                <label>RefType:</label>
-                <select [(ngModel)]="statement.refType">
-                  <option value="">Seleccione el tipo de referencia</option>
-                  <option value="Standard">Standard</option>
-                  <option value="Procedure">Procedure</option>
-                  <option value="Uncertainty">Uncertainty</option>
-                  <option value="Traceability">Traceability</option>
-                  <option value="Environmental">Environmental</option>
-                  <option value="Method">Method</option>
-                  <option value="Other">Other</option>
+                <label>Convention:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="statement.convention"
+                  placeholder="Convention"
+                />
+              </div>
+              <div class="form-group">
+                <label>Traceable:</label>
+                <select [(ngModel)]="statement.traceable">
+                  <option [ngValue]="undefined">No especificado</option>
+                  <option [ngValue]="true">Sí</option>
+                  <option [ngValue]="false">No</option>
                 </select>
               </div>
               <div class="form-group">
@@ -111,12 +148,44 @@
                 />
               </div>
               <div class="form-group">
-                <label>Content:</label>
+                <label>Valid:</label>
+                <select [(ngModel)]="statement.valid">
+                  <option [ngValue]="null">No especificado</option>
+                  <option [ngValue]="1">Sí</option>
+                  <option [ngValue]="0">No</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Declaration:</label>
                 <textarea
-                  [(ngModel)]="statement.content"
+                  [(ngModel)]="statement.declaration"
                   placeholder="Ingrese el contenido de la declaración"
                   rows="4"
                 ></textarea>
+              </div>
+              <div class="form-group">
+                <label>Resp. Authority Name:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="statement.respAuthority_name"
+                  placeholder="Nombre de la autoridad"
+                />
+              </div>
+              <div class="form-group">
+                <label>Resp. Authority Country Code:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="statement.respAuthority_countryCode"
+                  placeholder="Código de país"
+                />
+              </div>
+              <div class="form-group">
+                <label>Resp. Authority Post Code:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="statement.respAuthority_postCode"
+                  placeholder="Código postal"
+                />
               </div>
             </div>
           </div>

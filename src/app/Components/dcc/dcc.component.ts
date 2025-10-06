@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AdministrativeDataComponent } from '../administrative-data/administrative-data.component';
 import { ItemsComponent } from '../items/items.component';
@@ -50,6 +50,7 @@ export class DccComponent implements OnInit {
   // Selección de base de datos (pruebas o producción)
   isTesting: boolean = false; // Definir el entorno de pruebas
   database: string = this.isTesting ? 'prueba' : 'calibraciones';
+  databaseName = 'nombre_de_tu_bd'; // Cambia esto por el nombre real de tu base de datos
 
   // Lista de DCCs existentes para el select de cargar DCC
   existingDccList: any[] = [];
@@ -82,6 +83,9 @@ export class DccComponent implements OnInit {
     showSelectedItemsAtTop: false,
     defaultOpen: false,
   };
+
+  @ViewChild(StatementsComponent)
+  statementsComponent!: StatementsComponent;
 
   constructor(
     private apiService: ApiService,
@@ -164,7 +168,35 @@ export class DccComponent implements OnInit {
 
   // Abre el modal para cargar un archivo XML
   loadExistingDCC() {
-    this.showUploadModal = true;
+    console.log('🔄 Loading existing DCC from XML');
+
+    // Si hay datos en el DCC current, mostrar confirmación
+    const currentData = this.dccDataService.getCurrentData();
+    const hasCurrentData =
+      currentData.administrativeData.core.certificate_number ||
+      currentData.items.length > 0 ||
+      currentData.administrativeData.responsiblePersons.some(
+        (p) => p.role || p.full_name
+      );
+
+    if (hasCurrentData) {
+      Swal.fire({
+        title: '¿Cargar nuevo DCC?',
+        text: 'Se perderán todos los cambios no guardados del DCC actual.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#2196f3',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sí, cargar nuevo',
+        cancelButtonText: 'Cancelar',
+      }).then((result) => {
+        if (result.isConfirmed) {
+          this.showUploadModal = true;
+        }
+      });
+    } else {
+      this.showUploadModal = true;
+    }
   }
 
   // Cierra el modal de carga de XML
@@ -252,9 +284,36 @@ export class DccComponent implements OnInit {
 
   // Abre el modal para seleccionar un DCC existente
   openDccSelectModal() {
-    this.showDccSelect = true;
-    if (this.existingDccList.length === 0) {
+    console.log('🔄 Opening DCC select modal');
+
+    // Si hay datos en el DCC current, mostrar confirmación
+    const currentData = this.dccDataService.getCurrentData();
+    const hasCurrentData =
+      currentData.administrativeData.core.certificate_number ||
+      currentData.items.length > 0 ||
+      currentData.administrativeData.responsiblePersons.some(
+        (p) => p.role || p.full_name
+      );
+
+    if (hasCurrentData) {
+      Swal.fire({
+        title: '¿Cargar DCC existente?',
+        text: 'Se perderán todos los cambios no guardados del DCC actual.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#2196f3',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sí, cargar existente',
+        cancelButtonText: 'Cancelar',
+      }).then((result) => {
+        if (result.isConfirmed) {
+          this.loadExistingDccList();
+          this.showDccSelect = true;
+        }
+      });
+    } else {
       this.loadExistingDccList();
+      this.showDccSelect = true;
     }
   }
 
@@ -545,10 +604,12 @@ export class DccComponent implements OnInit {
         mergedData.administrativeData.responsiblePersons =
           dccData.responsibleInfo.map((person: any) => ({
             role: person.role || '',
-            no_nomina: person.no_nomina || '', // Usar no_nomina como name inicialmente
+            no_nomina: person.no_nomina || '',
             name: person.name || '',
+            full_name: person.name || '', // Usar el nombre de la BD como full_name
             email: '', // Los datos adicionales del usuario se cargarán después si es necesario
             phone: '',
+            mainSigner: Boolean(person.main), // Mapear el campo 'main' desde la BD
           }));
 
         console.log(
@@ -572,22 +633,123 @@ export class DccComponent implements OnInit {
     this.activeTab = tabId;
   }
 
-  // Vuelve a la pantalla de opciones iniciales
-  backToOptions() {
-    this.showInitialOptions = true;
-    this.showMainInterface = false;
-    this.activeTab = 'administrative-data';
-    this.showDccSelect = false;
-    this.selectedDccId = '';
+  // Método actualizado para volver a las opciones iniciales y limpiar todo
+  backToOptions(): void {
+    // Mostrar confirmación antes de limpiar todo
+    Swal.fire({
+      title: '¿Estás seguro?',
+      text: 'Se perderán todos los cambios no guardados del DCC actual.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#f44336',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Sí, volver',
+      cancelButtonText: 'Cancelar',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        console.log('🔄 User confirmed - proceeding with cleanup');
+
+        // Limpiar completamente el servicio DCC
+        this.cleanupDccData();
+
+        // Limpiar variables del componente
+        this.cleanupComponentData();
+
+        // Volver a la pantalla inicial
+        this.showMainInterface = false;
+        this.showInitialOptions = true;
+        this.activeTab = 'administrative-data';
+
+        console.log('🔄 Successfully returned to initial options');
+        console.log('🔄 === backToOptions DEBUG END ===');
+
+        // Mostrar mensaje de confirmación
+        Swal.fire({
+          icon: 'success',
+          title: 'Limpieza completada',
+          text: 'Todos los datos han sido limpiados correctamente.',
+          timer: 2000,
+          showConfirmButton: false,
+          position: 'top-end',
+        });
+      } else {
+        console.log('🔄 User cancelled - staying in current view');
+      }
+    });
   }
 
-  // Abre el modal para crear un nuevo DCC
-  openCreateDccModal() {
-    this.showCreateDccModal = true;
+  // Nuevo método para limpiar completamente los datos del DCC
+  private cleanupDccData(): void {
+    console.log('🧹 === cleanupDccData DEBUG START ===');
+    console.log('🧹 Resetting DCC data service to initial state');
+
+    // Resetear el servicio DCC a su estado inicial
+    this.dccDataService.resetData();
+
+    console.log('🧹 DCC data service reset completed');
+    console.log('🧹 === cleanupDccData DEBUG END ===');
+  }
+
+  // Nuevo método para limpiar las variables del componente
+  private cleanupComponentData(): void {
+    console.log('🧹 === cleanupComponentData DEBUG START ===');
+
+    // Limpiar variables de creación de DCC
     this.newDccProjectId = [];
     this.newDccPtId = '';
     this.newDccDutNumber = null;
     this.generatedCertificateNumber = '';
+
+    // Limpiar variables de selección de DCC
+    this.selectedDccId = '';
+    this.existingDccList = [];
+
+    // Limpiar estado de modales
+    this.showCreateDccModal = false;
+    this.showDccSelect = false;
+    this.showUploadModal = false;
+
+    console.log('🧹 Component variables cleaned:');
+    console.log('  - newDccProjectId:', this.newDccProjectId);
+    console.log('  - newDccPtId:', this.newDccPtId);
+    console.log('  - newDccDutNumber:', this.newDccDutNumber);
+    console.log('  - selectedDccId:', this.selectedDccId);
+    console.log('🧹 === cleanupComponentData DEBUG END ===');
+  }
+
+  // Abre el modal para crear un nuevo DCC
+  openCreateDccModal(): void {
+    console.log('🔄 Opening create DCC modal');
+
+    // Si hay datos en el DCC actual, mostrar confirmación
+    const currentData = this.dccDataService.getCurrentData();
+    const hasCurrentData =
+      currentData.administrativeData.core.certificate_number ||
+      currentData.items.length > 0 ||
+      currentData.administrativeData.responsiblePersons.some(
+        (p) => p.role || p.full_name
+      );
+
+    if (hasCurrentData) {
+      Swal.fire({
+        title: '¿Crear nuevo DCC?',
+        text: 'Se perderán todos los cambios no guardados del DCC actual.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#2196f3',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sí, crear nuevo',
+        cancelButtonText: 'Cancelar',
+      }).then((result) => {
+        if (result.isConfirmed) {
+          this.loadProjects();
+          this.showCreateDccModal = true;
+        }
+      });
+    } else {
+      this.loadProjects();
+      this.showCreateDccModal = true;
+    }
   }
 
   // Cierra el modal de creación de DCC
@@ -704,5 +866,7 @@ export class DccComponent implements OnInit {
     this.showMainInterface = true;
     this.activeTab = 'administrative-data';
     this.closeCreateDccModal();
+
+    this.statementsComponent?.loadStatementsFromDatabase(this.databaseName);
   }
 }
