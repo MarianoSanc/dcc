@@ -4,80 +4,38 @@
     <p>Resultados de medición y métodos utilizados en la calibración</p>
   </div>
 
-  <!-- Measurement Result Block -->
+  <!-- Measurement Result Block SOLO LECTURA, SOLO NOMBRE -->
   <div class="data-block">
     <div class="block-header">
       <h4>Measurement Result</h4>
-      <div class="block-actions">
-        <button
-          class="edit-btn"
-          (click)="toggleEdit('measurement-result')"
-          [class.active]="isEditing('measurement-result')"
-        >
-          <i class="material-icons">{{
-            isEditing("measurement-result") ? "close" : "edit"
-          }}</i>
-          {{ isEditing("measurement-result") ? "Cancelar" : "Editar" }}
-        </button>
-      </div>
+      <!-- Botones de edición eliminados -->
     </div>
-
     <div class="block-content">
-      <!-- View Mode -->
-      <div
-        *ngIf="!isEditing('measurement-result')"
-        class="measurement-result-view"
-      >
+      <div class="measurement-result-view">
         <table class="data-table">
           <tr>
             <td class="label">Name:</td>
-            <td>{{ measurementResult.name || "No especificado" }}</td>
-          </tr>
-          <tr>
-            <td class="label">Description:</td>
-            <td class="description-cell">
-              {{ measurementResult.description || "No especificado" }}
+            <td>
+              <!-- Si measurementResult.name existe (cargado desde XML), mostrarlo tal cual -->
+              <ng-container
+                *ngIf="
+                  measurementResult?.name && measurementResult.name.trim();
+                  else fallbackName
+                "
+              >
+                {{ measurementResult.name }}
+              </ng-container>
+              <ng-template #fallbackName>
+                Calibration of
+                {{
+                  coreData?.certificate_number
+                    ? coreData.certificate_number
+                    : ""
+                }}.
+              </ng-template>
             </td>
           </tr>
         </table>
-      </div>
-
-      <!-- Edit Mode -->
-      <div
-        *ngIf="isEditing('measurement-result')"
-        class="measurement-result-edit"
-      >
-        <div class="edit-form">
-          <div class="form-group">
-            <label>Name:</label>
-            <input
-              type="text"
-              [(ngModel)]="measurementResult.name"
-              placeholder="Ingrese el nombre del resultado de medición"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>Description:</label>
-            <textarea
-              [(ngModel)]="measurementResult.description"
-              placeholder="Ingrese la descripción del resultado de medición"
-              rows="4"
-            ></textarea>
-          </div>
-
-          <div class="form-actions">
-            <button class="save-btn" (click)="saveBlock('measurement-result')">
-              Guardar
-            </button>
-            <button
-              class="cancel-btn"
-              (click)="cancelEdit('measurement-result')"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -86,31 +44,14 @@
   <div class="data-block">
     <div class="block-header">
       <h4>Used Methods</h4>
-      <div class="block-actions">
-        <button class="add-btn" (click)="addMethod()">
-          <i class="material-icons">add</i>
-          Agregar Método
-        </button>
-        <button
-          class="edit-btn"
-          (click)="toggleEdit('used-methods')"
-          [class.active]="isEditing('used-methods')"
-        >
-          <i class="material-icons">{{
-            isEditing("used-methods") ? "close" : "edit"
-          }}</i>
-          {{ isEditing("used-methods") ? "Cancelar" : "Editar" }}
-        </button>
-      </div>
+      <!-- Botones de agregar/editar pueden quedarse si quieres edición local -->
     </div>
-
     <div class="block-content">
       <!-- View Mode -->
-      <div *ngIf="!isEditing('used-methods')" class="methods-view">
+      <div class="methods-view">
         <div class="item-card" *ngFor="let method of usedMethods">
           <div class="item-header">
             <h5>{{ method.name || "Sin nombre" }}</h5>
-            <span class="ref-type-badge">{{ method.refType }}</span>
           </div>
           <div class="item-details">
             <div class="detail-row" *ngIf="method.description">
@@ -119,92 +60,20 @@
             <div class="detail-row" *ngIf="method.norm">
               <strong>Norm:</strong> {{ method.norm }}
             </div>
-            <div class="detail-row" *ngIf="method.reference">
-              <strong>Reference:</strong> {{ method.reference }}
+            <!-- Mostrar cantidades asociadas si existen -->
+            <div class="detail-row" *ngIf="method.usedMethodQuantities?.length">
+              <strong>Quantities:</strong>
+              <ul>
+                <li *ngFor="let qty of method.usedMethodQuantities">
+                  <span *ngIf="qty.name"
+                    ><strong>{{ qty.name }}</strong
+                    >:
+                  </span>
+                  <span *ngIf="qty.value">{{ qty.value }}</span>
+                  <span *ngIf="qty.unit"> {{ qty.unit }}</span>
+                </li>
+              </ul>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Edit Mode -->
-      <div *ngIf="isEditing('used-methods')" class="methods-edit">
-        <div class="edit-form">
-          <div
-            class="item-form"
-            *ngFor="let method of usedMethods; let methodIndex = index"
-          >
-            <div class="item-form-header">
-              <h5>Método {{ methodIndex + 1 }}</h5>
-              <button class="remove-btn" (click)="removeMethod(method.id)">
-                <i class="material-icons">delete</i>
-                Eliminar
-              </button>
-            </div>
-
-            <div class="form-grid">
-              <div class="form-group">
-                <label>Name:</label>
-                <input
-                  type="text"
-                  [(ngModel)]="method.name"
-                  placeholder="Ingrese el nombre del método"
-                />
-              </div>
-
-              <div class="form-group">
-                <label>RefType:</label>
-                <select [(ngModel)]="method.refType">
-                  <option value="">Seleccione el tipo de referencia</option>
-                  <option value="basic_calibrationMethod">
-                    basic_calibrationMethod
-                  </option>
-                  <option value="basic_uncertainty">basic_uncertainty</option>
-                  <option value="basic_measurementProcedure">
-                    basic_measurementProcedure
-                  </option>
-                  <option value="basic_evaluationMethod">
-                    basic_evaluationMethod
-                  </option>
-                  <option value="other">other</option>
-                </select>
-              </div>
-
-              <div class="form-group full-width">
-                <label>Description:</label>
-                <textarea
-                  [(ngModel)]="method.description"
-                  placeholder="Ingrese la descripción del método"
-                  rows="3"
-                ></textarea>
-              </div>
-
-              <div class="form-group">
-                <label>Norm:</label>
-                <input
-                  type="text"
-                  [(ngModel)]="method.norm"
-                  placeholder="Ingrese la norma"
-                />
-              </div>
-
-              <div class="form-group">
-                <label>Reference:</label>
-                <input
-                  type="text"
-                  [(ngModel)]="method.reference"
-                  placeholder="Ingrese la referencia"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button class="save-btn" (click)="saveBlock('used-methods')">
-              Guardar
-            </button>
-            <button class="cancel-btn" (click)="cancelEdit('used-methods')">
-              Cancelar
-            </button>
           </div>
         </div>
       </div>
@@ -216,10 +85,6 @@
     <div class="block-header">
       <h4>Influence Conditions</h4>
       <div class="block-actions">
-        <button class="add-btn" (click)="addInfluenceCondition()">
-          <i class="material-icons">add</i>
-          Agregar Condición
-        </button>
         <button
           class="edit-btn"
           (click)="toggleEdit('influence-conditions')"
@@ -236,11 +101,12 @@
     <div class="block-content">
       <!-- View Mode -->
       <div *ngIf="!isEditing('influence-conditions')" class="conditions-view">
-        <div class="item-card" *ngFor="let condition of influenceConditions">
+        <div
+          class="item-card"
+          *ngFor="let condition of getActiveInfluenceConditions()"
+        >
           <div class="item-header">
             <h5>{{ condition.name || "Sin nombre" }}</h5>
-            <span class="status-badge">{{ condition.status }}</span>
-            <span class="ref-type-badge">{{ condition.refType }}</span>
           </div>
           <div class="sub-block">
             <h6>Sub-block Data:</h6>
@@ -262,22 +128,41 @@
       <!-- Edit Mode -->
       <div *ngIf="isEditing('influence-conditions')" class="conditions-edit">
         <div class="edit-form">
+          <!-- Selector de condiciones a activar -->
+          <div class="conditions-selector">
+            <h6>Seleccionar condiciones a incluir:</h6>
+            <div class="conditions-checkboxes">
+              <div
+                class="condition-checkbox"
+                *ngFor="
+                  let condition of availableInfluenceConditions;
+                  let i = index
+                "
+              >
+                <input
+                  type="checkbox"
+                  [id]="'condition_' + i"
+                  [(ngModel)]="condition.active"
+                  [disabled]="condition.required"
+                  (ngModelChange)="onConditionActiveChange()"
+                />
+                <label [for]="'condition_' + i" class="checkbox-label">
+                  {{ condition.name }}
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Campos editables para condiciones activas -->
           <div
             class="item-form"
             *ngFor="
-              let condition of influenceConditions;
+              let condition of getActiveAvailableConditions();
               let conditionIndex = index
             "
           >
             <div class="item-form-header">
-              <h5>Condición {{ conditionIndex + 1 }}</h5>
-              <button
-                class="remove-btn"
-                (click)="removeInfluenceCondition(condition.id)"
-              >
-                <i class="material-icons">delete</i>
-                Eliminar
-              </button>
+              <h5>{{ condition.name }}</h5>
             </div>
 
             <div class="form-grid">
@@ -287,35 +172,21 @@
                   type="text"
                   [(ngModel)]="condition.name"
                   placeholder="Ingrese el nombre de la condición"
+                  readonly
+                  class="readonly-field"
                 />
               </div>
 
               <div class="form-group">
                 <label>RefType:</label>
-                <select [(ngModel)]="condition.refType">
-                  <option value="">Seleccione el tipo de referencia</option>
-                  <option value="basic_temperature">basic_temperature</option>
-                  <option value="basic_humidityRelative">
-                    basic_humidityRelative
+                <select [(ngModel)]="condition.refType" disabled>
+                  <option [value]="condition.refType">
+                    {{ condition.refType }}
                   </option>
-                  <option value="basic_pressure">basic_pressure</option>
-                  <option value="basic_voltage">basic_voltage</option>
-                  <option value="basic_current">basic_current</option>
-                  <option value="basic_frequency">basic_frequency</option>
-                  <option value="other">other</option>
                 </select>
               </div>
 
-              <div class="form-group">
-                <label>Status:</label>
-                <select [(ngModel)]="condition.status">
-                  <option value="">Seleccione el estado</option>
-                  <option value="beforeAdjustment">beforeAdjustment</option>
-                  <option value="afterAdjustment">afterAdjustment</option>
-                  <option value="beforeRepair">beforeRepair</option>
-                  <option value="afterRepair">afterRepair</option>
-                </select>
-              </div>
+              <!-- Removido: Status field -->
             </div>
 
             <!-- Sub-block -->
@@ -323,16 +194,16 @@
               <h6>Sub-block Data:</h6>
               <div class="form-grid">
                 <div class="form-group">
-                  <label>Name:</label>
+                  <label>Quantity Name:</label>
                   <input
                     type="text"
                     [(ngModel)]="condition.subBlock.name"
-                    placeholder="Ingrese el nombre del sub-bloque"
+                    placeholder="Ingrese el nombre de la cantidad"
                   />
                 </div>
 
                 <div class="form-group">
-                  <label>Value:</label>
+                  <label>Quantity Value:</label>
                   <input
                     type="text"
                     [(ngModel)]="condition.subBlock.value"
@@ -341,13 +212,17 @@
                 </div>
 
                 <div class="form-group">
-                  <label>Unit:</label>
+                  <label>Quantity Unit:</label>
                   <select [(ngModel)]="condition.subBlock.unit">
                     <option value="">Seleccione la unidad</option>
-                    <option value="\degreecelsius">\degreecelsius</option>
-                    <option value="\percent">\percent</option>
-                    <option value="\one">\one</option>
-                    <option value="\kilovolt">\kilovolt</option>
+                    <option
+                      *ngFor="
+                        let unit of getUnitsForCondition(condition.refType)
+                      "
+                      [value]="unit.value"
+                    >
+                      {{ unit.label }}
+                    </option>
                   </select>
                 </div>
               </div>
@@ -401,7 +276,14 @@
         <div class="item-card" *ngFor="let equipment of measuringEquipments">
           <div class="item-header">
             <h5>{{ equipment.name || "Sin nombre" }}</h5>
-            <span class="ref-type-badge">{{ equipment.refType }}</span>
+          </div>
+          <div class="equipment-details">
+            <div class="detail-row" *ngIf="equipment.manufacturer">
+              <strong>Manufacturer:</strong> {{ equipment.manufacturer }}
+            </div>
+            <div class="detail-row" *ngIf="equipment.model">
+              <strong>Model:</strong> {{ equipment.model }}
+            </div>
           </div>
           <div class="identifications">
             <h6>Identifications:</h6>
@@ -466,6 +348,24 @@
                   <option value="other">other</option>
                 </select>
               </div>
+
+              <div class="form-group">
+                <label>Manufacturer:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="equipment.manufacturer"
+                  placeholder="Ingrese el fabricante"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>Model:</label>
+                <input
+                  type="text"
+                  [(ngModel)]="equipment.model"
+                  placeholder="Ingrese el modelo"
+                />
+              </div>
             </div>
 
             <!-- Identifications Section -->
@@ -490,11 +390,16 @@
                 <div class="form-grid">
                   <div class="form-group">
                     <label>Issuer:</label>
-                    <input
-                      type="text"
-                      [(ngModel)]="id.issuer"
-                      placeholder="Ingrese el emisor"
-                    />
+                    <select [(ngModel)]="id.issuer">
+                      <option value="">Seleccione el emisor</option>
+                      <option value="calibrationLaboratory">
+                        Calibration Laboratory
+                      </option>
+                      <option value="manufacturer">Manufacturer</option>
+                      <option value="customer">Customer</option>
+                      <option value="owner">Owner</option>
+                      <option value="other">Other</option>
+                    </select>
                   </div>
 
                   <div class="form-group">
@@ -508,11 +413,16 @@
 
                   <div class="form-group">
                     <label>Name:</label>
-                    <input
-                      type="text"
-                      [(ngModel)]="id.name"
-                      placeholder="Ingrese el nombre"
-                    />
+                    <select [(ngModel)]="id.name">
+                      <option value="">
+                        Seleccione el tipo de identificación
+                      </option>
+                      <option value="Laboratory ID">Laboratory ID</option>
+                      <option value="Serial Number">Serial Number</option>
+                      <option value="Asset ID">Asset ID</option>
+                      <option value="Model Number">Model Number</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
 
                   <div class="form-group delete-action">
@@ -597,22 +507,90 @@
             <h5>{{ result.name || "Sin nombre" }}</h5>
             <span class="ref-type-badge">{{ result.refType }}</span>
           </div>
-          <div class="identifications">
-            <h6>Data:</h6>
-            <div class="identification-grid">
-              <div class="identification-item" *ngFor="let data of result.data">
-                <span
-                  ><strong>{{ data.refType }}</strong></span
-                >
-                <span>{{ data.name }}</span>
-                <span *ngIf="data.dataType === 'realListXMLList'">{{
-                  data.valueXMLList
-                }}</span>
-                <span *ngIf="data.dataType === 'real'">{{ data.value }}</span>
-                <span *ngIf="data.dataType === 'realListXMLList'">{{
-                  data.unitXMLList
-                }}</span>
-                <span *ngIf="data.dataType === 'real'">{{ data.unit }}</span>
+
+          <!-- Mostrar datos organizados por tipo -->
+          <div class="result-data-section">
+            <h6>Data Quantities:</h6>
+            <div class="quantities-grid">
+              <div class="quantity-item" *ngFor="let data of result.data">
+                <div class="quantity-header">
+                  <strong>{{ data.name || data.refType }}</strong>
+                  <span class="data-type-badge" [class]="data.dataType">
+                    {{
+                      data.dataType === "realListXMLList"
+                        ? "Lista"
+                        : "Valor único"
+                    }}
+                  </span>
+                </div>
+                <div class="quantity-content">
+                  <div
+                    *ngIf="data.dataType === 'realListXMLList'"
+                    class="list-data"
+                  >
+                    <div class="list-values">
+                      <strong>Valores:</strong>
+                      {{ data.valueXMLList || "No definido" }}
+                    </div>
+                    <div class="list-unit">
+                      <strong>Unidad:</strong>
+                      {{ data.unitXMLList || "No definido" }}
+                    </div>
+
+                    <!-- Mostrar incertidumbre de medición si existe -->
+                    <div
+                      *ngIf="
+                        data.measurementUncertainty?.expandedMU
+                          ?.valueExpandedMUXMLList &&
+                        data.measurementUncertainty.expandedMU.valueExpandedMUXMLList.trim() !==
+                          ''
+                      "
+                      class="measurement-uncertainty-display"
+                    >
+                      <h6>Measurement Uncertainty</h6>
+                      <div class="uncertainty-values">
+                        <div class="uncertainty-row">
+                          <span class="uncertainty-label"
+                            >Expanded Uncertainty Values:</span
+                          >
+                          <span class="uncertainty-value">{{
+                            data.measurementUncertainty.expandedMU
+                              .valueExpandedMUXMLList
+                          }}</span>
+                        </div>
+                        <div class="uncertainty-row">
+                          <span class="uncertainty-label"
+                            >Coverage Factor:</span
+                          >
+                          <span class="uncertainty-value">{{
+                            data.measurementUncertainty.expandedMU
+                              .coverageFactorXMLList
+                          }}</span>
+                        </div>
+                        <div class="uncertainty-row">
+                          <span class="uncertainty-label"
+                            >Coverage Probability:</span
+                          >
+                          <span class="uncertainty-value">{{
+                            data.measurementUncertainty.expandedMU
+                              .coverageProbabilityXMLList
+                          }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div *ngIf="data.dataType === 'real'" class="single-data">
+                    <span
+                      ><strong>Valor:</strong>
+                      {{ data.value || "No definido" }}</span
+                    >
+                    <span
+                      ><strong>Unidad:</strong>
+                      {{ data.unit || "No definido" }}</span
+                    >
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -636,58 +614,87 @@
 
             <div class="form-grid">
               <div class="form-group">
-                <label>Name:</label>
+                <label>Result Name:</label>
                 <input
                   type="text"
                   [(ngModel)]="result.name"
-                  placeholder="Ingrese el nombre del resultado"
+                  placeholder="Ej: Table Results, Linearity Test Results"
                 />
               </div>
 
               <div class="form-group">
-                <label>RefType:</label>
+                <label>Result Type:</label>
                 <select [(ngModel)]="result.refType">
-                  <option value="">Seleccione el tipo de referencia</option>
-                  <option value="hv_scaleFactor">hv_scaleFactor</option>
-                  <option value="hv_linearity">hv_linearity</option>
-                  <option value="basic_measurement">basic_measurement</option>
-                  <option value="other">other</option>
+                  <option value="">Seleccione el tipo de resultado</option>
+                  <option value="hv_scaleFactor">Scale Factor Results</option>
+                  <option value="hv_linearity">Linearity Test Results</option>
+                  <option value="basic_measurement">Basic Measurement</option>
+                  <option value="other">Other</option>
                 </select>
               </div>
             </div>
 
-            <!-- Data Section -->
-            <div class="identifications-section">
-              <div class="identifications-header">
-                <h6>Data:</h6>
+            <!-- Data Quantities Section -->
+            <div class="quantities-section">
+              <div class="quantities-header">
+                <h6>Data Quantities:</h6>
                 <button
                   class="add-sub-btn"
                   (click)="addDataToResult(resultIndex)"
                 >
                   <i class="material-icons">add</i>
-                  Agregar Data
+                  Agregar Quantity
                 </button>
               </div>
+
               <div
-                class="identification-form"
+                class="quantity-form"
                 *ngFor="let data of result.data; let dataIndex = index"
               >
+                <div class="quantity-form-header">
+                  <h6>Quantity {{ dataIndex + 1 }}</h6>
+                  <button
+                    class="remove-btn small"
+                    (click)="removeDataFromResult(resultIndex, dataIndex)"
+                  >
+                    <i class="material-icons">delete</i>
+                  </button>
+                </div>
+
                 <div class="form-grid">
                   <div class="form-group">
-                    <label>RefType:</label>
-                    <input
-                      type="text"
-                      [(ngModel)]="data.refType"
-                      placeholder="Ingrese el refType"
-                    />
+                    <label>Quantity Type (refType):</label>
+                    <select [(ngModel)]="data.refType">
+                      <option value="">Seleccione el tipo</option>
+                      <option value="hv_range">Range</option>
+                      <option value="hv_assignedScaleFactor">
+                        Assigned Scale Factor
+                      </option>
+                      <option value="basic_measuredValue">
+                        Measured Value
+                      </option>
+                      <option value="basic_referenceValue">
+                        Reference Value
+                      </option>
+                      <option value="basic_measurementError">
+                        Measurement Error
+                      </option>
+                      <option value="hv_scaleFactor">Scale Factor</option>
+                      <option value="hv_meanScaleFactor">
+                        Mean Scale Factor
+                      </option>
+                      <option value="hv_linearity">Linearity</option>
+                      <option value="basic_uncertainty">Uncertainty</option>
+                      <option value="other">Other</option>
+                    </select>
                   </div>
 
                   <div class="form-group">
-                    <label>Name:</label>
+                    <label>Quantity Name:</label>
                     <input
                       type="text"
                       [(ngModel)]="data.name"
-                      placeholder="Ingrese el nombre"
+                      placeholder="Ej: Range, Voltage Measured, Scale Factor"
                     />
                   </div>
 
@@ -695,64 +702,124 @@
                     <label>Data Type:</label>
                     <select [(ngModel)]="data.dataType">
                       <option value="realListXMLList">
-                        realListXMLList (Lista)
+                        Lista de valores (realListXMLList)
                       </option>
-                      <option value="real">real (Valor único)</option>
+                      <option value="real">Valor único (real)</option>
                     </select>
-                  </div>
-
-                  <div class="form-group delete-action">
-                    <button
-                      class="remove-btn"
-                      (click)="removeDataFromResult(resultIndex, dataIndex)"
-                    >
-                      <i class="material-icons">delete</i>
-                    </button>
                   </div>
                 </div>
 
-                <!-- Conditional fields based on data type -->
+                <!-- Fields for List Data -->
                 <div
-                  class="form-grid"
+                  class="data-fields"
                   *ngIf="data.dataType === 'realListXMLList'"
                 >
                   <div class="form-group">
-                    <label>Value XML List:</label>
+                    <label>Lista de Valores:</label>
                     <textarea
                       [(ngModel)]="data.valueXMLList"
-                      placeholder="Ingrese los valores separados por espacios"
+                      placeholder="Ej: 1 10 20 30 40 50 60 70 80 90 100"
                       rows="2"
                     ></textarea>
+                    <small class="field-hint"
+                      >Valores separados por espacios</small
+                    >
                   </div>
 
                   <div class="form-group">
-                    <label>Unit XML List:</label>
+                    <label>Unidad:</label>
                     <select [(ngModel)]="data.unitXMLList">
                       <option value="">Seleccione la unidad</option>
-                      <option value="\percent">\percent</option>
-                      <option value="\one">\one</option>
-                      <option value="\kilovolt">\kilovolt</option>
+                      <option value="\kilovolt">kV (\kilovolt)</option>
+                      <option value="\volt">V (\volt)</option>
+                      <option value="\percent">% (\percent)</option>
+                      <option value="\one">Adimensional (\one)</option>
                     </select>
+                  </div>
+
+                  <!-- Sección de Incertidumbre de Medición -->
+                  <div
+                    class="measurement-uncertainty-section"
+                    *ngIf="data.refType === 'basic_measurementError'"
+                  >
+                    <h6>Measurement Uncertainty (Opcional)</h6>
+                    <div class="uncertainty-toggle">
+                      <input
+                        type="checkbox"
+                        [id]="'hasUncertainty_' + data.id"
+                        [(ngModel)]="data.hasUncertainty"
+                        (ngModelChange)="onUncertaintyToggle(data)"
+                      />
+                      <label [for]="'hasUncertainty_' + data.id"
+                        >Incluir incertidumbre de medición</label
+                      >
+                    </div>
+
+                    <div class="uncertainty-fields" *ngIf="data.hasUncertainty">
+                      <div class="form-group">
+                        <label>Valores de Incertidumbre Expandida:</label>
+                        <textarea
+                          [(ngModel)]="
+                            data.measurementUncertainty.expandedMU
+                              .valueExpandedMUXMLList
+                          "
+                          placeholder="Ej: 3.0 1.3 1.1 1.0 1.0 0.99 0.98 0.99 0.99 0.98 0.99 0.97"
+                          rows="2"
+                        ></textarea>
+                        <small class="field-hint"
+                          >Valores de incertidumbre separados por
+                          espacios</small
+                        >
+                      </div>
+
+                      <div class="form-group">
+                        <label>Factor de Cobertura:</label>
+                        <input
+                          type="text"
+                          [(ngModel)]="
+                            data.measurementUncertainty.expandedMU
+                              .coverageFactorXMLList
+                          "
+                          placeholder="Ej: 2"
+                          value="2"
+                        />
+                      </div>
+
+                      <div class="form-group">
+                        <label>Probabilidad de Cobertura:</label>
+                        <input
+                          type="text"
+                          [(ngModel)]="
+                            data.measurementUncertainty.expandedMU
+                              .coverageProbabilityXMLList
+                          "
+                          placeholder="Ej: 0.95"
+                          value="0.95"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div class="form-grid" *ngIf="data.dataType === 'real'">
+                <!-- Fields for Single Value Data -->
+                <div class="data-fields" *ngIf="data.dataType === 'real'">
                   <div class="form-group">
-                    <label>Value:</label>
+                    <label>Valor:</label>
                     <input
                       type="text"
                       [(ngModel)]="data.value"
-                      placeholder="Ingrese el valor"
+                      placeholder="Ej: 0.932, 3.96"
                     />
                   </div>
 
                   <div class="form-group">
-                    <label>Unit:</label>
+                    <label>Unidad:</label>
                     <select [(ngModel)]="data.unit">
                       <option value="">Seleccione la unidad</option>
-                      <option value="\percent">\percent</option>
-                      <option value="\one">\one</option>
-                      <option value="\kilovolt">\kilovolt</option>
+                      <option value="\kilovolt">kV (\kilovolt)</option>
+                      <option value="\volt">V (\volt)</option>
+                      <option value="\percent">% (\percent)</option>
+                      <option value="\one">Adimensional (\one)</option>
                     </select>
                   </div>
                 </div>
@@ -762,7 +829,7 @@
 
           <div class="form-actions">
             <button class="save-btn" (click)="saveBlock('results')">
-              Guardar
+              Guardar Resultados
             </button>
             <button class="cancel-btn" (click)="cancelEdit('results')">
               Cancelar

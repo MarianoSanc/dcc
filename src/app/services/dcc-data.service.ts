@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, map, Observable } from 'rxjs';
 import { ApiService } from '../api/api.service';
-import Swal from 'sweetalert2';
 import { UrlClass } from '../shared/models/url.model';
 
 export interface DCCData {
@@ -146,7 +145,7 @@ export interface DCCData {
     id: string;
     name: string;
     refType: string;
-    status: string;
+    // Removido: status field
     subBlock: {
       name: string;
       value: string;
@@ -178,6 +177,14 @@ export interface DCCData {
       unitXMLList: string;
       value: string;
       unit: string;
+      // Agregar soporte para incertidumbre
+      measurementUncertainty?: {
+        expandedMU?: {
+          valueExpandedMUXMLList: string;
+          coverageFactorXMLList: string;
+          coverageProbabilityXMLList: string;
+        };
+      };
     }>;
   }>;
 }
@@ -420,33 +427,33 @@ export class DccDataService {
           id: 'influence_default_1',
           name: 'Ambient condition temperature',
           refType: 'basic_temperature',
-          status: 'beforeAdjustment',
+          // Removido: status: 'beforeAdjustment',
           subBlock: {
             name: 'Temperature',
             value: '',
-            unit: '\\degreecelsius',
+            unit: '\\kelvin',
           },
         },
         {
           id: 'influence_default_2',
           name: 'Ambient condition relative air humidity',
           refType: 'basic_humidityRelative',
-          status: 'beforeAdjustment',
+          // Removido: status: 'beforeAdjustment',
           subBlock: {
-            name: 'Humidity',
+            name: 'Relative humidity of the ambient air',
             value: '',
-            unit: '\\percent',
+            unit: '\\one',
           },
         },
         {
           id: 'influence_default_3',
           name: 'Ambient condition pressure',
           refType: 'basic_pressure',
-          status: 'beforeAdjustment',
+          // Removido: status: 'beforeAdjustment',
           subBlock: {
             name: 'Ambient Pressure',
             value: '',
-            unit: '\\hectopascal',
+            unit: '\\pascal',
           },
         },
       ],
@@ -843,7 +850,7 @@ export class DccDataService {
             id: this.generateId(),
             name: this.getContentText(node, 'name') || '',
             refType: node.getAttribute('refType') || '',
-            status: 'beforeAdjustment',
+            // Removido: status: 'beforeAdjustment',
             subBlock: {
               name: this.getContentText(quantityNode, 'name') || '',
               value: value,
@@ -884,53 +891,8 @@ export class DccDataService {
             name: this.getContentText(node, 'name') || '',
             refType: node.getAttribute('refType') || '',
             data: quantityNodes.map((qNode) => {
-              const hybridNode = this.getElementByTagName(qNode, 'hybrid');
-              const realListNode = this.getElementByTagName(
-                hybridNode,
-                'realListXMLList'
-              );
-              const realNode = this.getElementByTagName(hybridNode, 'real');
-
-              if (realListNode) {
-                // Handle realListXMLList type
-                const valueXMLListNode = this.getElementByTagName(
-                  realListNode,
-                  'valueXMLList'
-                );
-                const unitXMLListNode = this.getElementByTagName(
-                  realListNode,
-                  'unitXMLList'
-                );
-
-                return {
-                  id: this.generateId(),
-                  refType: qNode.getAttribute('refType') || '',
-                  name: this.getContentText(qNode, 'name') || '',
-                  dataType: 'realListXMLList' as const,
-                  valueXMLList: valueXMLListNode?.textContent?.trim() || '',
-                  unitXMLList: unitXMLListNode?.textContent?.trim() || '',
-                  value: '',
-                  unit: '',
-                };
-              } else if (realNode) {
-                // Handle real type
-                const valueNode = this.getElementByTagName(realNode, 'value');
-                const unitNode = this.getElementByTagName(realNode, 'unit');
-
-                return {
-                  id: this.generateId(),
-                  refType: qNode.getAttribute('refType') || '',
-                  name: this.getContentText(qNode, 'name') || '',
-                  dataType: 'real' as const,
-                  valueXMLList: '',
-                  unitXMLList: '',
-                  value: valueNode?.textContent?.trim() || '',
-                  unit: unitNode?.textContent?.trim() || '',
-                };
-              }
-
-              // Fallback for unknown structure
-              return {
+              // Try different parsing approaches for both XML formats
+              let dataResult: any = {
                 id: this.generateId(),
                 refType: qNode.getAttribute('refType') || '',
                 name: this.getContentText(qNode, 'name') || '',
@@ -940,6 +902,163 @@ export class DccDataService {
                 value: '',
                 unit: '',
               };
+
+              // Approach 1: Check for direct realListXMLList (rev_3 format)
+              const directRealListNode = this.getElementByTagName(
+                qNode,
+                'realListXMLList'
+              );
+              if (directRealListNode) {
+                const valueXMLListNode = this.getElementByTagName(
+                  directRealListNode,
+                  'valueXMLList'
+                );
+                const unitXMLListNode = this.getElementByTagName(
+                  directRealListNode,
+                  'unitXMLList'
+                );
+
+                dataResult.dataType = 'realListXMLList';
+                dataResult.valueXMLList =
+                  valueXMLListNode?.textContent?.trim() || '';
+                dataResult.unitXMLList =
+                  unitXMLListNode?.textContent?.trim() || '';
+
+                // Parse measurement uncertainty if present
+                const uncertaintyNode = this.getElementByTagName(
+                  directRealListNode,
+                  'measurementUncertaintyUnivariateXMLList'
+                );
+                if (uncertaintyNode) {
+                  const expandedMUNode = this.getElementByTagName(
+                    uncertaintyNode,
+                    'expandedMUXMLList'
+                  );
+                  if (expandedMUNode) {
+                    const valueExpandedMUNode = this.getElementByTagName(
+                      expandedMUNode,
+                      'valueExpandedMUXMLList'
+                    );
+                    const coverageFactorNode = this.getElementByTagName(
+                      expandedMUNode,
+                      'coverageFactorXMLList'
+                    );
+                    const coverageProbabilityNode = this.getElementByTagName(
+                      expandedMUNode,
+                      'coverageProbabilityXMLList'
+                    );
+
+                    dataResult.measurementUncertainty = {
+                      expandedMU: {
+                        valueExpandedMUXMLList:
+                          valueExpandedMUNode?.textContent?.trim() || '',
+                        coverageFactorXMLList:
+                          coverageFactorNode?.textContent?.trim() || '',
+                        coverageProbabilityXMLList:
+                          coverageProbabilityNode?.textContent?.trim() || '',
+                      },
+                    };
+                  }
+                }
+
+                return dataResult;
+              }
+
+              // Approach 2: Check for direct real (rev_3 format)
+              const directRealNode = this.getElementByTagName(qNode, 'real');
+              if (directRealNode) {
+                const valueNode = this.getElementByTagName(
+                  directRealNode,
+                  'value'
+                );
+                const unitNode = this.getElementByTagName(
+                  directRealNode,
+                  'unit'
+                );
+
+                dataResult.dataType = 'real';
+                dataResult.value = valueNode?.textContent?.trim() || '';
+                dataResult.unit = unitNode?.textContent?.trim() || '';
+                return dataResult;
+              }
+
+              // Approach 3: Check for hybrid structure (3.3.0 and 3.2.1 formats)
+              const hybridNode = this.getElementByTagName(qNode, 'hybrid');
+              if (hybridNode) {
+                const realListNode = this.getElementByTagName(
+                  hybridNode,
+                  'realListXMLList'
+                );
+                const realNode = this.getElementByTagName(hybridNode, 'real');
+
+                if (realListNode) {
+                  const valueXMLListNode = this.getElementByTagName(
+                    realListNode,
+                    'valueXMLList'
+                  );
+                  const unitXMLListNode = this.getElementByTagName(
+                    realListNode,
+                    'unitXMLList'
+                  );
+
+                  dataResult.dataType = 'realListXMLList';
+                  dataResult.valueXMLList =
+                    valueXMLListNode?.textContent?.trim() || '';
+                  dataResult.unitXMLList =
+                    unitXMLListNode?.textContent?.trim() || '';
+
+                  // Parse measurement uncertainty from hybrid structure too
+                  const uncertaintyNode = this.getElementByTagName(
+                    realListNode,
+                    'measurementUncertaintyUnivariateXMLList'
+                  );
+                  if (uncertaintyNode) {
+                    const expandedMUNode = this.getElementByTagName(
+                      uncertaintyNode,
+                      'expandedMUXMLList'
+                    );
+                    if (expandedMUNode) {
+                      const valueExpandedMUNode = this.getElementByTagName(
+                        expandedMUNode,
+                        'valueExpandedMUXMLList'
+                      );
+                      const coverageFactorNode = this.getElementByTagName(
+                        expandedMUNode,
+                        'coverageFactorXMLList'
+                      );
+                      const coverageProbabilityNode = this.getElementByTagName(
+                        expandedMUNode,
+                        'coverageProbabilityXMLList'
+                      );
+
+                      dataResult.measurementUncertainty = {
+                        expandedMU: {
+                          valueExpandedMUXMLList:
+                            valueExpandedMUNode?.textContent?.trim() || '',
+                          coverageFactorXMLList:
+                            coverageFactorNode?.textContent?.trim() || '',
+                          coverageProbabilityXMLList:
+                            coverageProbabilityNode?.textContent?.trim() || '',
+                        },
+                      };
+                    }
+                  }
+
+                  return dataResult;
+                } else if (realNode) {
+                  const valueNode = this.getElementByTagName(realNode, 'value');
+                  const unitNode = this.getElementByTagName(realNode, 'unit');
+
+                  dataResult.dataType = 'real';
+                  dataResult.value = valueNode?.textContent?.trim() || '';
+                  dataResult.unit = unitNode?.textContent?.trim() || '';
+                  return dataResult;
+                }
+              }
+
+              // Fallback: Return empty structure
+              console.warn('Could not parse quantity data for:', qNode);
+              return dataResult;
             }),
           };
         });
@@ -961,6 +1080,29 @@ export class DccDataService {
         norm: this.getTextContent(node, 'norm') || '',
         reference: this.getTextContent(node, 'reference') || '',
       }));
+    }
+
+    // Parse Core Data (enlazar uniqueIdentifier a certificate_number y pt_id)
+    const coreDataNode = this.getElementByTagName(xmlDoc, 'coreData');
+    if (coreDataNode) {
+      const uniqueIdentifier =
+        this.getTextContent(coreDataNode, 'uniqueIdentifier') || '';
+      dccData.administrativeData.core.certificate_number = uniqueIdentifier;
+
+      // Extraer PT ID del penúltimo grupo si cumple el patrón esperado
+      // Ejemplo: PC0434-00 CC 23 01  => pt_id = 'PT-23'
+      // Ejemplo: PH2459-00 DCC 24 01 => pt_id = 'PT-24'
+      let ptId = '';
+      if (uniqueIdentifier) {
+        const parts = uniqueIdentifier.trim().split(/\s+/);
+        if (parts.length >= 3) {
+          const penultimate = parts[parts.length - 2];
+          if (/^\d{2}$/.test(penultimate)) {
+            ptId = `PT-${penultimate}`;
+          }
+        }
+      }
+      dccData.administrativeData.core.pt_id = ptId || '';
     }
 
     return dccData;
@@ -1588,6 +1730,47 @@ export class DccDataService {
     return this.apiService.post(updateStatement, UrlClass.URLNuevo);
   }
 
+  // Método para obtener todos los métodos usados desde la tabla dcc_usedmethod
+  getAllUsedMethodsFromDatabase(database: string): Observable<any[]> {
+    const getUsedMethods = {
+      action: 'get',
+      bd: database,
+      table: 'dcc_usedmethod',
+      opts: {},
+    };
+    return this.apiService.post(getUsedMethods, UrlClass.URLNuevo).pipe(
+      map((response: any) => {
+        const rows = response?.result || [];
+        // Agrupar por método (por refType, name, description, norm)
+        const grouped: { [key: string]: any } = {};
+        rows.forEach((row: any) => {
+          const key = `${row.refType}|${row.name}|${row.description}|${row.norm}`;
+          if (!grouped[key]) {
+            grouped[key] = {
+              refType: row.refType,
+              name: row.name,
+              description: row.description,
+              norm: row.norm,
+              usedMethodQuantities: [],
+            };
+          }
+          if (
+            row.usedMethodQuantity_name ||
+            row.usedMethodQuantity_value ||
+            row.usedMethodQuantity_unit
+          ) {
+            grouped[key].usedMethodQuantities.push({
+              name: row.usedMethodQuantity_name,
+              value: row.usedMethodQuantity_value,
+              unit: row.usedMethodQuantity_unit,
+            });
+          }
+        });
+        return Object.values(grouped);
+      })
+    );
+  }
+
   private deepMerge(defaultData: any, loadedData: any): any {
     if (!loadedData) return defaultData;
     if (typeof loadedData !== 'object' || Array.isArray(loadedData)) {
@@ -1763,5 +1946,10 @@ export class DccDataService {
 
     console.log(`🔧 No match found for: ${name} (${issuer})`);
     return null;
+  }
+
+  // Método para hacer queries a la BD
+  post(query: any) {
+    return this.apiService.post(query, UrlClass.URLNuevo);
   }
 }

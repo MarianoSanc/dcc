@@ -1,69 +1,97 @@
-<div class="data-block">
-  <div class="block-header">
-    <h4>SF PT-23</h4>
-    <div class="block-actions">
-      <button class="add-btn" (click)="agregarNivel()">
-        <i class="material-icons">add</i>
-        Agregar otro nivel de tensión
-      </button>
-      <button class="close-btn" (click)="cerrarTablas()">
-        <i class="material-icons">close</i>
-        Cerrar
-      </button>
-    </div>
+<div class="pt23-results-container">
+  <div class="section-header">
+    <h3>PT-23 Results</h3>
+    <p>Resultados específicos para el procedimiento PT-23</p>
   </div>
-  <div class="block-content">
-    <div *ngFor="let tabla of tablas; let tablaIdx = index" class="nivel-block">
-      <div class="form-group">
-        <label>Nivel de tensión ({{ tablaIdx + 1 }}):</label>
-        <input
-          type="number"
-          [(ngModel)]="tabla.nivel"
-          placeholder="Ingrese el nivel de tensión"
-        />
+
+  <!-- Control buttons -->
+  <div class="control-buttons">
+    <button class="add-btn" (click)="agregarNivel()">
+      <i class="material-icons">add</i>
+      Agregar Nivel de Tensión
+    </button>
+    <button class="close-btn" (click)="cerrarTablas()">
+      <i class="material-icons">close</i>
+      Cerrar Tablas
+    </button>
+  </div>
+
+  <!-- Results tables -->
+  <div class="tables-container">
+    <div
+      class="tabla-nivel"
+      *ngFor="let tabla of tablas; let tablaIndex = index"
+    >
+      <div class="tabla-header">
+        <h4>Nivel de Tensión {{ tablaIndex + 1 }}</h4>
+        <div class="nivel-input-group">
+          <label>Nivel de Tensión (kV):</label>
+          <input
+            type="number"
+            [(ngModel)]="tabla.nivel"
+            placeholder="Ingrese el nivel"
+            class="nivel-input"
+          />
+        </div>
       </div>
+
       <div class="table-wrapper">
-        <table class="data-table compact-table">
+        <table class="results-table">
           <thead>
             <tr>
-              <th style="width: 40px">Nivel</th>
-              <th style="width: 90px">DUT</th>
-              <th style="width: 90px">Patrón</th>
+              <th rowspan="2" class="measurement-header">Medición</th>
+              <th colspan="10" class="dut-header">DUT (kV)</th>
+              <th colspan="10" class="patron-header">Patrón (kV)</th>
+            </tr>
+            <tr>
+              <!-- DUT columns -->
+              <th *ngFor="let fila of filas; let i = index" class="sub-header">
+                {{ i + 1 }}
+              </th>
+              <!-- Patrón columns -->
+              <th *ngFor="let fila of filas; let i = index" class="sub-header">
+                {{ i + 1 }}
+              </th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let row of filas; let i = index">
-              <td>{{ i + 1 }}</td>
-              <td>
+            <tr>
+              <td class="row-label">Mediciones PT-23</td>
+              <!-- DUT inputs -->
+              <td *ngFor="let fila of filas; let i = index" class="data-cell">
                 <input
                   type="number"
                   [(ngModel)]="tabla.dut[i]"
-                  class="cell-input"
+                  placeholder=""
+                  class="data-input"
+                  step="0.001"
                 />
               </td>
-              <td>
+              <!-- Patrón inputs -->
+              <td *ngFor="let fila of filas; let i = index" class="data-cell">
                 <input
                   type="number"
                   [(ngModel)]="tabla.patron[i]"
-                  class="cell-input"
+                  placeholder=""
+                  class="data-input"
+                  step="0.001"
                 />
               </td>
             </tr>
-          </tbody>
-          <tfoot>
-            <tr>
-              <td><strong>Promedio</strong></td>
-              <td>
-                <strong>{{ getAverage(tabla.dut) }}</strong>
+            <tr class="average-row">
+              <td class="row-label average-label">Promedio</td>
+              <!-- DUT average -->
+              <td colspan="10" class="average-cell dut-average">
+                {{ getAverage(tabla.dut) }}
               </td>
-              <td>
-                <strong>{{ getAverage(tabla.patron) }}</strong>
+              <!-- Patrón average -->
+              <td colspan="10" class="average-cell patron-average">
+                {{ getAverage(tabla.patron) }}
               </td>
             </tr>
-          </tfoot>
+          </tbody>
         </table>
       </div>
-      <hr *ngIf="tablas.length > 1 && tablaIdx < tablas.length - 1" />
     </div>
   </div>
 </div>

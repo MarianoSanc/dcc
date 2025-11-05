@@ -143,7 +143,6 @@
 
 .item-card:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-color: #2196f3;
 }
 
 .item-header {
@@ -290,7 +289,11 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 15px;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
+}
+
+.form-grid.equipment-grid {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
 }
 
 .form-group {
@@ -324,7 +327,6 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #2196f3;
   box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
 }
 
@@ -341,7 +343,6 @@
 
 .form-group select:focus {
   outline: none;
-  border-color: #2196f3;
   box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
 }
 
@@ -478,53 +479,340 @@
   color: #333;
 }
 
-@media (max-width: 768px) {
-  .results-container {
-    padding: 20px;
-  }
+/* Estilo para campos readonly */
+.readonly-field {
+  background-color: #f5f5f5 !important;
+  color: #666 !important;
+  cursor: not-allowed !important;
+  border-color: #ddd !important;
+}
 
-  .block-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
-  }
+.readonly-field:focus {
+  box-shadow: none !important;
+  border-color: #ddd !important;
+}
 
-  .block-actions {
-    align-self: stretch;
-  }
+/* Estilos para el selector de condiciones */
+.conditions-selector {
+  margin-bottom: 25px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+}
 
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
+.conditions-selector h6 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 1.1em;
+  font-weight: 600;
+}
 
-  .item-form-header {
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
-  }
+.conditions-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
-  .remove-btn {
-    align-self: stretch;
-    justify-content: center;
-  }
+.condition-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
-  .form-actions {
-    flex-direction: column;
-  }
+.condition-checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  transform: scale(1.2);
+}
 
-  .save-btn,
-  .cancel-btn {
-    width: 100%;
-  }
+.condition-checkbox .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1em;
+  color: #333;
+  cursor: pointer;
+  margin: 0;
+}
 
-  .identification-item {
-    grid-template-columns: 1fr;
-    gap: 5px;
-  }
+.condition-checkbox input[type="checkbox"]:disabled + .checkbox-label {
+  color: #666;
+  cursor: not-allowed;
+}
 
-  .identifications-header {
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
-  }
+.required-badge {
+  background: #ff9800;
+  color: white;
+  font-size: 0.75em;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.equipment-details {
+  margin: 10px 0;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.equipment-details .detail-row {
+  margin-bottom: 8px;
+}
+
+.equipment-details .detail-row:last-child {
+  margin-bottom: 0;
+}
+
+.equipment-details strong {
+  color: #333;
+}
+
+/* Results specific styles */
+.result-data-section {
+  margin-top: 15px;
+}
+
+.result-data-section h6 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 1.1em;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 5px;
+}
+
+.quantities-grid {
+  display: grid;
+  gap: 15px;
+}
+
+.quantity-item {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 15px;
+}
+
+.quantity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.quantity-header strong {
+  color: #333;
+  font-size: 1em;
+}
+
+.data-type-badge {
+  font-size: 0.8em;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.data-type-badge.realListXMLList {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.data-type-badge.real {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.quantity-content {
+  margin-top: 10px;
+}
+
+.list-data,
+.single-data {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.single-data {
+  flex-direction: row;
+  gap: 20px;
+}
+
+.list-values,
+.list-unit {
+  font-size: 0.9em;
+  color: #555;
+}
+
+.quantities-section {
+  margin-top: 25px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.quantities-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.quantities-header h6 {
+  margin: 0;
+  color: #333;
+  font-size: 1.1em;
+}
+
+.quantity-form {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.quantity-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.quantity-form-header h6 {
+  margin: 0;
+  color: #333;
+  font-size: 1em;
+}
+
+.remove-btn.small {
+  padding: 6px;
+  min-width: 32px;
+  height: 32px;
+  font-size: 0.9em;
+}
+
+.data-fields {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.8em;
+  color: #666;
+  font-style: italic;
+}
+
+/* Estilos para la sección de incertidumbre de medición */
+.measurement-uncertainty-section {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.measurement-uncertainty-section h6 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.uncertainty-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.uncertainty-toggle input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  transform: scale(1.2);
+}
+
+.uncertainty-toggle label {
+  margin: 0;
+  cursor: pointer;
+  color: #333;
+  font-weight: 500;
+}
+
+.uncertainty-fields {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.uncertainty-fields .form-group {
+  margin-bottom: 15px;
+}
+
+.uncertainty-fields .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.uncertainty-fields input,
+.uncertainty-fields textarea {
+  background: white;
+  border: 1px solid #ddd;
+}
+
+.uncertainty-fields input:focus,
+.uncertainty-fields textarea:focus {
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+/* Measurement uncertainty display styles */
+.measurement-uncertainty-display {
+  margin-top: 15px;
+  padding: 15px;
+  background: #f0f8ff;
+  border: 1px solid #d1ecf1;
+  border-radius: 4px;
+}
+
+.measurement-uncertainty-display h6 {
+  margin: 0 0 10px 0;
+  color: #1976d2;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.uncertainty-values {
+  display: grid;
+  gap: 8px;
+  font-size: 0.9em;
+}
+
+.uncertainty-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid #e3f2fd;
+}
+
+.uncertainty-row:last-child {
+  border-bottom: none;
+}
+
+.uncertainty-label {
+  font-weight: 500;
+  color: #333;
+}
+
+.uncertainty-value {
+  font-family: "Courier New", monospace;
+  color: #1976d2;
+  background: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #e3f2fd;
 }

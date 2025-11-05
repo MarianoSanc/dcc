@@ -168,8 +168,6 @@ export class DccComponent implements OnInit {
 
   // Abre el modal para cargar un archivo XML
   loadExistingDCC() {
-    console.log('🔄 Loading existing DCC from XML');
-
     // Si hay datos en el DCC current, mostrar confirmación
     const currentData = this.dccDataService.getCurrentData();
     const hasCurrentData =
@@ -284,8 +282,6 @@ export class DccComponent implements OnInit {
 
   // Abre el modal para seleccionar un DCC existente
   openDccSelectModal() {
-    console.log('🔄 Opening DCC select modal');
-
     // Si hay datos en el DCC current, mostrar confirmación
     const currentData = this.dccDataService.getCurrentData();
     const hasCurrentData =
@@ -398,12 +394,9 @@ export class DccComponent implements OnInit {
         .then((labData) => {
           if (labData) {
             dccData.laboratoryInfo = labData;
-            console.log('🏢 Laboratory data loaded:', labData);
           }
         })
-        .catch(() => {
-          console.log('❌ Failed to load laboratory data');
-        });
+        .catch(() => {});
       loadTasks.push(loadLabPromise);
     }
 
@@ -413,12 +406,9 @@ export class DccComponent implements OnInit {
         .then((customerData) => {
           if (customerData) {
             dccData.customerInfo = customerData;
-            console.log('👤 Customer data loaded:', customerData);
           }
         })
-        .catch(() => {
-          console.log('❌ Failed to load customer data');
-        });
+        .catch(() => {});
       loadTasks.push(loadCustomerPromise);
     }
 
@@ -427,12 +417,9 @@ export class DccComponent implements OnInit {
       .then((responsibleData) => {
         if (responsibleData && responsibleData.length > 0) {
           dccData.responsibleInfo = responsibleData;
-          console.log('👥 Responsible persons data loaded:', responsibleData);
         }
       })
-      .catch(() => {
-        console.log('❌ Failed to load responsible persons data');
-      });
+      .catch(() => {});
     loadTasks.push(loadResponsiblePromise);
 
     // Cuando todas las tareas terminen, procesar los datos
@@ -582,22 +569,11 @@ export class DccComponent implements OnInit {
           country: custInfo.country || '',
           customer_id: dccData.id_customer,
         };
-
-        console.log(
-          '🔗 Setting customer ID from DCC data:',
-          dccData.id_customer
-        );
       } else if (dccData.id_customer) {
         // Si tenemos ID pero no datos del cliente, al menos asignar el ID
         mergedData.administrativeData.customer.customer_id =
           dccData.id_customer;
-        console.log(
-          '🔗 Setting customer ID only (no additional data):',
-          dccData.id_customer
-        );
       }
-
-      console.log('🔍dccData.responsibleInfo', dccData.responsibleInfo);
 
       // Asignar datos de responsible persons si existen
       if (dccData.responsibleInfo && dccData.responsibleInfo.length > 0) {
@@ -611,21 +587,272 @@ export class DccComponent implements OnInit {
             phone: '',
             mainSigner: Boolean(person.main), // Mapear el campo 'main' desde la BD
           }));
-
-        console.log(
-          '👥 Setting responsible persons from database:',
-          dccData.responsibleInfo
-        );
       }
     }
 
-    console.log('✅ Final merged data:', mergedData);
+    // Cargar todos los datos de items en paralelo
+    Promise.all([
+      this.loadMainItemData(dccData.id),
+      this.loadObjectIdentificationGroups(dccData.id),
+      this.loadSubItems(dccData.id),
+    ])
+      .then(([mainItemData, objectGroups, subItems]) => {
+        console.log('🔧 SubItems:', subItems);
 
-    this.dccDataService.loadFromObject(mergedData);
+        // Procesar Main Item Data
+        if (mainItemData) {
+          // Asegurar que el array de items existe
+          if (!mergedData.items || mergedData.items.length === 0) {
+            mergedData.items = [
+              {
+                id: 'main_item',
+                name: '',
+                manufacturer: '',
+                model: '',
+                serialNumber: '',
+                customerAssetId: '',
+                identifications: [],
+                itemQuantities: [],
+                subItems: [],
+              },
+            ];
+          }
 
-    this.showInitialOptions = false;
-    this.showMainInterface = true;
-    this.showDccSelect = false;
+          // Mapear datos del main item desde la BD
+          mergedData.items[0] = {
+            ...mergedData.items[0],
+            name: mainItemData.object || '',
+            manufacturer: mainItemData.manufacturer || '',
+            model: mainItemData.model || '',
+            serialNumber: mainItemData.serial_number || '',
+            customerAssetId: mainItemData.costumer_asset || '',
+          };
+        } else {
+          // Asegurar que al menos existe un item vacío
+          if (!mergedData.items || mergedData.items.length === 0) {
+            mergedData.items = [
+              {
+                id: 'main_item',
+                name: '',
+                manufacturer: '',
+                model: '',
+                serialNumber: '',
+                customerAssetId: '',
+                identifications: [],
+                itemQuantities: [],
+                subItems: [],
+              },
+            ];
+          }
+        }
+
+        // Procesar Object Identifications Groups
+        if (objectGroups && objectGroups.length > 0) {
+          mergedData.objectIdentifications = objectGroups.map(
+            (group: any, index: number) => ({
+              id: `group_${group.id}`,
+              groupId: `group_${index + 1}`,
+              groupName: group.name || `Grupo ${index + 1}`,
+              groupIndex: index,
+              assignedMeasurementRange: {
+                label: 'Rated voltage',
+                value: group.range_voltage || '',
+                unit: '\\volt',
+              },
+              assignedScaleFactor: {
+                label: 'Scale factor',
+                value: group.scale_factor || '',
+                unit: '\\one',
+              },
+              ratedFrequency: {
+                label: 'Rated Frequency',
+                value: group.rated_frequency || '',
+                unit: '\\one',
+              },
+            })
+          );
+        } else {
+        }
+
+        // Procesar SubItems
+        if (subItems && subItems.length > 0) {
+          // Mapear SubItems desde la BD
+          mergedData.items[0].subItems = subItems.map((subItem: any) => ({
+            id: `subitem_${subItem.id}`,
+            name: subItem.description || '',
+            manufacturer: subItem.manufacturer || '',
+            model: subItem.model || '',
+            identifications: this.createIdentificationsFromSubItem(subItem),
+            itemQuantities: this.createQuantitiesFromSubItem(subItem),
+          }));
+        } else {
+        }
+
+        // Finalmente cargar los datos en el servicio
+        this.dccDataService.loadFromObject(mergedData);
+
+        this.showInitialOptions = false;
+        this.showMainInterface = true;
+        this.showDccSelect = false;
+      })
+      .catch((error) => {
+        console.error('❌ Error loading item data:', error);
+        // Aún así cargar los datos administrativos sin los items
+        this.dccDataService.loadFromObject(mergedData);
+        this.showInitialOptions = false;
+        this.showMainInterface = true;
+        this.showDccSelect = false;
+      });
+  }
+
+  // Nuevo método para cargar datos del main item
+  private loadMainItemData(dccId: string): Promise<any> {
+    const getMainItem = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_item',
+      opts: {
+        where: { id_dcc: dccId },
+        limit: 1,
+      },
+    };
+
+    return this.apiService
+      .post(getMainItem, UrlClass.URLNuevo)
+      .toPromise()
+      .then((response: any) => {
+        return response?.result?.[0] || null;
+      })
+      .catch((error) => {
+        console.error('❌ Error loading main item:', error);
+        return null;
+      });
+  }
+
+  // Nuevo método para cargar Object Identification Groups
+  private loadObjectIdentificationGroups(dccId: string): Promise<any[]> {
+    const getObjectGroups = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_item_config',
+      opts: {
+        where: { id_dcc: dccId },
+        order_by: ['id_item', 'ASC'],
+      },
+    };
+
+    return this.apiService
+      .post(getObjectGroups, UrlClass.URLNuevo)
+      .toPromise()
+      .then((response: any) => {
+        return response?.result || [];
+      })
+      .catch((error) => {
+        console.error('❌ Error loading object groups:', error);
+        return [];
+      });
+  }
+
+  // Nuevo método para cargar SubItems
+  private loadSubItems(dccId: string): Promise<any[]> {
+    const getSubItems = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_subitem',
+      opts: {
+        where: { id_dcc: dccId },
+        order_by: ['id_item', 'ASC'],
+      },
+    };
+
+    return this.apiService
+      .post(getSubItems, UrlClass.URLNuevo)
+      .toPromise()
+      .then((response: any) => {
+        return response?.result || [];
+      })
+      .catch((error) => {
+        console.error('❌ Error loading subitems:', error);
+        return [];
+      });
+  }
+
+  // Método auxiliar para crear identifications desde subitem de BD
+  private createIdentificationsFromSubItem(subItem: any): any[] {
+    const identifications: any[] = [];
+
+    // Serial Number
+    if (subItem.serial_number && subItem.serial_number.trim() !== '') {
+      identifications.push({
+        issuer: 'Manufacturer',
+        name: 'Serial Number',
+        value: subItem.serial_number,
+        selectedOption: {
+          issuer: 'Manufacturer',
+          name: 'Serial Number',
+          saveAs: 'identification',
+        },
+      });
+    }
+
+    // Customer Asset
+    if (subItem.costumer_asset && subItem.costumer_asset.trim() !== '') {
+      identifications.push({
+        issuer: 'Customer',
+        name: "Customer's asset ID",
+        value: subItem.costumer_asset,
+        selectedOption: {
+          issuer: 'Customer',
+          name: "Customer's asset ID",
+          saveAs: 'identification',
+        },
+      });
+    }
+
+    return identifications;
+  }
+
+  // Método auxiliar para crear quantities desde subitem de BD
+  private createQuantitiesFromSubItem(subItem: any): any[] {
+    const quantities: any[] = [];
+
+    // Rated Voltage
+    if (subItem.rated_voltage && subItem.rated_voltage.trim() !== '') {
+      quantities.push({
+        refType: 'hv_ratedVoltage',
+        name: 'Rated voltage',
+        value: subItem.rated_voltage,
+        unit: '\\volt',
+        selectedOption: {
+          issuer: 'Manufacturer',
+          name: 'Rated voltage',
+          saveAs: 'itemQuantity',
+          unit: '\\volt',
+        },
+        originalIssuer: 'Manufacturer',
+        saveAs: 'itemQuantity',
+      });
+    }
+
+    // Length
+    if (subItem.length && subItem.length.trim() !== '') {
+      quantities.push({
+        refType: 'basic_length',
+        name: 'Length',
+        value: subItem.length,
+        unit: '\\meter',
+        selectedOption: {
+          issuer: 'Manufacturer',
+          name: 'Length',
+          saveAs: 'itemQuantity',
+          unit: '\\meter',
+        },
+        originalIssuer: 'Manufacturer',
+        saveAs: 'itemQuantity',
+      });
+    }
+
+    return quantities;
   }
 
   // Cambia la tab activa
@@ -647,8 +874,6 @@ export class DccComponent implements OnInit {
       cancelButtonText: 'Cancelar',
     }).then((result) => {
       if (result.isConfirmed) {
-        console.log('🔄 User confirmed - proceeding with cleanup');
-
         // Limpiar completamente el servicio DCC
         this.cleanupDccData();
 
@@ -660,9 +885,6 @@ export class DccComponent implements OnInit {
         this.showInitialOptions = true;
         this.activeTab = 'administrative-data';
 
-        console.log('🔄 Successfully returned to initial options');
-        console.log('🔄 === backToOptions DEBUG END ===');
-
         // Mostrar mensaje de confirmación
         Swal.fire({
           icon: 'success',
@@ -673,27 +895,18 @@ export class DccComponent implements OnInit {
           position: 'top-end',
         });
       } else {
-        console.log('🔄 User cancelled - staying in current view');
       }
     });
   }
 
   // Nuevo método para limpiar completamente los datos del DCC
   private cleanupDccData(): void {
-    console.log('🧹 === cleanupDccData DEBUG START ===');
-    console.log('🧹 Resetting DCC data service to initial state');
-
     // Resetear el servicio DCC a su estado inicial
     this.dccDataService.resetData();
-
-    console.log('🧹 DCC data service reset completed');
-    console.log('🧹 === cleanupDccData DEBUG END ===');
   }
 
   // Nuevo método para limpiar las variables del componente
   private cleanupComponentData(): void {
-    console.log('🧹 === cleanupComponentData DEBUG START ===');
-
     // Limpiar variables de creación de DCC
     this.newDccProjectId = [];
     this.newDccPtId = '';
@@ -708,19 +921,10 @@ export class DccComponent implements OnInit {
     this.showCreateDccModal = false;
     this.showDccSelect = false;
     this.showUploadModal = false;
-
-    console.log('🧹 Component variables cleaned:');
-    console.log('  - newDccProjectId:', this.newDccProjectId);
-    console.log('  - newDccPtId:', this.newDccPtId);
-    console.log('  - newDccDutNumber:', this.newDccDutNumber);
-    console.log('  - selectedDccId:', this.selectedDccId);
-    console.log('🧹 === cleanupComponentData DEBUG END ===');
   }
 
   // Abre el modal para crear un nuevo DCC
   openCreateDccModal(): void {
-    console.log('🔄 Opening create DCC modal');
-
     // Si hay datos en el DCC actual, mostrar confirmación
     const currentData = this.dccDataService.getCurrentData();
     const hasCurrentData =
@@ -763,14 +967,12 @@ export class DccComponent implements OnInit {
 
   // Maneja la selección de proyecto
   onProjectSelect(item: any) {
-    console.log('Proyecto seleccionado:', item);
     this.newDccProjectId = [item]; // Asegurar que sea un array con un solo elemento
     this.updateCertificateNumber();
   }
 
   // Maneja la deselección de proyecto
   onProjectDeselect(item: any) {
-    console.log('Proyecto deseleccionado:', item);
     this.newDccProjectId = [];
     this.updateCertificateNumber();
   }
@@ -815,6 +1017,16 @@ export class DccComponent implements OnInit {
       this.generatedCertificateNumber;
     this.dccDataService.loadFromObject(currentData);
 
+    // Mostrar loading mientras se crean los registros
+    Swal.fire({
+      title: 'Creando DCC...',
+      text: 'Por favor espere',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
     // Prepara los atributos base para guardar en la base de datos
     let attributes: any = {
       id: this.generatedCertificateNumber,
@@ -830,21 +1042,64 @@ export class DccComponent implements OnInit {
       },
     };
 
-    console.log('Atributos preparados para el nuevo DCC:', createDcc);
+    const createItem = {
+      action: 'create',
+      bd: this.database,
+      table: 'dcc_item',
+      opts: {
+        attributes: {
+          id_dcc: this.generatedCertificateNumber,
+        },
+      },
+    };
 
-    this.apiService.post(createDcc, UrlClass.URLNuevo).subscribe(
-      (response: any) => {
-        Swal.close();
-        if (response.result) {
-          Swal.fire({
-            icon: 'success',
-            title: '¡DCC Creado!',
-            text: `Se ha creado el DCC ${this.generatedCertificateNumber} correctamente`,
-            timer: 2500,
-            showConfirmButton: false,
-            position: 'top-end',
+    // Crear primero el DCC y luego el item
+    this.apiService.post(createDcc, UrlClass.URLNuevo).subscribe({
+      next: (dccResponse: any) => {
+        if (dccResponse.result) {
+          // Si el DCC se creó exitosamente, crear el item
+          this.apiService.post(createItem, UrlClass.URLNuevo).subscribe({
+            next: (itemResponse: any) => {
+              Swal.close();
+
+              if (itemResponse.result) {
+                Swal.fire({
+                  icon: 'success',
+                  title: '¡DCC Creado!',
+                  text: `Se ha creado el DCC ${this.generatedCertificateNumber} correctamente con su item asociado`,
+                  timer: 2500,
+                  showConfirmButton: false,
+                  position: 'top-end',
+                });
+
+                // Proceder a la interfaz principal
+                this.proceedToMainInterface();
+              } else {
+                Swal.fire({
+                  icon: 'warning',
+                  title: 'DCC Creado Parcialmente',
+                  text: 'El DCC se creó pero hubo un problema al crear el item asociado.',
+                });
+
+                // Proceder a la interfaz principal de todos modos
+                this.proceedToMainInterface();
+              }
+            },
+            error: (itemError) => {
+              Swal.close();
+              console.error('❌ Error al crear item:', itemError);
+              Swal.fire({
+                icon: 'warning',
+                title: 'DCC Creado Parcialmente',
+                text: 'El DCC se creó pero hubo un error al crear el item asociado.',
+              });
+
+              // Proceder a la interfaz principal de todos modos
+              this.proceedToMainInterface();
+            },
           });
         } else {
+          Swal.close();
           Swal.fire({
             icon: 'error',
             title: 'Error',
@@ -852,21 +1107,28 @@ export class DccComponent implements OnInit {
           });
         }
       },
-      (error) => {
+      error: (dccError) => {
         Swal.close();
+        console.error('❌ Error al crear DCC:', dccError);
         Swal.fire({
           icon: 'error',
           title: 'Error',
-          text: 'Ocurrió un problema en la petición.',
+          text: 'Ocurrió un problema en la petición para crear el DCC.',
         });
-      }
-    );
+      },
+    });
+  }
 
+  // Método auxiliar para proceder a la interfaz principal
+  private proceedToMainInterface() {
     this.showInitialOptions = false;
     this.showMainInterface = true;
     this.activeTab = 'administrative-data';
     this.closeCreateDccModal();
 
-    this.statementsComponent?.loadStatementsFromDatabase(this.databaseName);
+    // Cargar statements desde la base de datos si el componente está disponible
+    if (this.statementsComponent) {
+      this.statementsComponent.loadStatementsFromDatabase(this.databaseName);
+    }
   }
 }

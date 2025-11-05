@@ -1,7 +1,10 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DccDataService } from '../../services/dcc-data.service';
+import { ApiService } from '../../api/api.service';
+import { UrlClass } from '../../shared/models/url.model';
+import { Subscription } from 'rxjs';
 import Swal from 'sweetalert2';
 
 @Component({
@@ -9,462 +12,1093 @@ import Swal from 'sweetalert2';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './items.component.html',
-  styleUrl: './items.component.css',
+  styleUrls: ['./items.component.css'],
 })
-export class ItemsComponent implements OnInit {
-  // Estados de edición por bloque
-  editingStates = {
-    mainItem: false,
-    objectGroups: false,
-    subItems: false,
-  };
+export class ItemsComponent implements OnInit, OnDestroy {
+  // ===== PROPIEDADES =====
+  items: any[] = [];
+  objectIdentifications: any[] = [];
+  editingStates: { [key: string]: boolean } = {};
+  private subscription = new Subscription();
+  private database: string = 'calibraciones';
 
-  // Datos del item principal
-  mainItem: any = {
-    name: '',
-    model: '',
-    manufacturer: '',
-    serialNumber: '',
-    customerAssetId: '',
-    identifications: [],
-    itemQuantities: [],
-    subItems: [],
-  };
+  // Variables para el control de edición del main item
+  isEditingMainItem: boolean = false;
 
-  // Grupos de object identifications
-  objectGroups: any[] = [];
+  // Variables para el modal de identificadores
+  showIdentifierModal: boolean = false;
+  currentSubItemIndex: number = -1;
+  availableIdentifiers: any[] = [];
+  selectedIdentifierName: string = '';
 
-  // Opciones predefinidas para identificaciones de subitems - Actualizado
-  identificationOptions = [
-    {
-      issuer: 'manufacturer',
-      name: 'Serial Number',
-      displayText: 'Serial Number (Manufacturer)',
-      saveAs: 'identification',
-    },
-    {
-      issuer: 'customer',
-      name: "Customer's asset ID",
-      displayText: "Customer's asset ID (Customer)",
-      saveAs: 'identification',
-    },
-    {
-      issuer: 'manufacturer',
-      name: 'Rated voltage',
-      displayText: 'Rated voltage (Manufacturer)',
-      saveAs: 'itemQuantity',
-      unit: '\\volt',
-    },
-    {
-      issuer: 'manufacturer',
-      name: 'Length',
-      displayText: 'Length (Manufacturer)',
-      saveAs: 'itemQuantity',
-      unit: '\\meter',
-    },
-    {
-      issuer: 'manufacturer',
-      name: 'Characteristic impedance',
-      displayText: 'Characteristic impedance (Manufacturer)',
-      saveAs: 'itemQuantity',
-      unit: '\\ohm',
-    },
-  ];
+  constructor(
+    private dccDataService: DccDataService,
+    private apiService: ApiService
+  ) {}
 
-  constructor(private dccDataService: DccDataService) {}
-
+  // ===== LIFECYCLE HOOKS =====
   ngOnInit() {
-    this.dccDataService.dccData$.subscribe((data) => {
-      if (data.items && data.items.length > 0) {
-        this.mainItem = { ...data.items[0] };
-        // Asegurar que las propiedades nuevas existan
-        if (!this.mainItem.serialNumber) this.mainItem.serialNumber = '';
-        if (!this.mainItem.customerAssetId) this.mainItem.customerAssetId = '';
-        if (!this.mainItem.subItems) this.mainItem.subItems = [];
-        if (!this.mainItem.itemQuantities) this.mainItem.itemQuantities = [];
-
-        // Asegurar estructura correcta de subitems
-        this.ensureSubItemsStructure();
-      }
-
-      this.objectGroups = [...(data.objectIdentifications || [])];
-      this.updateGroupNames();
-    });
+    this.loadDccData();
   }
 
-  // Métodos de control de edición
-  isEditing(block: string): boolean {
-    return (this.editingStates as any)[block] || false;
+  ngOnDestroy() {
+    this.subscription.unsubscribe();
   }
 
-  toggleEdit(block: string): void {
-    // Cancelar cualquier edición activa antes de empezar una nueva
-    this.cancelAllEdits();
-    (this.editingStates as any)[block] = true;
+  // ===== MÉTODOS DE CARGA DE DATOS =====
+  private loadDccData() {
+    this.subscription.add(
+      this.dccDataService.dccData$.subscribe((data) => {
+        this.items = data.items || [];
+        this.objectIdentifications = data.objectIdentifications || [];
+      })
+    );
   }
 
-  cancelEdit(block: string): void {
-    (this.editingStates as any)[block] = false;
-    // Recargar datos originales
-    this.ngOnInit();
+  // ===== GETTERS =====
+  get mainItem() {
+    return this.items[0] || { subItems: [] };
   }
 
-  cancelAllEdits(): void {
-    this.editingStates.mainItem = false;
-    this.editingStates.objectGroups = false;
-    this.editingStates.subItems = false;
+  // ===== MÉTODOS DE CONTROL DE EDICIÓN =====
+  isEditing(key: string): boolean {
+    return this.editingStates[key] || false;
   }
 
-  saveBlock(block: string): void {
-    switch (block) {
-      case 'mainItem':
-        this.saveMainItem();
-        break;
-      case 'objectGroups':
-        this.saveObjectGroups();
-        break;
-      case 'subItems':
-        this.saveSubItems();
-        break;
+  toggleEdit(key: string) {
+    this.editingStates[key] = !this.editingStates[key];
+
+    // Si estamos entrando en modo edición de subitems, cargar los identificadores desde la BD
+    if (key === 'subitems' && this.editingStates[key]) {
+      this.loadSubItemIdentifiersFromDB();
     }
-    (this.editingStates as any)[block] = false;
   }
 
-  // Métodos para manejar grupos de object identifications
-  addObjectGroup() {
-    const newGroup = {
-      id: this.generateId(),
-      groupId: `group_${this.objectGroups.length + 1}`,
-      groupName: `Grupo ${this.objectGroups.length + 1}`,
-      groupIndex: this.objectGroups.length,
-      assignedMeasurementRange: {
-        label: 'Rated voltage', // Siempre fijo
-        value: '',
-        unit: '\\volt', // Siempre fijo
+  saveBlock(blockName: string) {
+    if (blockName === 'object-identifications') {
+      this.saveObjectIdentifications();
+    } else if (blockName === 'subitems') {
+      this.saveSubItems();
+    } else {
+      this.dccDataService.updateObjectIdentifications(
+        this.objectIdentifications
+      );
+      this.editingStates[blockName] = false;
+    }
+  }
+
+  cancelEdit(blockName: string) {
+    this.loadDccData();
+    this.editingStates[blockName] = false;
+  }
+
+  // ===== MAIN ITEM - GESTIÓN =====
+  toggleEditMainItem() {
+    this.isEditingMainItem = !this.isEditingMainItem;
+    if (!this.isEditingMainItem) {
+      this.loadDccData();
+    }
+  }
+
+  saveMainItem() {
+    const currentData = this.dccDataService.getCurrentData();
+
+    if (!this.items || this.items.length === 0) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'No se encontraron datos del item para actualizar.',
+      });
+      return;
+    }
+
+    const mainItem = this.items[0];
+    const dccId = currentData.administrativeData.core.certificate_number;
+
+    if (!dccId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'No se encontró el Certificate Number para actualizar.',
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'Guardando...',
+      text: 'Actualizando información del main item',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
       },
-      assignedScaleFactor: {
-        label: 'Scale factor', // Siempre fijo
-        value: '',
-        unit: '\\one', // Siempre fijo
-      },
-      ratedFrequency: {
-        label: 'Rated Frequency', // Siempre fijo
-        value: '',
-        unit: '\\one', // Siempre fijo
+    });
+
+    const updateMainItem = {
+      action: 'update',
+      bd: this.database,
+      table: 'dcc_item',
+      opts: {
+        attributes: {
+          object: mainItem.name || '',
+          manufacturer: mainItem.manufacturer || '',
+          model: mainItem.model || '',
+          serial_number: mainItem.serialNumber || '',
+          costumer_asset: mainItem.customerAssetId || '',
+        },
+        where: { id_dcc: dccId },
       },
     };
 
-    this.objectGroups.push(newGroup);
-    this.updateGroupNames();
-  }
-
-  // Método para asegurar que los labels y units estén siempre correctos
-  private enforceFixedLabelsAndUnits(): void {
-    this.objectGroups.forEach((group) => {
-      // Asegurar labels y units fijos
-      group.assignedMeasurementRange.label = 'Rated voltage';
-      group.assignedMeasurementRange.unit = '\\volt';
-
-      group.assignedScaleFactor.label = 'Scale factor';
-      group.assignedScaleFactor.unit = '\\one';
-
-      group.ratedFrequency.label = 'Rated Frequency';
-      group.ratedFrequency.unit = '\\one';
-    });
-  }
-
-  // Guardar métodos específicos
-  saveMainItem(): void {
-    this.dccDataService.updateItems([this.mainItem]);
-
-    Swal.fire({
-      icon: 'success',
-      title: '¡Guardado!',
-      text: 'Main Item guardado correctamente',
-      timer: 2000,
-      showConfirmButton: false,
-      position: 'top-end',
-    });
-  }
-
-  saveObjectGroups(): void {
-    // Asegurar que los labels y units estén correctos antes de guardar
-    this.enforceFixedLabelsAndUnits();
-
-    this.dccDataService.updateObjectIdentifications(this.objectGroups);
-
-    Swal.fire({
-      icon: 'success',
-      title: '¡Guardado!',
-      text: 'Object Groups guardados correctamente',
-      timer: 2000,
-      showConfirmButton: false,
-      position: 'top-end',
-    });
-  }
-
-  saveSubItems(): void {
-    this.dccDataService.updateItems([this.mainItem]);
-
-    Swal.fire({
-      icon: 'success',
-      title: '¡Guardado!',
-      text: 'Sub Items guardados correctamente',
-      timer: 2000,
-      showConfirmButton: false,
-      position: 'top-end',
-    });
-  }
-
-  // Método para actualizar nombres de grupos automáticamente
-  updateGroupNames() {
-    if (this.objectGroups.length === 2) {
-      this.objectGroups[0].groupName = 'BEFORE ADJUSTMENT';
-      this.objectGroups[1].groupName = 'AFTER ADJUSTMENT';
-    } else {
-      this.objectGroups.forEach((group, index) => {
-        if (
-          !group.groupName ||
-          group.groupName.startsWith('Grupo ') ||
-          group.groupName === 'BEFORE ADJUSTMENT' ||
-          group.groupName === 'AFTER ADJUSTMENT'
-        ) {
-          group.groupName = `Grupo ${index + 1}`;
+    this.apiService.post(updateMainItem, UrlClass.URLNuevo).subscribe({
+      next: (response: any) => {
+        Swal.close();
+        if (response.result) {
+          this.dccDataService.updateItems(this.items);
+          this.isEditingMainItem = false;
+          Swal.fire({
+            icon: 'success',
+            title: '¡Guardado!',
+            text: 'El main item se ha actualizado correctamente.',
+            timer: 2000,
+            showConfirmButton: false,
+            position: 'top-end',
+          });
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Hubo un problema al actualizar el main item.',
+          });
         }
+      },
+      error: (error) => {
+        Swal.close();
+        console.error('Error updating main item:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Ocurrió un error al actualizar el main item.',
+        });
+      },
+    });
+  }
+
+  cancelMainItemEdit() {
+    this.isEditingMainItem = false;
+    this.loadDccData();
+  }
+
+  // ===== OBJECT IDENTIFICATIONS - GESTIÓN =====
+  addObjectGroup() {
+    const newGroup = {
+      id: this.generateId(),
+      groupId: `group_${this.objectIdentifications.length + 1}`,
+      groupName: `Grupo ${this.objectIdentifications.length + 1}`,
+      groupIndex: this.objectIdentifications.length,
+      assignedMeasurementRange: {
+        label: 'Rated voltage',
+        value: '',
+        unit: '\\volt',
+      },
+      assignedScaleFactor: {
+        label: 'Scale factor',
+        value: '',
+        unit: '\\one',
+      },
+      ratedFrequency: {
+        label: 'Rated Frequency',
+        value: '',
+        unit: '\\one',
+      },
+    };
+    this.objectIdentifications.push(newGroup);
+  }
+
+  removeObjectGroup(index: number) {
+    if (this.objectIdentifications.length > 1) {
+      this.objectIdentifications.splice(index, 1);
+      this.objectIdentifications.forEach((group, i) => {
+        group.groupIndex = i;
+        group.groupId = `group_${i + 1}`;
+        group.groupName = `Grupo ${i + 1}`;
       });
     }
   }
 
-  // Métodos para manejar identificaciones del main item
-  addMainItemIdentification() {
-    this.mainItem.identifications.push({
-      issuer: 'manufacturer',
-      value: '',
-      name: '',
+  saveObjectIdentifications() {
+    const currentData = this.dccDataService.getCurrentData();
+    const dccId = currentData.administrativeData.core.certificate_number;
+
+    if (!dccId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'No se encontró el Certificate Number para actualizar.',
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'Guardando...',
+      text: 'Actualizando configuración de grupos',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
     });
+
+    this.checkExistingObjectGroups(dccId)
+      .then((existingGroups) => {
+        if (existingGroups.length > 0) {
+          this.updateObjectGroups(dccId, existingGroups);
+        } else {
+          this.createObjectGroups(dccId);
+        }
+      })
+      .catch((error) => {
+        Swal.close();
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Error al verificar grupos existentes.',
+        });
+      });
   }
 
-  removeMainItemIdentification(index: number) {
-    this.mainItem.identifications.splice(index, 1);
+  private checkExistingObjectGroups(dccId: string): Promise<any[]> {
+    const checkGroups = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_item_config',
+      opts: {
+        where: { id_dcc: dccId },
+        order_by: ['id_item', 'ASC'],
+      },
+    };
+
+    return this.apiService
+      .post(checkGroups, UrlClass.URLNuevo)
+      .toPromise()
+      .then((response: any) => response?.result || []);
   }
 
-  // Métodos para manejar subitems (sin cambios)
+  private createObjectGroups(dccId: string) {
+    const createPromises = this.objectIdentifications.map((group, index) => {
+      const createGroup = {
+        action: 'create',
+        bd: this.database,
+        table: 'dcc_item_config',
+        opts: {
+          attributes: {
+            id_item: index + 1,
+            id_dcc: dccId,
+            name: group.groupName,
+            range_voltage: group.assignedMeasurementRange?.value || '',
+            scale_factor: group.assignedScaleFactor?.value || '',
+            rated_frequency: group.ratedFrequency?.value || '',
+          },
+        },
+      };
+      return this.apiService.post(createGroup, UrlClass.URLNuevo).toPromise();
+    });
+
+    Promise.all(createPromises)
+      .then((responses) => {
+        Swal.close();
+        const allSuccess = responses.every((response: any) => response?.result);
+        if (allSuccess) {
+          this.dccDataService.updateObjectIdentifications(
+            this.objectIdentifications
+          );
+          this.editingStates['object-identifications'] = false;
+          Swal.fire({
+            icon: 'success',
+            title: '¡Guardado!',
+            text: 'Los grupos se han creado correctamente.',
+            timer: 2000,
+            showConfirmButton: false,
+            position: 'top-end',
+          });
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Hubo un problema al crear algunos grupos.',
+          });
+        }
+      })
+      .catch((error) => {
+        Swal.close();
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Error al crear los grupos.',
+        });
+      });
+  }
+
+  private updateObjectGroups(dccId: string, existingGroups: any[]) {
+    const updatePromises: Promise<any>[] = [];
+
+    this.objectIdentifications.forEach((group, index) => {
+      const existingGroup = existingGroups.find((g) => g.id_item === index + 1);
+
+      if (existingGroup) {
+        const updateGroup = {
+          action: 'update',
+          bd: this.database,
+          table: 'dcc_item_config',
+          opts: {
+            attributes: {
+              name: group.groupName,
+              range_voltage: group.assignedMeasurementRange?.value || '',
+              scale_factor: group.assignedScaleFactor?.value || '',
+              rated_frequency: group.ratedFrequency?.value || '',
+            },
+            where: { id: existingGroup.id },
+          },
+        };
+        updatePromises.push(
+          this.apiService.post(updateGroup, UrlClass.URLNuevo).toPromise()
+        );
+      } else {
+        const createGroup = {
+          action: 'create',
+          bd: this.database,
+          table: 'dcc_item_config',
+          opts: {
+            attributes: {
+              id_item: index + 1,
+              id_dcc: dccId,
+              name: group.groupName,
+              range_voltage: group.assignedMeasurementRange?.value || '',
+              scale_factor: group.assignedScaleFactor?.value || '',
+              rated_frequency: group.ratedFrequency?.value || '',
+            },
+          },
+        };
+        updatePromises.push(
+          this.apiService.post(createGroup, UrlClass.URLNuevo).toPromise()
+        );
+      }
+    });
+
+    const groupsToDelete = existingGroups.filter(
+      (existing) =>
+        !this.objectIdentifications.some(
+          (_, index) => index + 1 === existing.id_item
+        )
+    );
+
+    groupsToDelete.forEach((groupToDelete) => {
+      const deleteGroup = {
+        action: 'update',
+        bd: this.database,
+        table: 'dcc_item_config',
+        opts: {
+          attributes: { deleted: 1 },
+          where: { id: groupToDelete.id },
+        },
+      };
+      updatePromises.push(
+        this.apiService.post(deleteGroup, UrlClass.URLNuevo).toPromise()
+      );
+    });
+
+    Promise.all(updatePromises)
+      .then((responses) => {
+        Swal.close();
+        const allSuccess = responses.every((response: any) => response?.result);
+        if (allSuccess) {
+          this.dccDataService.updateObjectIdentifications(
+            this.objectIdentifications
+          );
+          this.editingStates['object-identifications'] = false;
+          Swal.fire({
+            icon: 'success',
+            title: '¡Guardado!',
+            text: 'Los grupos se han actualizado correctamente.',
+            timer: 2000,
+            showConfirmButton: false,
+            position: 'top-end',
+          });
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Hubo un problema al actualizar algunos grupos.',
+          });
+        }
+      })
+      .catch((error) => {
+        Swal.close();
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Error al actualizar los grupos.',
+        });
+      });
+  }
+
+  // ===== SUB ITEMS - GESTIÓN =====
   addSubItem() {
-    this.mainItem.subItems.push({
+    const newSubItem = {
       id: this.generateId(),
       name: '',
       model: '',
       manufacturer: '',
       identifications: [],
       itemQuantities: [],
-    });
+    };
+
+    if (!this.mainItem.subItems) {
+      this.mainItem.subItems = [];
+    }
+    this.mainItem.subItems.push(newSubItem);
   }
 
   removeSubItem(index: number) {
-    this.mainItem.subItems.splice(index, 1);
+    if (
+      this.mainItem.subItems &&
+      index >= 0 &&
+      index < this.mainItem.subItems.length
+    ) {
+      this.mainItem.subItems.splice(index, 1);
+    }
   }
 
-  // Métodos para manejar identificaciones de subitems
-  addSubItemIdentification(subItemIndex: number) {
-    // Agregar una identificación simple con la primera opción seleccionada por defecto
-    if (!this.mainItem.subItems[subItemIndex].identifications) {
-      this.mainItem.subItems[subItemIndex].identifications = [];
+  // Método mejorado para guardar subitems
+  saveSubItems() {
+    console.log('🔍 ===== SAVE SUBITEMS START =====');
+    const currentData = this.dccDataService.getCurrentData();
+    const dccId = currentData.administrativeData.core.certificate_number;
+
+    if (!dccId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'No se encontró el Certificate Number para actualizar.',
+      });
+      return;
     }
 
-    this.mainItem.subItems[subItemIndex].identifications.push({
-      issuer: this.identificationOptions[0].issuer,
-      name: this.identificationOptions[0].name,
-      value: '',
-      selectedOption: this.identificationOptions[0],
+    if (!this.mainItem.subItems || this.mainItem.subItems.length === 0) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Sin cambios',
+        text: 'No hay subitems para guardar.',
+      });
+      return;
+    }
+
+    console.log('📊 Subitems to save:', this.mainItem.subItems);
+
+    // Swal.fire({
+    //   title: 'Guardando...',
+    //   text: 'Actualizando subitems',
+    //   allowOutsideClick: false,
+    //   didOpen: () => {
+    //     Swal.showLoading();
+    //   },
+    // });
+
+    this.checkExistingSubItems(dccId)
+      .then((existingSubItems) => {
+        console.log('📊 Existing subitems from DB:', existingSubItems);
+
+        if (existingSubItems.length > 0) {
+          this.updateSubItems(dccId, existingSubItems);
+        } else {
+          this.createSubItems(dccId);
+        }
+      })
+      .catch((error) => {
+        Swal.close();
+        console.error('❌ Error checking existing subitems:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Error al verificar subitems existentes.',
+        });
+      });
+  }
+
+  private checkExistingSubItems(dccId: string): Promise<any[]> {
+    const checkSubItems = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_subitem',
+      opts: {
+        where: { id_dcc: dccId },
+        order_by: ['id', 'ASC'],
+      },
+    };
+
+    return this.apiService
+      .post(checkSubItems, UrlClass.URLNuevo)
+      .toPromise()
+      .then((response: any) => response?.result || [])
+      .catch((error) => {
+        console.error('Error in checkExistingSubItems:', error);
+        throw error;
+      });
+  }
+
+  private createSubItems(dccId: string) {
+    const createPromises = this.mainItem.subItems.map(
+      (subItem: any, index: number) => {
+        const attributes: any = {
+          id_dcc: dccId,
+          id_item: index + 1, // Agregar id_item secuencial
+          description: subItem.name || '',
+          manufacturer: subItem.manufacturer || '',
+          model: subItem.model || '',
+        };
+
+        const optionalFields = [
+          'serial_number',
+          'costumer_asset',
+          'rated_voltage',
+          'length',
+        ];
+
+        if (subItem.identifications && Array.isArray(subItem.identifications)) {
+          subItem.identifications.forEach((id: any) => {
+            if (id.dbField && id.value && id.value.trim() !== '') {
+              attributes[id.dbField] = id.value;
+            }
+          });
+        }
+
+        if (subItem.itemQuantities && Array.isArray(subItem.itemQuantities)) {
+          subItem.itemQuantities.forEach((qty: any) => {
+            if (qty.dbField && qty.value && qty.value.trim() !== '') {
+              attributes[qty.dbField] = qty.value;
+            }
+          });
+        }
+
+        optionalFields.forEach((field) => {
+          if (attributes[field] === undefined) {
+            attributes[field] = '';
+          }
+        });
+
+        console.log(`📝 Creating subitem ${index + 1}:`, attributes);
+
+        const createSubItem = {
+          action: 'create',
+          bd: this.database,
+          table: 'dcc_subitem',
+          opts: { attributes },
+        };
+
+        return this.apiService
+          .post(createSubItem, UrlClass.URLNuevo)
+          .toPromise()
+          .then((response: any) => response)
+          .catch((error: any) => {
+            console.error(`Error creating subitem ${index + 1}:`, error);
+            throw error;
+          });
+      }
+    );
+
+    Promise.all(createPromises)
+      .then((responses) => {
+        Swal.close();
+        const allSuccess = responses.every((response: any) => response?.result);
+
+        if (allSuccess) {
+          this.dccDataService.updateItems(this.items);
+          this.editingStates['subitems'] = false;
+          Swal.fire({
+            icon: 'success',
+            title: '¡Guardado!',
+            text: 'Los subitems se han creado correctamente.',
+            timer: 2000,
+            showConfirmButton: false,
+            position: 'top-end',
+          });
+          console.log('✅ Subitems created successfully');
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Hubo un problema al crear algunos subitems.',
+          });
+        }
+      })
+      .catch((error) => {
+        Swal.close();
+        console.error('Error in createSubItems:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Error al crear los subitems.',
+        });
+      });
+  }
+
+  private updateSubItems(dccId: string, existingSubItems: any[]) {
+    console.log('🔄 ===== UPDATE SUBITEMS START =====');
+
+    const updatePromises: Promise<any>[] = [];
+
+    this.mainItem.subItems.forEach((subItem: any, index: number) => {
+      const existingSubItem = existingSubItems[index];
+
+      console.log(`\n📋 Processing subitem ${index + 1}: ${subItem.name}`);
+
+      // Log identifications directamente
+      if (subItem.identifications && subItem.identifications.length > 0) {
+        console.log('  🔍 Identifications:');
+        subItem.identifications.forEach((id: any, idx: number) => {
+          console.log(
+            `    [${idx}] ${id.name} (dbField: ${id.dbField}): "${id.value}"`
+          );
+
+          // VALIDACIÓN: Si no tiene dbField, intentar asignarlo
+          if (!id.dbField) {
+            console.warn(
+              `    ⚠️ Missing dbField for ${id.name}, attempting to assign...`
+            );
+            if (id.name === 'Serial Number') {
+              id.dbField = 'serial_number';
+            } else if (id.name === "Customer's asset ID") {
+              id.dbField = 'costumer_asset';
+            }
+            console.log(`    ✅ Assigned dbField: ${id.dbField}`);
+          }
+        });
+      }
+
+      // Log quantities directamente
+      if (subItem.itemQuantities && subItem.itemQuantities.length > 0) {
+        console.log('  🔍 Item Quantities:');
+        subItem.itemQuantities.forEach((qty: any, idx: number) => {
+          console.log(
+            `    [${idx}] ${qty.name} (dbField: ${qty.dbField}): "${qty.value}"`
+          );
+
+          // VALIDACIÓN: Si no tiene dbField, intentar asignarlo
+          if (!qty.dbField) {
+            console.warn(
+              `    ⚠️ Missing dbField for ${qty.name}, attempting to assign...`
+            );
+            if (qty.name === 'Rated voltage') {
+              qty.dbField = 'rated_voltage';
+            } else if (qty.name === 'Length') {
+              qty.dbField = 'length';
+            }
+            console.log(`    ✅ Assigned dbField: ${qty.dbField}`);
+          }
+        });
+      }
+
+      // Inicializar attributes
+      const attributes: any = {
+        description: subItem.name || '',
+        manufacturer: subItem.manufacturer || '',
+        model: subItem.model || '',
+        serial_number: '',
+        costumer_asset: '',
+        rated_voltage: '',
+        length: '',
+      };
+
+      console.log('  🛠️ Base attributes set:', attributes);
+
+      // Procesar identificadores directamente del array original
+      if (subItem.identifications && Array.isArray(subItem.identifications)) {
+        subItem.identifications.forEach((id: any) => {
+          if (id.dbField && id.value !== undefined && id.value !== null) {
+            const finalValue = String(id.value).trim();
+            attributes[id.dbField] = finalValue;
+            console.log(`  ✅ SET ${id.dbField} = "${finalValue}"`);
+          } else if (!id.dbField) {
+            console.error(`  ❌ SKIPPED ${id.name}: Missing dbField!`);
+          }
+        });
+      }
+
+      // Procesar cantidades directamente del array original
+      if (subItem.itemQuantities && Array.isArray(subItem.itemQuantities)) {
+        subItem.itemQuantities.forEach((qty: any) => {
+          if (qty.dbField && qty.value !== undefined && qty.value !== null) {
+            const finalValue = String(qty.value).trim();
+            attributes[qty.dbField] = finalValue;
+            console.log(`  ✅ SET ${qty.dbField} = "${finalValue}"`);
+          } else if (!qty.dbField) {
+            console.error(`  ❌ SKIPPED ${qty.name}: Missing dbField!`);
+          }
+        });
+      }
+
+      console.log('  📤 Final attributes:', attributes);
+
+      if (existingSubItem) {
+        const updateSubItem = {
+          action: 'update',
+          bd: this.database,
+          table: 'dcc_subitem',
+          opts: {
+            attributes,
+            where: {
+              id: existingSubItem.id,
+            },
+          },
+        };
+
+        console.log(
+          `  🔄 UPDATE query:`,
+          JSON.stringify(updateSubItem, null, 2)
+        );
+
+        updatePromises.push(
+          this.apiService
+            .post(updateSubItem, UrlClass.URLNuevo)
+            .toPromise()
+            .then((response: any) => {
+              console.log(`  ✅ Update response:`, response);
+              return response;
+            })
+            .catch((error: any) => {
+              console.error(`  ❌ Update error:`, error);
+              throw error;
+            })
+        );
+      } else {
+        const createSubItem = {
+          action: 'create',
+          bd: this.database,
+          table: 'dcc_subitem',
+          opts: {
+            attributes: {
+              ...attributes,
+              id_dcc: dccId,
+              id_item: index + 1, // Agregar id_item secuencial
+            },
+          },
+        };
+
+        console.log(
+          `  ➕ CREATE query:`,
+          JSON.stringify(createSubItem, null, 2)
+        );
+
+        updatePromises.push(
+          this.apiService
+            .post(createSubItem, UrlClass.URLNuevo)
+            .toPromise()
+            .then((response: any) => {
+              console.log(`  ✅ Create response:`, response);
+              return response;
+            })
+            .catch((error: any) => {
+              console.error(`  ❌ Create error:`, error);
+              throw error;
+            })
+        );
+      }
     });
-  }
 
-  removeSubItemIdentification(
-    subItemIndex: number,
-    identificationIndex: number
-  ) {
-    this.mainItem.subItems[subItemIndex].identifications.splice(
-      identificationIndex,
-      1
+    const subItemsToDelete = existingSubItems.slice(
+      this.mainItem.subItems.length
     );
-  }
 
-  // Nuevo método para remover itemQuantity
-  removeSubItemQuantity(subItemIndex: number, quantityIndex: number) {
-    this.mainItem.subItems[subItemIndex].itemQuantities.splice(
-      quantityIndex,
-      1
-    );
-  }
+    if (subItemsToDelete.length > 0) {
+      console.log('🗑️ Subitems to delete:', subItemsToDelete.length);
+      subItemsToDelete.forEach((subItemToDelete) => {
+        const deleteSubItem = {
+          action: 'update',
+          bd: this.database,
+          table: 'dcc_subitem',
+          opts: {
+            where: { id: subItemToDelete.id },
+            attributes: { deleted: 1 },
+          },
+        };
 
-  // Método para actualizar issuer y name cuando se selecciona una opción
-  onIdentificationOptionChange(
-    subItemIndex: number,
-    identificationIndex: number,
-    selectedOption: any
-  ) {
-    const identification =
-      this.mainItem.subItems[subItemIndex].identifications[identificationIndex];
-    identification.issuer = selectedOption.issuer;
-    identification.name = selectedOption.name;
-    identification.selectedOption = selectedOption;
-
-    // Si es itemQuantity, necesitamos mover el entry o crear uno en itemQuantities
-    if (selectedOption.saveAs === 'itemQuantity') {
-      this.convertToItemQuantity(
-        subItemIndex,
-        identificationIndex,
-        selectedOption
-      );
+        updatePromises.push(
+          this.apiService.post(deleteSubItem, UrlClass.URLNuevo).toPromise()
+        );
+      });
     }
+
+    Promise.all(updatePromises)
+      .then((responses) => {
+        Swal.close();
+        console.log('📊 All responses:', responses);
+        const allSuccess = responses.every((response: any) => response?.result);
+
+        if (allSuccess) {
+          this.dccDataService.updateItems(this.items);
+          this.editingStates['subitems'] = false;
+          this.loadDccData();
+
+          Swal.fire({
+            icon: 'success',
+            title: '¡Guardado!',
+            text: 'Los subitems se han actualizado correctamente.',
+            timer: 2000,
+            showConfirmButton: false,
+            position: 'top-end',
+          });
+          console.log('✅ ===== UPDATE SUBITEMS SUCCESS =====\n');
+        } else {
+          console.log(
+            '❌ Some updates failed:',
+            responses.filter((r: any) => !r?.result)
+          );
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Hubo un problema al actualizar algunos subitems.',
+          });
+        }
+      })
+      .catch((error) => {
+        Swal.close();
+        console.error('❌ Error in updateSubItems:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Error al actualizar los subitems.',
+        });
+      });
   }
 
-  // Nuevo método para convertir identification a itemQuantity
-  private convertToItemQuantity(
+  removeIdentifierFromSubItem(
     subItemIndex: number,
-    identificationIndex: number,
-    selectedOption: any
+    identifierName: string,
+    type: string
   ) {
     const subItem = this.mainItem.subItems[subItemIndex];
-    const identification = subItem.identifications[identificationIndex];
+    if (!subItem) return;
 
-    // Asegurar que itemQuantities existe
-    if (!subItem.itemQuantities) {
-      subItem.itemQuantities = [];
+    if (type === 'identification') {
+      const removedIdentifier = subItem.identifications?.find(
+        (id: any) => id.name === identifierName
+      );
+
+      subItem.identifications =
+        subItem.identifications?.filter(
+          (id: any) => id.name !== identifierName
+        ) || [];
+
+      if (removedIdentifier && removedIdentifier.dbField) {
+        if (!subItem._fieldsToClean) {
+          subItem._fieldsToClean = [];
+        }
+        subItem._fieldsToClean.push(removedIdentifier.dbField);
+      }
+    } else if (type === 'itemQuantity') {
+      const removedQuantity = subItem.itemQuantities?.find(
+        (qty: any) => qty.name === identifierName
+      );
+
+      subItem.itemQuantities =
+        subItem.itemQuantities?.filter(
+          (qty: any) => qty.name !== identifierName
+        ) || [];
+
+      if (removedQuantity && removedQuantity.dbField) {
+        if (!subItem._fieldsToClean) {
+          subItem._fieldsToClean = [];
+        }
+        subItem._fieldsToClean.push(removedQuantity.dbField);
+      }
     }
 
-    // Verificar si ya existe una itemQuantity con este name
-    const existingQtyIndex = subItem.itemQuantities.findIndex(
-      (qty: any) => qty.name === selectedOption.name
-    );
+    this.items = [...this.items];
+  }
 
-    if (existingQtyIndex === -1) {
-      // Crear nueva itemQuantity
-      subItem.itemQuantities.push({
-        refType: this.generateRefTypeFromName(selectedOption.name),
-        name: selectedOption.name,
-        value: identification.value,
-        unit: selectedOption.unit || '',
-        selectedOption: selectedOption,
-        originalIssuer: selectedOption.issuer,
+  // ===== MODAL DE IDENTIFICADORES =====
+  addPredefinedIdentifier(subItemIndex: number) {
+    const subItem = this.mainItem.subItems[subItemIndex];
+    if (!subItem) return;
+
+    const allIdentifiers = [
+      {
+        name: 'Serial Number',
+        issuer: 'Manufacturer',
+        saveAs: 'identification',
+        dbField: 'serial_number',
+        icon: 'tag',
+        description: 'Número de serie del fabricante',
+      },
+      {
+        name: "Customer's asset ID",
+        issuer: 'Customer',
+        saveAs: 'identification',
+        dbField: 'costumer_asset',
+        icon: 'business',
+        description: 'ID de activo del cliente',
+      },
+      {
+        name: 'Rated voltage',
+        issuer: 'Manufacturer',
+        saveAs: 'itemQuantity',
+        dbField: 'rated_voltage',
+        unit: '\\volt',
+        icon: 'flash_on',
+        description: 'Voltaje nominal',
+      },
+      {
+        name: 'Length',
+        issuer: 'Manufacturer',
+        saveAs: 'itemQuantity',
+        dbField: 'length',
+        unit: '\\meter',
+        icon: 'straighten',
+        description: 'Longitud del elemento',
+      },
+    ];
+
+    const existingNames: string[] = [];
+    if (subItem.identifications && Array.isArray(subItem.identifications)) {
+      subItem.identifications.forEach((id: any) => {
+        if (id && id.name) existingNames.push(id.name);
       });
-    } else {
-      // Actualizar existente
-      subItem.itemQuantities[existingQtyIndex].value = identification.value;
-      subItem.itemQuantities[existingQtyIndex].selectedOption = selectedOption;
+    }
+    if (subItem.itemQuantities && Array.isArray(subItem.itemQuantities)) {
+      subItem.itemQuantities.forEach((qty: any) => {
+        if (qty && qty.name) existingNames.push(qty.name);
+      });
     }
 
-    // Remover de identifications
-    subItem.identifications.splice(identificationIndex, 1);
-  }
-
-  // Método para obtener la opción seleccionada actual - Mejorado
-  getSelectedIdentificationOption(identification: any) {
-    // Si ya tiene selectedOption, usarla
-    if (identification.selectedOption) {
-      return identification.selectedOption;
-    }
-
-    // Si no tiene selectedOption, buscar por issuer y name
-    const foundOption = this.identificationOptions.find(
-      (option) =>
-        option.issuer === identification.issuer &&
-        option.name === identification.name
+    this.availableIdentifiers = allIdentifiers.filter(
+      (identifier) => !existingNames.includes(identifier.name)
     );
 
-    if (foundOption) {
-      // Asignar la opción encontrada al objeto para futuras referencias
-      identification.selectedOption = foundOption;
-      return foundOption;
+    if (this.availableIdentifiers.length === 0) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Sin opciones disponibles',
+        text: 'Todos los identificadores predeterminados ya han sido agregados a este subitem.',
+        timer: 3000,
+        showConfirmButton: false,
+        position: 'top-end',
+      });
+      return;
     }
 
-    // Si no encuentra coincidencia exacta, devolver la primera opción como fallback
-    return this.identificationOptions[0];
+    this.currentSubItemIndex = subItemIndex;
+    this.selectedIdentifierName = '';
+    this.showIdentifierModal = true;
   }
 
-  // Asegurar que todos los subitems tengan la estructura correcta - Mejorado
-  private ensureSubItemsStructure() {
-    if (this.mainItem.subItems) {
-      this.mainItem.subItems.forEach((subItem: any) => {
-        // Asegurar arrays existen
+  closeIdentifierModal() {
+    this.showIdentifierModal = false;
+    this.currentSubItemIndex = -1;
+    this.availableIdentifiers = [];
+    this.selectedIdentifierName = '';
+  }
+
+  selectIdentifierOption(identifierName: string) {
+    this.selectedIdentifierName = identifierName;
+  }
+
+  confirmAddIdentifier() {
+    if (!this.selectedIdentifierName || this.currentSubItemIndex === -1) return;
+
+    const selectedIdentifier = this.availableIdentifiers.find(
+      (identifier) => identifier.name === this.selectedIdentifierName
+    );
+
+    if (!selectedIdentifier) return;
+
+    try {
+      this.addIdentifierToSubItem(this.currentSubItemIndex, selectedIdentifier);
+      this.closeIdentifierModal();
+    } catch (error) {
+      console.error('Error adding identifier:', error);
+      this.closeIdentifierModal();
+    }
+  }
+
+  private addIdentifierToSubItem(subItemIndex: number, identifier: any) {
+    const subItem = this.mainItem.subItems[subItemIndex];
+    if (!subItem) return;
+
+    try {
+      if (identifier.saveAs === 'identification') {
         if (!subItem.identifications) subItem.identifications = [];
+        const newIdentification = {
+          issuer: identifier.issuer,
+          name: identifier.name,
+          value: '',
+          selectedOption: {
+            issuer: identifier.issuer,
+            name: identifier.name,
+            saveAs: 'identification',
+          },
+          dbField: identifier.dbField,
+        };
+        subItem.identifications.push(newIdentification);
+      } else if (identifier.saveAs === 'itemQuantity') {
         if (!subItem.itemQuantities) subItem.itemQuantities = [];
+        const newQuantity = {
+          refType: this.generateRefTypeFromName(identifier.name),
+          name: identifier.name,
+          value: '',
+          unit: identifier.unit,
+          selectedOption: {
+            issuer: identifier.issuer,
+            name: identifier.name,
+            saveAs: 'itemQuantity',
+            unit: identifier.unit,
+          },
+          originalIssuer: identifier.issuer,
+          saveAs: 'itemQuantity',
+          dbField: identifier.dbField,
+        };
+        subItem.itemQuantities.push(newQuantity);
+      }
 
-        // Asegurar que las identificaciones tienen selectedOption
-        subItem.identifications.forEach((identification: any) => {
-          if (!identification.selectedOption) {
-            // Buscar la opción correcta basada en issuer y name
-            const matchingOption = this.identificationOptions.find(
-              (option) =>
-                option.issuer === identification.issuer &&
-                option.name === identification.name
-            );
-
-            if (matchingOption) {
-              identification.selectedOption = matchingOption;
-              console.log(
-                `🔧 Assigned selectedOption for identification: ${identification.name} (${identification.issuer})`
-              );
-            } else {
-              // Si no encuentra match exacto, asignar la primera opción
-              identification.selectedOption = this.identificationOptions[0];
-              console.log(
-                `🔧 No exact match found for identification: ${identification.name} (${identification.issuer}), using default`
-              );
-            }
-          }
-        });
-
-        // Para itemQuantities que vienen del XML, agregar selectedOption si corresponde
-        subItem.itemQuantities.forEach((quantity: any) => {
-          if (!quantity.selectedOption && !quantity.originalIssuer) {
-            const matchingOption = this.identificationOptions.find(
-              (option) =>
-                option.name === quantity.name &&
-                option.saveAs === 'itemQuantity'
-            );
-            if (matchingOption) {
-              quantity.selectedOption = matchingOption;
-              quantity.originalIssuer = matchingOption.issuer;
-              console.log(
-                `🔧 Assigned selectedOption for itemQuantity: ${quantity.name}`
-              );
-            }
-          } else if (!quantity.selectedOption && quantity.originalIssuer) {
-            // Si tiene originalIssuer pero no selectedOption, buscar por name e issuer
-            const matchingOption = this.identificationOptions.find(
-              (option) =>
-                option.name === quantity.name &&
-                option.issuer.toLowerCase() ===
-                  quantity.originalIssuer.toLowerCase() &&
-                option.saveAs === 'itemQuantity'
-            );
-            if (matchingOption) {
-              quantity.selectedOption = matchingOption;
-              console.log(
-                `🔧 Assigned selectedOption for itemQuantity with originalIssuer: ${quantity.name} (${quantity.originalIssuer})`
-              );
-            }
-          }
-        });
-      });
+      this.items = [...this.items];
+    } catch (error) {
+      console.error('Error in addIdentifierToSubItem:', error);
+      throw error;
     }
   }
 
-  // Simplificar validaciones para subitems
-  getValidSubItemIdentifications(subItem: any): any[] {
-    return (subItem.identifications || []).filter(
-      (id: any) => id.value?.trim() && id.name?.trim()
-    );
+  // ===== MÉTODOS DE VALIDACIÓN =====
+  getValidSubItemIdentifications(item: any): any[] {
+    if (!item.subItems) return [];
+    return item.subItems.reduce((validIds: any[], subItem: any) => {
+      if (subItem.identifications) {
+        const valid = subItem.identifications.filter(
+          (id: any) =>
+            id.value &&
+            id.value.trim() !== '' &&
+            id.name &&
+            id.name.trim() !== ''
+        );
+        return validIds.concat(valid);
+      }
+      return validIds;
+    }, []);
   }
 
-  getValidSubItemQuantities(subItem: any): any[] {
-    return (subItem.itemQuantities || []).filter(
-      (qty: any) => qty.value?.trim() && qty.name?.trim()
-    );
+  getValidSubItemQuantities(item: any): any[] {
+    if (!item.subItems) return [];
+    return item.subItems.reduce((validQtys: any[], subItem: any) => {
+      if (subItem.itemQuantities) {
+        const valid = subItem.itemQuantities.filter(
+          (qty: any) =>
+            qty.value &&
+            qty.value.trim() !== '' &&
+            qty.name &&
+            qty.name.trim() !== ''
+        );
+        return validQtys.concat(valid);
+      }
+      return validQtys;
+    }, []);
   }
 
-  // Métodos para verificar si hay datos válidos en subitems
   hasValidIdentifications(item: any): boolean {
     return this.getValidSubItemIdentifications(item).length > 0;
   }
@@ -473,7 +1107,6 @@ export class ItemsComponent implements OnInit {
     return this.getValidSubItemQuantities(item).length > 0;
   }
 
-  // Actualizar los métodos de validación para usar los nuevos métodos
   getValidIdentifications(item: any): any[] {
     return this.getValidSubItemIdentifications(item);
   }
@@ -482,206 +1115,178 @@ export class ItemsComponent implements OnInit {
     return this.getValidSubItemQuantities(item);
   }
 
-  // Método para obtener todos los entries para mostrar en el formulario
-  getAllSubItemEntries(subItemIndex: number): any[] {
-    const subItem = this.mainItem.subItems[subItemIndex];
-    const allEntries: any[] = [];
-
-    // Agregar identifications
-    if (subItem.identifications) {
-      subItem.identifications.forEach((entry: any) => {
-        allEntries.push(entry);
-      });
-    }
-
-    // Agregar itemQuantities que tienen selectedOption (son del formulario)
-    if (subItem.itemQuantities) {
-      subItem.itemQuantities.forEach((qty: any) => {
-        if (qty.selectedOption) {
-          allEntries.push({
-            issuer: qty.originalIssuer || 'manufacturer',
-            name: qty.name,
-            value: qty.value,
-            selectedOption: qty.selectedOption,
-            saveAs: qty.saveAs || 'itemQuantity',
-          });
-        }
-      });
-    }
-
-    return allEntries;
-  }
-
-  // Método actualizado para cuando se actualiza un valor
-  onEntryValueChange(
-    subItemIndex: number,
-    entryIndex: number,
-    newValue: string
-  ) {
-    const entries = this.getAllSubItemEntries(subItemIndex);
-    const entry = entries[entryIndex];
-
-    if (entry.saveAs === 'identification') {
-      // Buscar en identifications y actualizar
-      const idIndex = this.mainItem.subItems[
-        subItemIndex
-      ].identifications.findIndex(
-        (id: any) => id.name === entry.name && id.issuer === entry.issuer
-      );
-      if (idIndex !== -1) {
-        this.mainItem.subItems[subItemIndex].identifications[idIndex].value =
-          newValue;
-      }
-    } else if (entry.saveAs === 'itemQuantity') {
-      // Buscar en itemQuantities y actualizar
-      const qtyIndex = this.mainItem.subItems[
-        subItemIndex
-      ].itemQuantities.findIndex(
-        (qty: any) =>
-          qty.selectedOption &&
-          qty.selectedOption.name === entry.selectedOption.name
-      );
-      if (qtyIndex !== -1) {
-        this.mainItem.subItems[subItemIndex].itemQuantities[qtyIndex].value =
-          newValue;
-      }
-    }
-  }
-
-  // Método para generar refType basado en el nombre
-  private generateRefTypeFromName(name: string): string {
-    const refTypeMap: { [key: string]: string } = {
-      'Rated voltage': 'hv_ratedVoltage',
-      Length: 'basic_length',
-      'Characteristic impedance': 'basic_impedance',
-    };
-    return refTypeMap[name] || 'basic_property';
-  }
-
-  // Nuevos métodos para verificar si un campo específico tiene valor
-  hasValueInMeasurementRange(group: any, field: string): boolean {
-    return (
-      group.assignedMeasurementRange &&
-      group.assignedMeasurementRange[field] &&
-      group.assignedMeasurementRange[field].trim() !== ''
-    );
-  }
-
-  hasValueInScaleFactor(group: any, field: string): boolean {
-    return (
-      group.assignedScaleFactor &&
-      group.assignedScaleFactor[field] &&
-      group.assignedScaleFactor[field].trim() !== ''
-    );
-  }
-
-  hasValueInRatedFrequency(group: any, field: string): boolean {
-    return (
-      group.ratedFrequency &&
-      group.ratedFrequency[field] &&
-      group.ratedFrequency[field].trim() !== ''
-    );
-  }
-
-  // Métodos para verificar si una sección completa tiene algún valor
-  measurementRangeHasAnyValue(group: any): boolean {
-    return (
-      this.hasValueInMeasurementRange(group, 'label') ||
-      this.hasValueInMeasurementRange(group, 'value') ||
-      this.hasValueInMeasurementRange(group, 'unit')
-    );
-  }
-
-  scaleFactorHasAnyValue(group: any): boolean {
-    return (
-      this.hasValueInScaleFactor(group, 'label') ||
-      this.hasValueInScaleFactor(group, 'value') ||
-      this.hasValueInScaleFactor(group, 'unit')
-    );
-  }
-
-  ratedFrequencyHasAnyValue(group: any): boolean {
-    return (
-      this.hasValueInRatedFrequency(group, 'label') ||
-      this.hasValueInRatedFrequency(group, 'value') ||
-      this.hasValueInRatedFrequency(group, 'unit')
-    );
-  }
-
-  // Métodos para validar subitems (actualizados)
-  hasValidSubItems(): boolean {
-    return this.getValidSubItems().length > 0;
-  }
-
-  getValidSubItems(): any[] {
-    return (
-      this.mainItem.subItems?.filter(
-        (subItem: any) =>
-          subItem.name?.trim() ||
-          subItem.model?.trim() ||
-          subItem.manufacturer?.trim() ||
-          this.hasValidIdentifications(subItem) ||
-          this.hasValidItemQuantities(subItem)
-      ) || []
-    );
-  }
-
-  // Métodos para manejar object groups
-  removeObjectGroup(index: number) {
-    if (this.objectGroups.length > 1) {
-      this.objectGroups.splice(index, 1);
-      // Reindexar grupos
-      this.objectGroups.forEach((group, idx) => {
-        group.groupIndex = idx;
-        group.groupId = `group_${idx + 1}`;
-      });
-      this.updateGroupNames();
-    }
-  }
-
-  // Métodos para validar grupos de object identifications
-  hasValidObjectGroups(): boolean {
-    return this.getValidObjectGroups().length > 0;
-  }
-
-  getValidObjectGroups(): any[] {
-    return this.objectGroups.filter(
-      (group) =>
-        this.hasValidMeasurementRange(group) ||
-        this.hasValidScaleFactor(group) ||
-        this.hasValidRatedFrequency(group)
-    );
-  }
-
-  hasValidMeasurementRange(group: any): boolean {
-    return (
-      group.assignedMeasurementRange &&
-      (group.assignedMeasurementRange.value?.trim() ||
-        group.assignedMeasurementRange.label?.trim() ||
-        group.assignedMeasurementRange.unit?.trim())
-    );
-  }
-
-  hasValidScaleFactor(group: any): boolean {
-    return (
-      group.assignedScaleFactor &&
-      (group.assignedScaleFactor.value?.trim() ||
-        group.assignedScaleFactor.label?.trim() ||
-        group.assignedScaleFactor.unit?.trim())
-    );
-  }
-
-  hasValidRatedFrequency(group: any): boolean {
-    return (
-      group.ratedFrequency &&
-      (group.ratedFrequency.value?.trim() ||
-        group.ratedFrequency.label?.trim() ||
-        group.ratedFrequency.unit?.trim())
-    );
-  }
-
-  // Helper method
+  // ===== MÉTODOS AUXILIARES =====
   private generateId(): string {
-    return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    return `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  private generateRefTypeFromName(name: string): string {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '');
+  }
+
+  // ===== TRACKBY FUNCTIONS PARA PERFORMANCE =====
+  trackByIndex(index: number, item: any): number {
+    return index;
+  }
+
+  trackByIdentifierName(index: number, identifier: any): any {
+    return identifier.name || index;
+  }
+
+  // ELIMINAR trackByIdentifierKey - Ya no es necesario
+
+  // Nuevo método para cargar identificadores desde la BD
+  private loadSubItemIdentifiersFromDB() {
+    console.log('🔍 ===== LOADING IDENTIFIERS FROM DB =====');
+
+    const currentData = this.dccDataService.getCurrentData();
+    const dccId = currentData.administrativeData.core.certificate_number;
+
+    if (
+      !dccId ||
+      !this.mainItem.subItems ||
+      this.mainItem.subItems.length === 0
+    ) {
+      console.log('❌ No DCC ID or no subitems to load');
+      return;
+    }
+
+    this.checkExistingSubItems(dccId)
+      .then((existingSubItems) => {
+        console.log('📊 Existing subitems from DB:', existingSubItems);
+
+        existingSubItems.forEach((existingSubItem, index) => {
+          if (this.mainItem.subItems[index]) {
+            const subItem = this.mainItem.subItems[index];
+
+            console.log(`\n📋 Loading identifiers for subitem ${index + 1}:`);
+            console.log('  DB data:', existingSubItem);
+
+            if (!subItem.identifications) {
+              subItem.identifications = [];
+            }
+            if (!subItem.itemQuantities) {
+              subItem.itemQuantities = [];
+            }
+
+            const identifierMappings = [
+              {
+                dbField: 'serial_number',
+                name: 'Serial Number',
+                issuer: 'Manufacturer',
+                saveAs: 'identification',
+                icon: 'tag',
+              },
+              {
+                dbField: 'costumer_asset',
+                name: "Customer's asset ID",
+                issuer: 'Customer',
+                saveAs: 'identification',
+                icon: 'business',
+              },
+            ];
+
+            const quantityMappings = [
+              {
+                dbField: 'rated_voltage',
+                name: 'Rated voltage',
+                issuer: 'Manufacturer',
+                saveAs: 'itemQuantity',
+                unit: '\\volt',
+                icon: 'flash_on',
+              },
+              {
+                dbField: 'length',
+                name: 'Length',
+                issuer: 'Manufacturer',
+                saveAs: 'itemQuantity',
+                unit: '\\meter',
+                icon: 'straighten',
+              },
+            ];
+
+            // Cargar identifications
+            identifierMappings.forEach((mapping) => {
+              const dbValue = existingSubItem[mapping.dbField];
+
+              if (dbValue && dbValue.trim() !== '') {
+                const exists = subItem.identifications.some(
+                  (id: any) => id.name === mapping.name
+                );
+
+                if (!exists) {
+                  subItem.identifications.push({
+                    issuer: mapping.issuer,
+                    name: mapping.name,
+                    value: dbValue,
+                    selectedOption: {
+                      issuer: mapping.issuer,
+                      name: mapping.name,
+                      saveAs: mapping.saveAs,
+                    },
+                    dbField: mapping.dbField,
+                  });
+                  console.log(`  ✅ Loaded ${mapping.name} = "${dbValue}"`);
+                } else {
+                  const existingId = subItem.identifications.find(
+                    (id: any) => id.name === mapping.name
+                  );
+                  if (existingId) {
+                    existingId.value = dbValue;
+                    console.log(`  🔄 Updated ${mapping.name} = "${dbValue}"`);
+                  }
+                }
+              }
+            });
+
+            // Cargar itemQuantities
+            quantityMappings.forEach((mapping) => {
+              const dbValue = existingSubItem[mapping.dbField];
+
+              if (dbValue && dbValue.trim() !== '') {
+                const exists = subItem.itemQuantities.some(
+                  (qty: any) => qty.name === mapping.name
+                );
+
+                if (!exists) {
+                  subItem.itemQuantities.push({
+                    refType: this.generateRefTypeFromName(mapping.name),
+                    name: mapping.name,
+                    value: dbValue,
+                    unit: mapping.unit,
+                    selectedOption: {
+                      issuer: mapping.issuer,
+                      name: mapping.name,
+                      saveAs: mapping.saveAs,
+                      unit: mapping.unit,
+                    },
+                    originalIssuer: mapping.issuer,
+                    saveAs: mapping.saveAs,
+                    dbField: mapping.dbField,
+                  });
+                  console.log(`  ✅ Loaded ${mapping.name} = "${dbValue}"`);
+                } else {
+                  const existingQty = subItem.itemQuantities.find(
+                    (qty: any) => qty.name === mapping.name
+                  );
+                  if (existingQty) {
+                    existingQty.value = dbValue;
+                    console.log(`  🔄 Updated ${mapping.name} = "${dbValue}"`);
+                  }
+                }
+              }
+            });
+          }
+        });
+
+        this.items = [...this.items];
+        console.log('✅ ===== IDENTIFIERS LOADED SUCCESSFULLY =====\n');
+      })
+      .catch((error) => {
+        console.error('❌ Error loading subitem identifiers:', error);
+      });
   }
 }

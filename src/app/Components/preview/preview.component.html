@@ -11,66 +11,68 @@
       <div class="view-buttons">
         <button
           class="view-btn"
-          [class.active]="viewMode === 'xml'"
-          (click)="setViewMode('xml')"
+          [class.active]="currentView === 'xml'"
+          (click)="switchView('xml')"
         >
           <i class="material-icons">code</i>
-          XML
+          <span>XML</span>
         </button>
         <button
           class="view-btn"
-          [class.active]="viewMode === 'pdf'"
-          (click)="setViewMode('pdf')"
+          [class.active]="currentView === 'pdf'"
+          (click)="switchView('pdf')"
         >
           <i class="material-icons">picture_as_pdf</i>
-          PDF
+          <span>PDF</span>
         </button>
       </div>
     </div>
 
-    <div class="download-section">
-      <button class="download-btn" (click)="downloadFile()">
-        <i class="material-icons">download</i>
-        Descargar {{ viewMode.toUpperCase() }}
-      </button>
-    </div>
+    <button
+      class="download-btn"
+      (click)="downloadXML()"
+      [disabled]="!xmlContent"
+    >
+      <i class="material-icons">download</i>
+      <span>Descargar XML</span>
+    </button>
   </div>
 
   <!-- Preview Content -->
   <div class="preview-content">
-    <!-- XML View -->
-    <div *ngIf="viewMode === 'xml'" class="xml-preview">
+    <!-- XML Preview -->
+    <div *ngIf="currentView === 'xml'" class="xml-preview">
       <div class="xml-header">
-        <h4>Contenido XML</h4>
-        <span class="file-info">
-          Archivo: DCC_{{
-            dccData?.administrativeData?.core?.certificate_number ||
-              "certificate"
+        <h4>Vista XML</h4>
+        <div class="file-info">
+          {{
+            dccData?.administrativeData?.core?.certificate_number || "DCC"
           }}.xml
-        </span>
+        </div>
       </div>
       <div class="xml-content">
         <pre><code>{{ xmlContent }}</code></pre>
       </div>
     </div>
 
-    <!-- PDF View -->
-    <div *ngIf="viewMode === 'pdf'" class="pdf-preview">
+    <!-- PDF Preview -->
+    <div *ngIf="currentView === 'pdf'" class="pdf-preview">
       <div class="pdf-header">
-        <h4>Vista previa PDF</h4>
-        <span class="file-info">
-          Archivo: DCC_{{
-            dccData?.administrativeData?.core?.certificate_number ||
-              "certificate"
+        <h4>Vista PDF</h4>
+        <div class="file-info">
+          {{
+            dccData?.administrativeData?.core?.certificate_number || "DCC"
           }}.pdf
-        </span>
+        </div>
       </div>
       <div class="pdf-content">
         <div class="pdf-placeholder">
           <i class="material-icons">picture_as_pdf</i>
-          <h4>Vista previa PDF</h4>
+          <h4>Vista PDF</h4>
+          <p>La generación de PDF estará disponible próximamente.</p>
           <p>
-            La funcionalidad de vista previa PDF será implementada próximamente.
+            Por ahora, puedes descargar el archivo XML y convertirlo usando
+            herramientas externas.
           </p>
         </div>
       </div>
