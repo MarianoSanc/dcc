@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DccDataService, DCCData } from '../../services/dcc-data.service';
+import { Pt23XmlGeneratorService } from '../../services/pt23-xml-generator.service';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -15,14 +16,23 @@ export class PreviewComponent implements OnInit, OnDestroy {
   xmlContent: string = '';
   dccData: DCCData | null = null;
   private subscription: Subscription = new Subscription();
+  private database: string = 'calibraciones';
+  private pt23Data: any[] = [];
+  private isGeneratingXML: boolean = false; // NUEVO: Flag para evitar regeneración múltiple
 
-  constructor(private dccDataService: DccDataService) {}
+  constructor(
+    private dccDataService: DccDataService,
+    private pt23XmlGenerator: Pt23XmlGeneratorService
+  ) {}
 
   ngOnInit() {
     this.subscription.add(
       this.dccDataService.dccData$.subscribe((data) => {
-        this.dccData = data;
-        this.generateXMLContent();
+        // OPTIMIZACIÓN: Solo regenerar si los datos realmente cambiaron
+        if (JSON.stringify(this.dccData) !== JSON.stringify(data)) {
+          this.dccData = data;
+          this.loadPT23DataAndGenerateXML();
+        }
       })
     );
   }
@@ -51,6 +61,90 @@ export class PreviewComponent implements OnInit, OnDestroy {
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
+  }
+
+  private async loadPT23DataAndGenerateXML() {
+    // OPTIMIZACIÓN: Evitar regeneración si ya está en proceso
+    if (this.isGeneratingXML) return;
+
+    if (!this.dccData) return;
+
+    this.isGeneratingXML = true;
+
+    const certificateNumber =
+      this.dccData.administrativeData.core.certificate_number;
+    if (!certificateNumber) {
+      this.generateXMLContent();
+      this.isGeneratingXML = false;
+      return;
+    }
+
+    try {
+      this.pt23Data = await this.loadPT23Data(certificateNumber);
+    } catch (error) {
+      this.pt23Data = [];
+    }
+
+    this.generateXMLContent();
+    this.isGeneratingXML = false;
+  }
+
+  private loadPT23Data(dccId: string): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      const query = {
+        action: 'get',
+        bd: this.database,
+        table: 'dcc_pt23_scalefactor_nivel',
+        opts: {
+          where: {
+            id_dcc: dccId,
+            deleted: 0,
+          },
+          order_by: ['prueba', 'ASC', 'nivel_tension', 'ASC'],
+        },
+      };
+
+      this.dccDataService.post(query).subscribe({
+        next: (response: any) => {
+          if (response?.result?.length > 0) {
+            const niveles = response.result;
+
+            // Agrupar por prueba
+            const groupedByPrueba: { [key: number]: any[] } = {};
+
+            niveles.forEach((nivel: any) => {
+              if (!groupedByPrueba[nivel.prueba]) {
+                groupedByPrueba[nivel.prueba] = [];
+              }
+
+              groupedByPrueba[nivel.prueba].push({
+                nivel: nivel.nivel_tension,
+                promedio_dut: nivel.promedio_dut,
+                promedio_patron: nivel.promedio_patron,
+                desviacion_std_dut: nivel.desviacion_std_dut,
+                desviacion_std_patron: nivel.desviacion_std_patron,
+                num_mediciones: nivel.num_mediciones,
+              });
+            });
+
+            const scaleFactorData = Object.keys(groupedByPrueba)
+              .map(Number)
+              .sort((a, b) => a - b)
+              .map((prueba) => ({
+                prueba,
+                tablas: groupedByPrueba[prueba],
+              }));
+
+            resolve(scaleFactorData);
+          } else {
+            resolve([]);
+          }
+        },
+        error: (error) => {
+          reject(error);
+        },
+      });
+    });
   }
 
   // =======================
@@ -731,9 +825,43 @@ export class PreviewComponent implements OnInit, OnDestroy {
   private generateResultsXML(data: DCCData): string {
     if (!data.results || data.results.length === 0) return '';
 
+    // Separar resultados PT-23 de otros resultados
+    const pt23Results = data.results.filter(
+      (r) => r.refType?.includes('hv_') || r.name?.includes('SF ')
+    );
+
+    const otherResults = data.results.filter(
+      (r) => !r.refType?.includes('hv_') && !r.name?.includes('SF ')
+    );
+
+    console.log('📊 Generating Results XML:', {
+      pt23Results: pt23Results.length,
+      otherResults: otherResults.length,
+      hasFreshPT23Data: this.pt23Data.length > 0,
+    });
+
+    // Si hay datos frescos de PT-23, regenerar el XML con esos datos
+    let pt23XML = '';
+    if (this.pt23Data.length > 0 && data.administrativeData) {
+      // Obtener SFx y SFref de la configuración guardada
+      this.loadPT23Config(data.administrativeData.core.certificate_number).then(
+        (config) => {
+          const sfx = config?.sfx || 1;
+          const sfref = config?.sfref || 1;
+
+          // Generar XML PT-23 fresco
+          pt23XML = this.pt23XmlGenerator.generateResultsXML(
+            this.pt23Data,
+            sfx,
+            sfref
+          );
+        }
+      );
+    }
+
     return `
       <dcc:results>
-        ${data.results
+        ${otherResults
           .map(
             (result) => `
         <dcc:result${
@@ -748,48 +876,28 @@ export class PreviewComponent implements OnInit, OnDestroy {
         </dcc:result>`
           )
           .join('')}
+        ${pt23XML}
       </dcc:results>`;
   }
 
-  private generateResultDataXML(resultData: any[]): string {
-    if (!resultData || resultData.length === 0) return '';
+  private loadPT23Config(dccId: string): Promise<any> {
+    return new Promise((resolve) => {
+      const query = {
+        action: 'get',
+        bd: this.database,
+        table: 'dcc_pt23_config',
+        opts: {
+          where: { id_dcc: dccId },
+        },
+      };
 
-    const hasListData =
-      resultData.length > 1 ||
-      resultData.some((data) => data.dataType === 'realListXMLList');
-
-    if (hasListData) {
-      return `
-            <dcc:list>
-              ${resultData
-                .filter((data) => this.isValidQuantityData(data))
-                .map(
-                  (data) => `
-              <dcc:quantity refType="${this.escapeXml(data.refType)}">
-                <dcc:name>
-                  <dcc:content lang="en">${this.escapeXml(
-                    data.name
-                  )}</dcc:content>
-                </dcc:name>
-                ${this.generateQuantityValueXML(data)}
-              </dcc:quantity>`
-                )
-                .join('')}
-            </dcc:list>`;
-    } else {
-      const data = resultData[0];
-      if (!this.isValidQuantityData(data)) return '';
-
-      return `
-            <dcc:quantity refType="${this.escapeXml(data.refType)}">
-              <dcc:name>
-                <dcc:content lang="en">${this.escapeXml(
-                  data.name
-                )}</dcc:content>
-              </dcc:name>
-              ${this.generateQuantityValueXML(data)}
-            </dcc:quantity>`;
-    }
+      this.dccDataService.post(query).subscribe({
+        next: (response: any) => {
+          resolve(response?.result?.[0] || null);
+        },
+        error: () => resolve(null),
+      });
+    });
   }
 
   // =======================
@@ -892,5 +1000,24 @@ export class PreviewComponent implements OnInit, OnDestroy {
                   <si:unit>${this.escapeXml(data.unit)}</si:unit>
                 </si:real>`;
     }
+  }
+
+  private generateResultDataXML(data: any[]): string {
+    if (!data || data.length === 0) return '';
+
+    return data
+      .filter((item) => this.isValidQuantityData(item))
+      .map(
+        (item) => `
+        <dcc:quantity${
+          item.refType ? ` refType="${this.escapeXml(item.refType)}"` : ''
+        }>
+          <dcc:name>
+            <dcc:content lang="en">${this.escapeXml(item.name)}</dcc:content>
+          </dcc:name>
+          ${this.generateQuantityValueXML(item)}
+        </dcc:quantity>`
+      )
+      .join('');
   }
 }

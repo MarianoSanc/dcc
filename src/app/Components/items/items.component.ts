@@ -31,6 +31,8 @@ export class ItemsComponent implements OnInit, OnDestroy {
   availableIdentifiers: any[] = [];
   selectedIdentifierName: string = '';
 
+  private loadedDccId: string = ''; // NUEVO: Rastrear qué DCC se cargó
+
   constructor(
     private dccDataService: DccDataService,
     private apiService: ApiService
@@ -49,8 +51,15 @@ export class ItemsComponent implements OnInit, OnDestroy {
   private loadDccData() {
     this.subscription.add(
       this.dccDataService.dccData$.subscribe((data) => {
-        this.items = data.items || [];
-        this.objectIdentifications = data.objectIdentifications || [];
+        // OPTIMIZACIÓN: Solo actualizar si los datos cambiaron
+        const newDccId =
+          data.administrativeData?.core?.certificate_number || '';
+
+        if (this.loadedDccId !== newDccId) {
+          this.loadedDccId = newDccId;
+          this.items = data.items || [];
+          this.objectIdentifications = data.objectIdentifications || [];
+        }
       })
     );
   }
@@ -1065,8 +1074,10 @@ export class ItemsComponent implements OnInit, OnDestroy {
   }
 
   // ===== MÉTODOS DE VALIDACIÓN =====
+  // OPTIMIZACIÓN: Simplificar validaciones
   getValidSubItemIdentifications(item: any): any[] {
     if (!item.subItems) return [];
+
     return item.subItems.reduce((validIds: any[], subItem: any) => {
       if (subItem.identifications) {
         const valid = subItem.identifications.filter(
@@ -1080,6 +1091,15 @@ export class ItemsComponent implements OnInit, OnDestroy {
       }
       return validIds;
     }, []);
+  }
+
+  // OPTIMIZACIÓN: Usar las mismas referencias en lugar de recalcular
+  hasValidIdentifications(item: any): boolean {
+    return this.getValidSubItemIdentifications(item).length > 0;
+  }
+
+  getValidIdentifications(item: any): any[] {
+    return this.getValidSubItemIdentifications(item);
   }
 
   getValidSubItemQuantities(item: any): any[] {
@@ -1099,16 +1119,8 @@ export class ItemsComponent implements OnInit, OnDestroy {
     }, []);
   }
 
-  hasValidIdentifications(item: any): boolean {
-    return this.getValidSubItemIdentifications(item).length > 0;
-  }
-
   hasValidItemQuantities(item: any): boolean {
     return this.getValidSubItemQuantities(item).length > 0;
-  }
-
-  getValidIdentifications(item: any): any[] {
-    return this.getValidSubItemIdentifications(item);
   }
 
   getValidItemQuantities(item: any): any[] {

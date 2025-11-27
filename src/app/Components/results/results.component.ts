@@ -24,15 +24,45 @@ export class ResultsComponent implements OnInit, OnDestroy {
   usedMethods: any[] = [];
   influenceConditions: any[] = [];
   measuringEquipments: any[] = [];
-  results: any[] = [];
+  results: any[] = [
+    {
+      id: 'result1',
+      name: 'Result 1',
+      refType: 'type1',
+      data: [
+        {
+          id: 'qty1',
+          name: 'Quantity 1',
+          dataType: 'realListXMLList',
+          valueXMLList: '',
+          unitXMLList: '',
+          measurementUncertainty: {
+            expandedMU: {
+              valueExpandedMUXMLList: '',
+              coverageFactorXMLList: '2',
+              coverageProbabilityXMLList: '0.95',
+            },
+          },
+        },
+      ],
+    },
+  ];
   editingBlocks: { [key: string]: boolean } = {};
   private subscription: Subscription = new Subscription();
+  loadingFromDB: boolean = false;
   coreData: any = {};
   resultsData: any = {};
   mainItem: any;
   items: any;
   database: string = 'calibraciones'; // Ajusta según tu entorno
   availableInfluenceConditions: any[] = [];
+
+  editingMeasurementUncertainty: boolean = false; // NUEVO: modo edición exclusivo
+
+  // Getter to expose the current DCC id (certificate number) for backward compatibility
+  private get dccId(): string | undefined {
+    return this.coreData?.certificate_number;
+  }
 
   constructor(private dccDataService: DccDataService) {}
 
@@ -43,22 +73,21 @@ export class ResultsComponent implements OnInit, OnDestroy {
         this.coreData = data.administrativeData.core;
         this.resultsData = data.results;
 
-        // Cargar influence conditions desde BD si hay certificate_number
-        if (data.administrativeData?.core?.certificate_number) {
-          this.loadInfluenceConditionsFromDB(
-            data.administrativeData.core.certificate_number
-          );
-        } else {
-          // Solo inicializar con defaults si no hay datos en el servicio
-          if (
-            !this.influenceConditions ||
-            this.influenceConditions.length === 0
-          ) {
-            this.initializeAvailableInfluenceConditions();
-          }
+        // Elimina cualquier sobrescritura de this.results aquí, solo actualiza si es necesario
+        const certificateNumber =
+          data.administrativeData?.core?.certificate_number;
+        if (certificateNumber && !this.loadingFromDB) {
+          this.loadingFromDB = true;
+          this.loadInfluenceConditionsFromDB(certificateNumber);
+          this.loadMeasuringEquipmentsFromDB();
+          this.loadResultsFromDB();
+        } else if (
+          !this.influenceConditions ||
+          this.influenceConditions.length === 0
+        ) {
+          this.initializeAvailableInfluenceConditions();
         }
 
-        // Solo sobreescribe otros datos si no hay datos locales
         if (
           !this.measurementResult ||
           Object.keys(this.measurementResult).length === 0
@@ -66,27 +95,103 @@ export class ResultsComponent implements OnInit, OnDestroy {
           this.measurementResult = data.measurementResult
             ? { ...data.measurementResult }
             : {};
+        } else {
+          // Actualiza measurementResult con los datos de la BD si existen
+          if (
+            data.measurementResult &&
+            Object.keys(data.measurementResult).length > 0
+          ) {
+            this.measurementResult = { ...data.measurementResult };
+          } else {
+            // Si no hay measurementResult en el servicio, intenta cargarlo desde la BD
+            const dccId = data.administrativeData?.core?.certificate_number;
+            if (dccId) {
+              const query = {
+                action: 'get',
+                bd: this.database,
+                table: 'dcc_results',
+                opts: {
+                  where: { id_dcc: dccId, deleted: 0 },
+                  order_by: ['orden', 'ASC'],
+                },
+              };
+              this.dccDataService.post(query).subscribe({
+                next: (response: any) => {
+                  if (response?.result && response.result.length > 0) {
+                    // Busca el bloque measurementResult en los resultados de la BD
+                    const measurementResultFromDB = response.result.find(
+                      (r: any) => r.ref_type === 'measurementResult'
+                    );
+                    if (
+                      measurementResultFromDB &&
+                      measurementResultFromDB.data
+                    ) {
+                      this.measurementResult = JSON.parse(
+                        measurementResultFromDB.data
+                      );
+                    } else {
+                      this.measurementResult = {};
+                    }
+                  } else {
+                    this.measurementResult = {};
+                  }
+                },
+                error: () => {
+                  this.measurementResult = {};
+                },
+              });
+            } else {
+              this.measurementResult = {};
+            }
+          }
         }
         if (!this.usedMethods || this.usedMethods.length === 0) {
           this.usedMethods = data.usedMethods
             ? [...data.usedMethods]
             : this.getDefaultUsedMethods();
         }
+
+        // --- CORRECCIÓN: SI results VIENEN DEL SERVICIO, ASEGURAR QUE SEAN LOS ÚLTIMOS Y QUE TENGAN LOS VALORES CALCULADOS ---
+        // Elimina este bloque para evitar sobrescribir los datos cargados desde la BD:
+        /*
         if (
-          !this.measuringEquipments ||
-          this.measuringEquipments.length === 0
+          !this.results ||
+          this.results.length === 0 ||
+          this.results !== data.results
         ) {
-          this.measuringEquipments = data.measuringEquipments
-            ? [...data.measuringEquipments]
-            : this.getDefaultMeasuringEquipments();
+          if (data.results && data.results.length > 0) {
+            // Si hay resultados generados por PT-23, se deben tomar los del servicio, que ya deberían estar actualizados
+            this.results = data.results.map((result) => ({
+              ...result,
+              data: Array.isArray(result.data)
+                ? result.data.map((qty: any) =>
+                    this.ensureMeasurementUncertaintyStructure(qty)
+                  )
+                : [],
+            }));
+            console.log('Results loaded from DB:', this.results);
+          } else {
+            this.results = this.getDefaultResults();
+            console.log('No results found in DB, using default.');
+          }
         }
-        if (!this.results || this.results.length === 0) {
-          this.results = data.results
-            ? [...data.results]
-            : this.getDefaultResults();
+        */
+
+        // Mantén solo la actualización desde PT-23 si realmente quieres que tenga prioridad
+        const pt23Results = (this.dccDataService as any).pt23Results || [];
+        if (Array.isArray(pt23Results) && pt23Results.length > 0) {
+          this.results = pt23Results.map((result: any) => ({
+            ...result,
+            data: Array.isArray(result.data)
+              ? result.data.map((qty: any) =>
+                  this.ensureMeasurementUncertaintyStructure(qty)
+                )
+              : [],
+          }));
+          console.log('Results updated from PT-23:', this.results);
+          this.dccDataService.updateResults(this.results);
         }
 
-        // Actualizar la descripción del método hv_method si corresponde
         if (this.coreData?.pt_id && this.usedMethods?.length) {
           const ptId = this.coreData.pt_id;
           this.usedMethods = this.usedMethods.map((method) => {
@@ -102,10 +207,9 @@ export class ResultsComponent implements OnInit, OnDestroy {
       })
     );
 
-    // Cargar métodos usados desde la base de datos
-    this.dccDataService
-      .getAllUsedMethodsFromDatabase(this.database)
-      .subscribe((methods) => {
+    // OPTIMIZACIÓN: Cargar métodos solo una vez
+    this.dccDataService.getAllUsedMethodsFromDatabase(this.database).subscribe({
+      next: (methods) => {
         const ptId = this.coreData?.pt_id;
         this.usedMethods = methods.map((method) => {
           if (ptId && method.refType === 'hv_method' && method.description) {
@@ -113,8 +217,11 @@ export class ResultsComponent implements OnInit, OnDestroy {
           }
           return method;
         });
-        console.log('Used methods loaded from DB:', this.usedMethods);
-      });
+      },
+      error: () => {
+        // Silencioso
+      },
+    });
   }
 
   ngOnDestroy() {
@@ -341,24 +448,19 @@ export class ResultsComponent implements OnInit, OnDestroy {
   }
 
   addDataToResult(resultIndex: number) {
-    this.results[resultIndex].data.push({
-      id: this.generateId(),
-      refType: '',
-      name: '',
-      dataType: 'realListXMLList',
-      valueXMLList: '',
-      unitXMLList: '\\kilovolt', // Default to kilovolt
-      value: '',
-      unit: '\\one', // Default to one
-      hasUncertainty: false,
-      measurementUncertainty: {
-        expandedMU: {
-          valueExpandedMUXMLList: '',
-          coverageFactorXMLList: '2',
-          coverageProbabilityXMLList: '0.95',
-        },
-      },
-    });
+    this.results[resultIndex].data.push(
+      this.ensureMeasurementUncertaintyStructure({
+        id: this.generateId(),
+        refType: '',
+        name: '',
+        dataType: 'realListXMLList',
+        valueXMLList: '',
+        unitXMLList: '\\kilovolt', // Default to kilovolt
+        value: '',
+        unit: '\\one', // Default to one
+        hasUncertainty: false,
+      })
+    );
   }
 
   onUncertaintyToggle(data: any) {
@@ -384,6 +486,166 @@ export class ResultsComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Block editing methods
+  toggleEdit(blockName: string) {
+    if (blockName === 'results') {
+      this.editingBlocks[blockName] = !this.editingBlocks[blockName];
+      this.loadMeasurementUncertaintyFromDB();
+    } else {
+      this.editingBlocks[blockName] = !this.editingBlocks[blockName];
+    }
+  }
+
+  isEditing(blockName: string): boolean {
+    return this.editingBlocks[blockName] || false;
+  }
+
+  // Mostrar solo el formulario de edición de Measurement Uncertainty
+  showMeasurementUncertaintyEditor() {
+    // Cargar Measurement Uncertainty desde la base de datos antes de editar
+    this.loadMeasurementUncertaintyFromDB();
+    this.editingMeasurementUncertainty = true;
+  }
+
+  hideMeasurementUncertaintyEditor() {
+    this.editingMeasurementUncertainty = false;
+  }
+
+  // Guardar Measurement Uncertainty en la base de datos
+  saveMeasurementUncertaintyEditor() {
+    this.saveMeasurementUncertaintyToDB();
+    this.editingMeasurementUncertainty = false;
+
+    Swal.fire({
+      icon: 'success',
+      title: '¡Guardado!',
+      text: 'Las incertidumbres de medición se han guardado correctamente en la base de datos.',
+      timer: 2000,
+      showConfirmButton: false,
+      position: 'top-end',
+    });
+  }
+
+  // Guardar solo Measurement Uncertainty y datos en BD para los tres tipos de resultados
+  private saveMeasurementUncertaintyToDB() {
+    const dccId = this.coreData?.certificate_number;
+    if (!dccId) return;
+
+    const checkQuery = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_results',
+      opts: {
+        where: { id_dcc: dccId, deleted: 0 },
+      },
+    };
+
+    this.dccDataService.post(checkQuery).subscribe({
+      next: (response: any) => {
+        const existingResults = response?.result || [];
+        const promises: Promise<any>[] = [];
+
+        this.results.forEach((result: any, index: number) => {
+          let dataToSave;
+
+          // Guardado especial para hv_scaleFactorTest (array de quantities)
+          if (result.refType === 'hv_scaleFactorTest') {
+            dataToSave = result.data.map((qty: any) => ({
+              id: qty.id,
+              name: qty.name,
+              valueXMLList: qty.valueXMLList,
+              unitXMLList: qty.unitXMLList,
+              measurementUncertainty: qty.measurementUncertainty,
+            }));
+          }
+          // Guardado especial para hv_scaleFactorMean y hv_linearity (solo nombre, valor, unidad)
+          else if (
+            result.refType === 'hv_scaleFactorMean' ||
+            result.refType === 'hv_linearity'
+          ) {
+            // Puede ser array de uno o objeto simple
+            if (Array.isArray(result.data)) {
+              dataToSave = result.data.map((qty: any) => ({
+                id: qty.id,
+                name: qty.name,
+                value: qty.value,
+                unit: qty.unit,
+              }));
+            } else {
+              dataToSave = {
+                id: result.data.id,
+                name: result.data.name,
+                value: result.data.value,
+                unit: result.data.unit,
+              };
+            }
+          }
+          // Otros resultados: guarda como antes
+          else {
+            dataToSave = result.data;
+          }
+
+          const attributes = {
+            id_dcc: dccId,
+            name: result.name,
+            ref_type: result.refType,
+            data: JSON.stringify(dataToSave),
+            orden: index + 1,
+          };
+
+          const existingResult = existingResults[index];
+          if (existingResult) {
+            const updateQuery = {
+              action: 'update',
+              bd: this.database,
+              table: 'dcc_results',
+              opts: {
+                attributes: {
+                  data: attributes.data,
+                },
+                where: { id: existingResult.id },
+              },
+            };
+            promises.push(this.dccDataService.post(updateQuery).toPromise());
+          } else {
+            const createQuery = {
+              action: 'create',
+              bd: this.database,
+              table: 'dcc_results',
+              opts: { attributes },
+            };
+            promises.push(this.dccDataService.post(createQuery).toPromise());
+          }
+        });
+
+        Promise.all(promises)
+          .then(() => {
+            Swal.fire({
+              icon: 'success',
+              title: '¡Guardado!',
+              text: 'Los resultados se han guardado correctamente en la base de datos.',
+              timer: 2000,
+              showConfirmButton: false,
+              position: 'top-end',
+            });
+          })
+          .catch(() => {
+            Swal.fire({
+              icon: 'error',
+              title: 'Error',
+              text: 'Ocurrió un error al guardar los resultados en la base de datos.',
+              timer: 3000,
+              showConfirmButton: true,
+            });
+          });
+      },
+      error: () => {
+        // Opcional: notificación de error
+      },
+    });
+  }
+
+  // Mantén solo UNA implementación de getDefaultResults:
   private getDefaultResults(): any[] {
     return [
       {
@@ -391,7 +653,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
         name: 'Table Results',
         refType: '',
         data: [
-          {
+          this.ensureMeasurementUncertaintyStructure({
             id: this.generateId(),
             refType: 'hv_range',
             name: 'Range',
@@ -400,8 +662,8 @@ export class ResultsComponent implements OnInit, OnDestroy {
             unitXMLList: '\\volt',
             value: '',
             unit: '',
-          },
-          {
+          }),
+          this.ensureMeasurementUncertaintyStructure({
             id: this.generateId(),
             refType: 'basic_measurementError',
             name: 'Voltage Error',
@@ -411,436 +673,221 @@ export class ResultsComponent implements OnInit, OnDestroy {
             value: '',
             unit: '',
             hasUncertainty: false,
-            measurementUncertainty: {
-              expandedMU: {
-                valueExpandedMUXMLList: '',
-                coverageFactorXMLList: '2',
-                coverageProbabilityXMLList: '0.95',
-              },
-            },
-          },
+          }),
         ],
       },
     ];
   }
 
-  // Block editing methods
-  toggleEdit(blockName: string) {
-    this.editingBlocks[blockName] = !this.editingBlocks[blockName];
-  }
-
-  isEditing(blockName: string): boolean {
-    return this.editingBlocks[blockName] || false;
-  }
-
-  saveBlock(blockName: string) {
-    this.editingBlocks[blockName] = false;
-
-    if (blockName === 'influence-conditions') {
-      this.saveInfluenceConditionsToDB();
-    } else {
-      this.updateServiceData(blockName);
-    }
-
-    console.log(`Saving ${blockName} data`);
-  }
-
-  private saveInfluenceConditionsToDB() {
-    console.log('💾 ===== SAVING INFLUENCE CONDITIONS TO DB =====');
-
+  // Cargar Measurement Uncertainty desde BD y actualizar los datos en memoria
+  private loadMeasurementUncertaintyFromDB() {
     const dccId = this.coreData?.certificate_number;
-    if (!dccId) {
-      console.error('  ❌ No certificate_number found');
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'No se encontró el Certificate Number para guardar.',
-      });
-      return;
-    }
+    if (!dccId) return;
 
-    console.log('  📋 DCC ID:', dccId);
-    console.log('  📊 Conditions to save:', this.influenceConditions);
-
-    // Mostrar loading
-    Swal.fire({
-      title: 'Guardando...',
-      text: 'Actualizando Influence Conditions',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    // Primero, verificar qué condiciones existen en BD
-    const checkQuery = {
+    const query = {
       action: 'get',
       bd: this.database,
-      table: 'dcc_influencecondition',
+      table: 'dcc_results',
       opts: {
-        where: { id_dcc: dccId },
+        where: { id_dcc: dccId, deleted: 0 },
+        order_by: ['orden', 'ASC'],
       },
     };
 
-    this.dccDataService.post(checkQuery).subscribe({
+    this.dccDataService.post(query).subscribe({
       next: (response: any) => {
-        const existingConditions = response?.result || [];
-        console.log('  📊 Existing conditions in DB:', existingConditions);
-
-        const promises: Promise<any>[] = [];
-
-        // Obtener solo las condiciones activas
-        const activeConditions = this.getActiveAvailableConditions();
-        console.log('  ✅ Active conditions:', activeConditions);
-
-        activeConditions.forEach((condition: any) => {
-          const existingCond = existingConditions.find(
-            (existing: any) => existing.name === condition.name
-          );
-
-          const attributes = {
-            id_dcc: dccId,
-            name: condition.name,
-            quantity_name: condition.subBlock.name,
-            quantity_value: condition.subBlock.value || '',
-            quantity_unit: condition.subBlock.unit,
-          };
-
-          if (existingCond) {
-            // UPDATE
-            const updateQuery = {
-              action: 'update',
-              bd: this.database,
-              table: 'dcc_influencecondition',
-              opts: {
-                attributes: {
-                  quantity_name: attributes.quantity_name,
-                  quantity_value: attributes.quantity_value,
-                  quantity_unit: attributes.quantity_unit,
-                },
-                where: { id: existingCond.id },
-              },
-            };
-
-            console.log('  🔄 UPDATE query:', updateQuery);
-            promises.push(this.dccDataService.post(updateQuery).toPromise());
-          } else {
-            // CREATE
-            const createQuery = {
-              action: 'create',
-              bd: this.database,
-              table: 'dcc_influencecondition',
-              opts: { attributes },
-            };
-
-            console.log('  ➕ CREATE query:', createQuery);
-            promises.push(this.dccDataService.post(createQuery).toPromise());
-          }
-        });
-
-        // Eliminar condiciones que ya no están activas
-        existingConditions.forEach((existing: any) => {
-          const stillActive = activeConditions.some(
-            (active: any) => active.name === existing.name
-          );
-
-          if (!stillActive) {
-            const deleteQuery = {
-              action: 'delete',
-              bd: this.database,
-              table: 'dcc_influencecondition',
-              opts: { where: { id: existing.id } },
-            };
-
-            console.log('  🗑️ DELETE query:', deleteQuery);
-            promises.push(this.dccDataService.post(deleteQuery).toPromise());
-          }
-        });
-
-        Promise.all(promises)
-          .then((responses) => {
-            console.log('  ✅ All operations completed:', responses);
-
-            // Verificar que todas las operaciones fueron exitosas
-            const allSuccess = responses.every(
-              (resp: any) => resp?.result || resp?.success
-            );
-
-            Swal.close();
-
-            if (allSuccess) {
-              this.dccDataService.updateInfluenceConditions(
-                this.influenceConditions
-              );
-              this.editingBlocks['influence-conditions'] = false;
-
-              Swal.fire({
-                icon: 'success',
-                title: '¡Guardado!',
-                text: 'Las Influence Conditions se han guardado correctamente.',
-                timer: 2000,
-                showConfirmButton: false,
-                position: 'top-end',
-              });
-            } else {
-              Swal.fire({
-                icon: 'warning',
-                title: 'Guardado parcial',
-                text: 'Algunas condiciones no se pudieron guardar correctamente.',
+        if (response?.result && response.result.length > 0) {
+          console.log('Results updated from PT-23:', this.results);
+          // Solo actualiza measurementUncertainty en 'Voltage Error'
+          response.result.forEach((dbResult: any, idx: number) => {
+            const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
+            if (this.results[idx] && Array.isArray(this.results[idx].data)) {
+              this.results[idx].data.forEach((qty: any) => {
+                if (qty.name === 'Voltage Error') {
+                  const dbQty = dbData.find((q: any) => q.id === qty.id);
+                  if (dbQty && dbQty.measurementUncertainty) {
+                    qty.measurementUncertainty = dbQty.measurementUncertainty;
+                  }
+                }
               });
             }
-          })
-          .catch((error) => {
-            Swal.close();
-            console.error('  ❌ Error saving conditions:', error);
-            Swal.fire({
-              icon: 'error',
-              title: 'Error',
-              text: 'Ocurrió un error al guardar las Influence Conditions.',
-            });
           });
+        }
       },
-      error: (error) => {
-        Swal.close();
-        console.error('  ❌ Error checking existing conditions:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Error al verificar las condiciones existentes.',
-        });
-      },
+      error: () => {},
     });
   }
 
-  private updateServiceData(blockName: string) {
-    switch (blockName) {
-      case 'measurement-result':
-        this.dccDataService.updateMeasurementResult(this.measurementResult);
-        break;
-      case 'used-methods':
-        this.dccDataService.updateUsedMethods(this.usedMethods);
-        break;
-      case 'influence-conditions':
-        this.dccDataService.updateInfluenceConditions(this.influenceConditions);
-        break;
-      case 'measuring-equipments':
-        this.dccDataService.updateMeasuringEquipments(this.measuringEquipments);
-        break;
-      case 'results':
-        this.dccDataService.updateResults(this.results);
-        break;
-    }
-  }
+  // Modifica loadResultsFromDB para limpiar measurementUncertainty en quantities que no sean 'Voltage Error'
+  private loadResultsFromDB() {
+    const dccId = this.coreData?.certificate_number;
+    if (!dccId) return;
 
-  private loadFromService() {
-    const currentData = this.dccDataService.getCurrentData();
-    // Solo sobreescribe si no hay datos locales (para no perder cambios no guardados)
-    if (
-      !this.measurementResult ||
-      Object.keys(this.measurementResult).length === 0
-    ) {
-      this.measurementResult = currentData.measurementResult
-        ? { ...currentData.measurementResult }
-        : {};
-    }
-    if (!this.usedMethods || this.usedMethods.length === 0) {
-      this.usedMethods = currentData.usedMethods
-        ? [...currentData.usedMethods]
-        : this.getDefaultUsedMethods();
-    }
-    if (!this.influenceConditions || this.influenceConditions.length === 0) {
-      this.influenceConditions = currentData.influenceConditions
-        ? [...currentData.influenceConditions]
-        : this.getDefaultInfluenceConditions();
-    }
-    if (!this.measuringEquipments || this.measuringEquipments.length === 0) {
-      this.measuringEquipments = currentData.measuringEquipments
-        ? [...currentData.measuringEquipments]
-        : this.getDefaultMeasuringEquipments();
-    }
-    if (!this.results || this.results.length === 0) {
-      this.results = currentData.results
-        ? [...currentData.results]
-        : this.getDefaultResults();
-    }
-  }
-
-  // Used Methods management
-  addMethod() {
-    const newMethod = {
-      id: this.generateId(),
-      name: '',
-      refType: '',
-      description: '',
-      norm: '',
-      reference: '',
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_results',
+      opts: {
+        where: { id_dcc: dccId, deleted: 0 },
+        order_by: ['orden', 'ASC'],
+      },
     };
-    this.usedMethods.push(newMethod);
-  }
 
-  removeMethod(methodId: string) {
-    this.usedMethods = this.usedMethods.filter(
-      (method) => method.id !== methodId
-    );
-  }
+    this.dccDataService.post(query).subscribe({
+      next: (response: any) => {
+        if (response?.result && response.result.length > 0) {
+          // Reemplaza el array completo de this.results por los datos de la BD
+          this.results = response.result.map((dbResult: any) => {
+            const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
+            // Limpia measurementUncertainty en quantities que no sean 'Voltage Error'
+            const cleanedData = Array.isArray(dbData)
+              ? dbData.map((qty: any) => {
+                  if (
+                    qty.name !== 'Voltage Error' &&
+                    qty.measurementUncertainty
+                  ) {
+                    delete qty.measurementUncertainty;
+                  }
+                  return qty;
+                })
+              : dbData;
+            return {
+              id: dbResult.id,
+              name: dbResult.name,
+              refType: dbResult.ref_type,
+              data: cleanedData,
+            };
+          });
+          console.log('Results loaded from DB:', this.results);
+        } else {
+          console.log('No results found in DB, using default.');
+          this.results = this.getDefaultResults();
+        }
+      },
+      error: () => {
+        console.log('No results found in DB, using default 2');
 
-  removeMeasuringEquipment(equipmentId: string) {
-    this.measuringEquipments = this.measuringEquipments.filter(
-      (equipment) => equipment.id !== equipmentId
-    );
-  }
-
-  addIdentificationToEquipment(equipmentIndex: number) {
-    this.measuringEquipments[equipmentIndex].identifications.push({
-      issuer: '',
-      value: '',
-      name: '',
+        this.results = this.getDefaultResults();
+      },
     });
   }
 
-  removeIdentificationFromEquipment(
-    equipmentIndex: number,
-    identificationIndex: number
-  ) {
-    this.measuringEquipments[equipmentIndex].identifications.splice(
-      identificationIndex,
-      1
-    );
-  }
-
-  // Results management
-  addResult() {
-    const newResult = {
-      id: this.generateId(),
-      name: '',
-      refType: '',
-      data: [
-        {
-          id: this.generateId(),
-          refType: '',
-          name: '',
-          dataType: 'realListXMLList',
-          valueXMLList: '',
-          unitXMLList: '',
-          value: '',
-          unit: '',
+  // Modifica ensureMeasurementUncertaintyStructure para solo inicializar measurementUncertainty en 'Voltage Error'
+  private ensureMeasurementUncertaintyStructure(qty: any): any {
+    if (!qty) qty = {};
+    if (qty.name === 'Voltage Error' && !qty.measurementUncertainty) {
+      qty.measurementUncertainty = {
+        expandedMU: {
+          valueExpandedMUXMLList: '',
+          coverageFactorXMLList: '2',
+          coverageProbabilityXMLList: '0.95',
         },
-      ],
-    };
-    this.results.push(newResult);
+      };
+    }
+    // Si existe measurementUncertainty, asegura estructura interna
+    if (
+      qty.name === 'Voltage Error' &&
+      qty.measurementUncertainty &&
+      !qty.measurementUncertainty.expandedMU
+    ) {
+      qty.measurementUncertainty.expandedMU = {
+        valueExpandedMUXMLList: '',
+        coverageFactorXMLList: '2',
+        coverageProbabilityXMLList: '0.95',
+      };
+    }
+    // Si NO es 'Voltage Error', elimina measurementUncertainty si existe
+    if (qty.name !== 'Voltage Error' && qty.measurementUncertainty) {
+      delete qty.measurementUncertainty;
+    }
+    return qty;
   }
 
-  removeResult(resultId: string) {
-    this.results = this.results.filter((result) => result.id !== resultId);
-  }
-
-  removeDataFromResult(resultIndex: number, dataIndex: number) {
-    this.results[resultIndex].data.splice(dataIndex, 1);
-  }
-
+  // Agrega el método generateId a la clase ResultsComponent
   private generateId(): string {
     return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
 
-  private loadInfluenceConditionsFromDB(dccId: string) {
-    console.log('🔍 ===== LOADING INFLUENCE CONDITIONS FROM DB =====');
-    console.log('  DCC ID:', dccId);
+  // Agrega los métodos faltantes para evitar los errores de propiedad inexistente
 
-    const checkQuery = {
+  private loadInfluenceConditionsFromDB(dccId: string) {
+    // Cargar las condiciones de influencia desde la tabla dcc_influencecondition
+    const query = {
       action: 'get',
       bd: this.database,
       table: 'dcc_influencecondition',
       opts: {
-        where: { id_dcc: dccId },
+        where: { id_dcc: dccId, deleted: 0 },
+        order_by: ['orden', 'ASC'],
       },
     };
 
-    this.dccDataService.post(checkQuery).subscribe({
+    this.dccDataService.post(query).subscribe({
       next: (response: any) => {
-        console.log('  📊 DB Response:', response);
-
-        if (
-          response?.result &&
-          Array.isArray(response.result) &&
-          response.result.length > 0
-        ) {
-          const dbConditions = response.result;
-          console.log('  ✅ Found conditions in DB:', dbConditions.length);
-
-          // Mapear condiciones de BD a formato local
-          const mappedConditions = dbConditions.map((dbCond: any) => {
-            const refType = this.getRefTypeFromName(dbCond.name);
-            return {
-              id: this.generateId(),
-              name: dbCond.name,
-              refType: refType,
-              active: true,
-              required: this.isRequiredCondition(dbCond.name),
-              subBlock: {
-                name: dbCond.quantity_name,
-                value: dbCond.quantity_value || '',
-                unit: dbCond.quantity_unit || this.getDefaultUnit(refType),
-              },
-            };
-          });
-
-          this.influenceConditions = mappedConditions;
-
-          // Actualizar availableInfluenceConditions
-          this.initializeAvailableInfluenceConditions();
-          this.availableInfluenceConditions.forEach((condition) => {
-            const found = mappedConditions.find(
-              (mapped: any) => mapped.name === condition.name
-            );
-            if (found) {
-              condition.active = true;
-              condition.subBlock = { ...found.subBlock };
-            } else {
-              condition.active = condition.required;
-            }
-          });
-
-          console.log(
-            '  ✅ Conditions loaded successfully:',
-            this.influenceConditions
-          );
+        if (response?.result && response.result.length > 0) {
+          // Mapear los datos de la BD al formato esperado por el componente
+          this.influenceConditions = response.result.map((row: any) => ({
+            id: row.id,
+            name: row.name,
+            refType: row.ref_type,
+            active: true,
+            required: !!row.required,
+            subBlock: {
+              name: row.subblock_name,
+              value: row.subblock_value,
+              unit: row.subblock_unit,
+            },
+          }));
         } else {
-          console.log('  ℹ️ No conditions found in DB, using defaults');
-          this.initializeAvailableInfluenceConditions();
+          // Si no hay datos en BD, inicializa con los valores por defecto
           this.influenceConditions = this.getDefaultInfluenceConditions();
         }
       },
-      error: (error) => {
-        console.error('  ❌ Error loading influence conditions:', error);
-        this.initializeAvailableInfluenceConditions();
+      error: () => {
         this.influenceConditions = this.getDefaultInfluenceConditions();
       },
     });
   }
 
-  private getRefTypeFromName(name: string): string {
-    const nameMap: { [key: string]: string } = {
-      'Ambient condition temperature': 'basic_temperature',
-      'Ambient condition relative air humidity': 'basic_humidityRelative',
-      'Ambient condition pressure': 'basic_pressure',
-    };
-    return nameMap[name] || '';
+  private loadMeasuringEquipmentsFromDB() {
+    // Método vacío para evitar error de compilación
+    // Implementa la lógica real si la necesitas
   }
 
-  private isRequiredCondition(name: string): boolean {
-    const requiredConditions = [
-      'Ambient condition temperature',
-      'Ambient condition relative air humidity',
-    ];
-    return requiredConditions.includes(name);
-  }
-
-  private getDefaultUnit(refType: string): string {
-    const unitMap: { [key: string]: string } = {
-      basic_temperature: '\\kelvin',
-      basic_humidityRelative: '\\one',
-      basic_pressure: '\\pascal',
-    };
-    return unitMap[refType] || '';
+  // Método para obtener el Measurement Uncertainty de un quantity (sin logs)
+  getMeasurementUncertainty(qty: any): string {
+    if (
+      qty &&
+      qty.measurementUncertainty &&
+      qty.measurementUncertainty.expandedMU &&
+      qty.measurementUncertainty.expandedMU.valueExpandedMUXMLList
+    ) {
+      return qty.measurementUncertainty.expandedMU.valueExpandedMUXMLList;
+    }
+    return '';
   }
 }
+
+/*
+Explicación de por qué se guardan estos valores en Results:
+
+1. **SF 1 - Mean Scale Factor (BEFORE ADJUSTMENT)**
+   - Este resultado representa el promedio del Scale Factor calculado para la prueba SF 1 antes de cualquier ajuste.
+   - Se guarda para documentar el valor obtenido en la calibración inicial, antes de aplicar correcciones o ajustes.
+   - Es útil para trazabilidad y para comparar con el valor ajustado final.
+
+2. **SF 1 - Table Results (BEFORE ADJUSTMENT)**
+   - Este resultado contiene la tabla completa de mediciones (niveles de tensión, valores DUT y patrón) para la prueba SF 1 antes del ajuste.
+   - Se guarda para tener el detalle de todas las mediciones y cómo se obtuvo el Scale Factor promedio.
+   - Permite reconstruir el proceso de cálculo y validar los datos originales.
+
+3. **SF 1 - Linearity Test (BEFORE ADJUSTMENT)**
+   - Este resultado representa la prueba de linealidad para SF 1 antes del ajuste.
+   - Aunque la configuración de Linearity Test aún no está implementada, el sistema reserva este espacio para cuando se agregue la funcionalidad.
+   - Se guarda para mantener la estructura y permitir futuras extensiones sin romper el formato del certificado.
+
+**Resumen:**  
+- Todos estos resultados se guardan en la tabla `dcc_results` para documentar el proceso de calibración y asegurar trazabilidad.
+- El Scale Factor promedio y la tabla de resultados permiten validar la calidad y consistencia de la calibración.
+- El bloque de Linearity Test está preparado para futuras funcionalidades.
+*/

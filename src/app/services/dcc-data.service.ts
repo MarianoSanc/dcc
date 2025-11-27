@@ -189,6 +189,25 @@ export interface DCCData {
   }>;
 }
 
+export interface QuantityData {
+  id: string;
+  refType: string;
+  name: string;
+  dataType: 'real' | 'realListXMLList';
+  valueXMLList: string;
+  unitXMLList: string;
+  value: string;
+  unit: string;
+  // AGREGAR interfaz para Measurement Uncertainty
+  measurementUncertainty?: {
+    expandedMU?: {
+      valueExpandedMUXMLList?: string;
+      coverageFactorXMLList?: string;
+      coverageProbabilityXMLList?: string;
+    };
+  };
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -569,21 +588,9 @@ export class DccDataService {
   }
 
   resetData(): void {
-    console.log('🔄 === DCC Data Service Reset DEBUG START ===');
-    console.log('🔄 Resetting to initial data state');
-
     const initialData = this.getInitialData();
-    console.log('🔄 Initial data prepared:', {
-      certificateNumber: initialData.administrativeData.core.certificate_number,
-      responsiblePersonsCount:
-        initialData.administrativeData.responsiblePersons.length,
-      itemsCount: initialData.items.length,
-    });
 
     this.dccDataSubject.next(initialData);
-
-    console.log('🔄 Data reset completed - all subscribers notified');
-    console.log('🔄 === DCC Data Service Reset DEBUG END ===');
   }
 
   loadFromXML(xmlContent: string): void {
@@ -600,7 +607,6 @@ export class DccDataService {
       const dccData = this.parseXMLToDCCData(xmlDoc);
       this.dccDataSubject.next(dccData);
     } catch (error) {
-      console.error('Error loading XML:', error);
       throw error;
     }
   }
@@ -646,9 +652,6 @@ export class DccDataService {
         'respPerson'
       );
 
-      console.log('🔧 Parsing responsible persons from XML');
-      console.log('🔧 Found respPerson nodes:', respPersonNodes.length);
-
       if (respPersonNodes.length > 0) {
         dccData.administrativeData.responsiblePersons = respPersonNodes.map(
           (node) => {
@@ -668,18 +671,13 @@ export class DccDataService {
               phone: this.getTextContent(personNode, 'phone') || '',
               mainSigner: isMainSigner, // Nueva propiedad
             };
-            console.log('🔧 Parsed person:', personData);
             return personData;
           }
         );
       } else {
-        console.log(
-          '🔧 No responsible persons found in XML - will use empty array'
-        );
         dccData.administrativeData.responsiblePersons = [];
       }
     } else {
-      console.log('🔧 No respPersons node found in XML - will use empty array');
       dccData.administrativeData.responsiblePersons = [];
     }
 
@@ -710,8 +708,6 @@ export class DccDataService {
     // Parse Items and Object Identifications - Mejorado para ambos formatos
     const itemsRootNode = this.getElementByTagName(xmlDoc, 'items');
     if (itemsRootNode) {
-      console.log('🔧 Parsing items and object identifications from XML');
-
       // Verificar si es el formato nuevo (3.3.0) o viejo (3.2.1)
       const mainItemNode = this.getElementsByTagName(itemsRootNode, 'item')[0];
       const isNewFormat =
@@ -719,15 +715,12 @@ export class DccDataService {
 
       if (isNewFormat) {
         // Formato nuevo: items > item > subItems > item
-        console.log('🔧 Detected new XML format (3.3.0+)');
         this.parseNewFormatItems(xmlDoc, dccData, mainItemNode);
       } else {
         // Formato viejo: items > item (múltiples items al mismo nivel)
-        console.log('🔧 Detected old XML format (3.2.1)');
         this.parseOldFormatItems(xmlDoc, dccData, itemsRootNode);
       }
     } else {
-      console.log('🔧 No items node found in XML');
       dccData.items = this.getInitialData().items;
       dccData.objectIdentifications =
         this.getInitialData().objectIdentifications;
@@ -1057,7 +1050,6 @@ export class DccDataService {
               }
 
               // Fallback: Return empty structure
-              console.warn('Could not parse quantity data for:', qNode);
               return dataResult;
             }),
           };
@@ -1114,8 +1106,6 @@ export class DccDataService {
     dccData: DCCData,
     mainItemNode: Element
   ) {
-    console.log('🔧 Parsing main item from XML (new format)');
-
     const manufacturerNode = this.getElementByTagName(
       mainItemNode,
       'manufacturer'
@@ -1132,10 +1122,6 @@ export class DccDataService {
         mainItemIdentificationsNode,
         'identification'
       );
-      console.log(
-        '🔧 Found main item identifications:',
-        identificationNodes.length
-      );
     }
 
     // Extraer serial number y customer asset ID del main item
@@ -1148,7 +1134,6 @@ export class DccDataService {
       mainItemNode,
       'itemQuantity'
     );
-    console.log('🔧 Found itemQuantity nodes:', itemQuantityNodes.length);
 
     let currentGroup: any = null;
     let groupIndex = 0;
@@ -1163,12 +1148,6 @@ export class DccDataService {
         value = this.getTextContent(realNode, 'value') || '';
         label = this.getTextContent(realNode, 'label') || '';
       }
-
-      console.log(`🔧 Processing itemQuantity ${index + 1}:`, {
-        refType,
-        label,
-        value,
-      });
 
       if (refType === 'voltage_measurement_range') {
         currentGroup = {
@@ -1207,11 +1186,6 @@ export class DccDataService {
     identificationNodes.forEach((idNode, index) => {
       const name = this.getContentText(idNode, 'name') || '';
       const value = this.getTextContent(idNode, 'value') || '';
-
-      console.log(`🔧 Processing main item identification ${index + 1}:`, {
-        name,
-        value,
-      });
 
       if (name.toLowerCase().includes('serial')) {
         serialNumber = value;
@@ -1269,11 +1243,8 @@ export class DccDataService {
     // Parse subitems
     if (subItemsNode) {
       const subItemNodes = this.getElementsByTagName(subItemsNode, 'item');
-      console.log('🔧 Found subitems:', subItemNodes.length);
 
       mainItem.subItems = subItemNodes.map((node, index) => {
-        console.log(`🔧 Processing subitem ${index + 1}`);
-
         const subManufacturerNode = this.getElementByTagName(
           node,
           'manufacturer'
@@ -1303,11 +1274,6 @@ export class DccDataService {
           const name = this.getContentText(idNode, 'name') || '';
           const value = this.getTextContent(idNode, 'value') || '';
 
-          console.log(
-            `🔧 Processing subitem ${index + 1} identification ${idIndex + 1}:`,
-            { issuer, name, value }
-          );
-
           // Normalizar el name para que coincida exactamente con nuestras opciones
           const normalizedName = this.normalizeIdentificationName(name);
           const mappedIssuer = this.mapIssuerToDisplayCase(issuer);
@@ -1318,11 +1284,6 @@ export class DccDataService {
             mappedIssuer
           );
 
-          console.log(
-            `🔧 Normalized name: "${normalizedName}", Mapped issuer: "${mappedIssuer}"`
-          );
-          console.log(`🔧 Found selectedOption:`, selectedOption);
-
           if (selectedOption) {
             if (selectedOption.saveAs === 'identification') {
               subItem.identifications.push({
@@ -1331,7 +1292,6 @@ export class DccDataService {
                 name: normalizedName,
                 selectedOption: selectedOption,
               });
-              console.log(`🔧 Added to identifications: ${normalizedName}`);
             } else {
               // Es itemQuantity - mover a itemQuantities
               const refType = this.generateRefTypeFromName(normalizedName);
@@ -1344,13 +1304,9 @@ export class DccDataService {
                 selectedOption: selectedOption,
                 originalIssuer: mappedIssuer,
               });
-              console.log(`🔧 Added to itemQuantities: ${normalizedName}`);
             }
           } else {
             // Si no encontramos una opción exacta, usar como identification genérica
-            console.log(
-              `🔧 No exact match found, using as generic identification: ${name}`
-            );
             subItem.identifications.push({
               issuer: mappedIssuer,
               value: value,
@@ -1374,11 +1330,6 @@ export class DccDataService {
           const name = this.getContentText(qNode, 'name') || '';
           const refType = qNode.getAttribute('refType') || '';
 
-          console.log(
-            `🔧 Processing subitem ${index + 1} itemQuantity ${qIndex + 1}:`,
-            { name, value, unit }
-          );
-
           // Normalizar el name y buscar opción
           const normalizedName = this.normalizeIdentificationName(name);
           const selectedOption = this.findOptionByName(normalizedName);
@@ -1393,18 +1344,11 @@ export class DccDataService {
           });
         });
 
-        console.log(`🔧 Subitem ${index + 1} final structure:`, {
-          name: subItem.name,
-          identifications: subItem.identifications.length,
-          itemQuantities: subItem.itemQuantities.length,
-        });
-
         return subItem;
       });
     }
 
     dccData.items = [mainItem];
-    console.log('🔧 Main item parsing completed (new format):', mainItem);
   }
 
   // Método para parsear formato viejo (mantener el código existente como está)
@@ -1415,8 +1359,6 @@ export class DccDataService {
   ) {
     // Usar la lógica existente para el formato viejo
     const allItemNodes = this.getElementsByTagName(itemsRootNode, 'item');
-    console.log('🔧 Found items (old format):', allItemNodes.length);
-
     if (allItemNodes.length > 0) {
       const mainItemNode = allItemNodes[0];
 
@@ -1928,7 +1870,6 @@ export class DccDataService {
     );
 
     if (exactMatch) {
-      console.log(`🔧 Found exact match: ${name} (${issuer})`);
       return exactMatch;
     }
 
@@ -1938,18 +1879,42 @@ export class DccDataService {
     );
 
     if (nameMatch) {
-      console.log(
-        `🔧 Found name match: ${name}, but issuer mismatch. Expected: ${nameMatch.issuer}, Got: ${issuer}`
-      );
       return nameMatch;
     }
 
-    console.log(`🔧 No match found for: ${name} (${issuer})`);
     return null;
   }
 
   // Método para hacer queries a la BD
   post(query: any) {
     return this.apiService.post(query, UrlClass.URLNuevo);
+  }
+
+  /**
+   * Actualiza los resultados de PT-23
+   * Reemplaza completamente los resultados existentes con los nuevos
+   */
+  updatePT23Results(newResults: any[]): void {
+    const currentData = this.dccDataSubject.value;
+
+    // Asegurar que results existe
+    const currentResults = currentData.results || [];
+
+    // Filtrar los resultados existentes que NO son de PT-23
+    const nonPT23Results = currentResults.filter(
+      (result) =>
+        !result.refType?.includes('hv_') &&
+        !result.name?.includes('SF ') &&
+        !result.name?.includes('Scale Factor')
+    );
+
+    // Combinar: mantener los resultados no-PT23 + agregar los nuevos resultados PT-23
+    const updatedResults = [...nonPT23Results, ...newResults];
+
+    // Actualizar el observable
+    this.dccDataSubject.next({
+      ...currentData,
+      results: updatedResults,
+    });
   }
 }

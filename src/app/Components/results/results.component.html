@@ -101,10 +101,7 @@
     <div class="block-content">
       <!-- View Mode -->
       <div *ngIf="!isEditing('influence-conditions')" class="conditions-view">
-        <div
-          class="item-card"
-          *ngFor="let condition of getActiveInfluenceConditions()"
-        >
+        <div class="item-card" *ngFor="let condition of influenceConditions">
           <div class="item-header">
             <h5>{{ condition.name || "Sin nombre" }}</h5>
           </div>
@@ -252,211 +249,83 @@
   <div class="data-block">
     <div class="block-header">
       <h4>Measuring Equipments</h4>
-      <div class="block-actions">
-        <button class="add-btn" (click)="addMeasuringEquipment()">
-          <i class="material-icons">add</i>
-          Agregar Equipo
-        </button>
-        <button
-          class="edit-btn"
-          (click)="toggleEdit('measuring-equipments')"
-          [class.active]="isEditing('measuring-equipments')"
-        >
-          <i class="material-icons">{{
-            isEditing("measuring-equipments") ? "close" : "edit"
-          }}</i>
-          {{ isEditing("measuring-equipments") ? "Cancelar" : "Editar" }}
-        </button>
-      </div>
     </div>
 
     <div class="block-content">
-      <!-- View Mode -->
-      <div *ngIf="!isEditing('measuring-equipments')" class="equipments-view">
-        <div class="item-card" *ngFor="let equipment of measuringEquipments">
-          <div class="item-header">
-            <h5>{{ equipment.name || "Sin nombre" }}</h5>
+      <!-- View Mode (Always visible - Read Only) -->
+      <div class="equipments-view">
+        <div
+          *ngFor="let equipment of measuringEquipments"
+          class="equipment-card"
+        >
+          <div class="equipment-header">
+            <div class="equipment-title">
+              <h5>{{ equipment.name }}</h5>
+              <span class="equipment-type">
+                {{
+                  equipment.refType === "basic_standardUsed"
+                    ? "Reference Standard"
+                    : "Auxiliary Equipment"
+                }}
+              </span>
+            </div>
           </div>
+
           <div class="equipment-details">
-            <div class="detail-row" *ngIf="equipment.manufacturer">
-              <strong>Manufacturer:</strong> {{ equipment.manufacturer }}
+            <div class="detail-row">
+              <span class="detail-label"> Manufacturer: </span>
+              <span class="detail-value">{{
+                equipment.manufacturer || "No definido"
+              }}</span>
             </div>
-            <div class="detail-row" *ngIf="equipment.model">
-              <strong>Model:</strong> {{ equipment.model }}
+
+            <div class="detail-row">
+              <span class="detail-label"> Model: </span>
+              <span class="detail-value">{{
+                equipment.model || "No definido"
+              }}</span>
             </div>
-          </div>
-          <div class="identifications">
-            <h6>Identifications:</h6>
-            <div class="identification-grid">
-              <div
-                class="identification-item"
-                *ngFor="let id of equipment.identifications"
-              >
-                <span
-                  ><strong>{{ id.issuer }}</strong></span
+
+            <!-- Identifications -->
+            <div
+              *ngIf="equipment.identifications?.length > 0"
+              class="identifications-section"
+            >
+              <div class="section-title">Identifications</div>
+              <div class="identifications-list">
+                <div
+                  *ngFor="let id of equipment.identifications"
+                  class="identification-item"
                 >
-                <span>{{ id.value }}</span>
-                <span>{{ id.name }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Edit Mode -->
-      <div *ngIf="isEditing('measuring-equipments')" class="equipments-edit">
-        <div class="edit-form">
-          <div
-            class="item-form"
-            *ngFor="
-              let equipment of measuringEquipments;
-              let equipmentIndex = index
-            "
-          >
-            <div class="item-form-header">
-              <h5>Equipo {{ equipmentIndex + 1 }}</h5>
-              <button
-                class="remove-btn"
-                (click)="removeMeasuringEquipment(equipment.id)"
-              >
-                <i class="material-icons">delete</i>
-                Eliminar
-              </button>
-            </div>
-
-            <div class="form-grid">
-              <div class="form-group">
-                <label>Name:</label>
-                <input
-                  type="text"
-                  [(ngModel)]="equipment.name"
-                  placeholder="Ingrese el nombre del equipo"
-                />
-              </div>
-
-              <div class="form-group">
-                <label>RefType:</label>
-                <select [(ngModel)]="equipment.refType">
-                  <option value="">Seleccione el tipo de referencia</option>
-                  <option value="basic_standardUsed">basic_standardUsed</option>
-                  <option value="basic_auxiliaryEquipment">
-                    basic_auxiliaryEquipment
-                  </option>
-                  <option value="basic_measuringInstrument">
-                    basic_measuringInstrument
-                  </option>
-                  <option value="other">other</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label>Manufacturer:</label>
-                <input
-                  type="text"
-                  [(ngModel)]="equipment.manufacturer"
-                  placeholder="Ingrese el fabricante"
-                />
-              </div>
-
-              <div class="form-group">
-                <label>Model:</label>
-                <input
-                  type="text"
-                  [(ngModel)]="equipment.model"
-                  placeholder="Ingrese el modelo"
-                />
-              </div>
-            </div>
-
-            <!-- Identifications Section -->
-            <div class="identifications-section">
-              <div class="identifications-header">
-                <h6>Identifications:</h6>
-                <button
-                  class="add-sub-btn"
-                  (click)="addIdentificationToEquipment(equipmentIndex)"
-                >
-                  <i class="material-icons">add</i>
-                  Agregar ID
-                </button>
-              </div>
-              <div
-                class="identification-form"
-                *ngFor="
-                  let id of equipment.identifications;
-                  let idIndex = index
-                "
-              >
-                <div class="form-grid">
-                  <div class="form-group">
-                    <label>Issuer:</label>
-                    <select [(ngModel)]="id.issuer">
-                      <option value="">Seleccione el emisor</option>
-                      <option value="calibrationLaboratory">
-                        Calibration Laboratory
-                      </option>
-                      <option value="manufacturer">Manufacturer</option>
-                      <option value="customer">Customer</option>
-                      <option value="owner">Owner</option>
-                      <option value="other">Other</option>
-                    </select>
+                  <div class="identification-name">
+                    {{ id.name }}
                   </div>
-
-                  <div class="form-group">
-                    <label>Value:</label>
-                    <input
-                      type="text"
-                      [(ngModel)]="id.value"
-                      placeholder="Ingrese el valor"
-                    />
-                  </div>
-
-                  <div class="form-group">
-                    <label>Name:</label>
-                    <select [(ngModel)]="id.name">
-                      <option value="">
-                        Seleccione el tipo de identificación
-                      </option>
-                      <option value="Laboratory ID">Laboratory ID</option>
-                      <option value="Serial Number">Serial Number</option>
-                      <option value="Asset ID">Asset ID</option>
-                      <option value="Model Number">Model Number</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-
-                  <div class="form-group delete-action">
-                    <button
-                      class="remove-btn"
-                      (click)="
-                        removeIdentificationFromEquipment(
-                          equipmentIndex,
-                          idIndex
-                        )
-                      "
-                    >
-                      <i class="material-icons">delete</i>
-                    </button>
+                  <div class="identification-value">{{ id.value }}</div>
+                  <div class="identification-issuer">
+                    <span class="issuer-badge">
+                      {{
+                        id.issuer === "manufacturer"
+                          ? "Manufacturer"
+                          : "Laboratory"
+                      }}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div class="form-actions">
-            <button
-              class="save-btn"
-              (click)="saveBlock('measuring-equipments')"
+            <div
+              *ngIf="!equipment.identifications?.length"
+              class="no-identifications"
             >
-              Guardar
-            </button>
-            <button
-              class="cancel-btn"
-              (click)="cancelEdit('measuring-equipments')"
-            >
-              Cancelar
-            </button>
+              Sin identificaciones registradas
+            </div>
           </div>
+        </div>
+
+        <!-- Empty State -->
+        <div *ngIf="!measuringEquipments?.length" class="empty-state">
+          <p>No hay equipos de medición registrados en la base de datos.</p>
         </div>
       </div>
     </div>
@@ -469,7 +338,7 @@
         <app-pt23-results></app-pt23-results>
       </div>
       <div *ngSwitchCase="'PT-24'">
-        <app-pt24-results></app-pt24-results>
+        <app-pt23-results></app-pt23-results>
       </div>
       <div *ngSwitchDefault>
         <p>Seleccione un PT válido para mostrar los cálculos.</p>
@@ -482,50 +351,133 @@
     <div class="block-header">
       <h4>Results</h4>
       <div class="block-actions">
-        <button class="add-btn" (click)="addResult()">
-          <i class="material-icons">add</i>
-          Agregar Resultado
-        </button>
         <button
+          *ngIf="!editingMeasurementUncertainty"
           class="edit-btn"
-          (click)="toggleEdit('results')"
-          [class.active]="isEditing('results')"
+          (click)="showMeasurementUncertaintyEditor()"
         >
-          <i class="material-icons">{{
-            isEditing("results") ? "close" : "edit"
-          }}</i>
-          {{ isEditing("results") ? "Cancelar" : "Editar" }}
+          <i class="material-icons">edit</i>
+          Editar Incertidumbres
         </button>
+        <ng-container *ngIf="editingMeasurementUncertainty">
+          <button class="save-btn" (click)="saveMeasurementUncertaintyEditor()">
+            <i class="material-icons">save</i>
+            Guardar
+          </button>
+          <button
+            class="cancel-btn"
+            (click)="editingMeasurementUncertainty = false"
+          >
+            <i class="material-icons">close</i>
+            Cancelar
+          </button>
+        </ng-container>
       </div>
     </div>
-
     <div class="block-content">
-      <!-- View Mode -->
-      <div *ngIf="!isEditing('results')" class="results-view">
+      <!-- Edit Mode - SOLO MUESTRA INCERTIDUMBRE DE VOLTAGE ERROR -->
+      <div *ngIf="editingMeasurementUncertainty" class="results-edit">
+        <div *ngFor="let result of results">
+          <div *ngFor="let qty of result.data">
+            <!-- Editar incertidumbre de Voltage Error -->
+            <div
+              *ngIf="
+                qty.name == 'Voltage Error' &&
+                qty.measurementUncertainty &&
+                qty.measurementUncertainty.expandedMU
+              "
+              class="form-group"
+            >
+              <h5>{{ result.name }}</h5>
+              <label>{{ qty.name }}</label>
+              <input
+                type="text"
+                [(ngModel)]="
+                  qty.measurementUncertainty.expandedMU.valueExpandedMUXMLList
+                "
+                placeholder="Valor de incertidumbre expandida"
+              />
+              <input
+                type="text"
+                [(ngModel)]="
+                  qty.measurementUncertainty.expandedMU.coverageFactorXMLList
+                "
+                placeholder="Factor de cobertura"
+              />
+              <input
+                type="text"
+                [(ngModel)]="
+                  qty.measurementUncertainty.expandedMU
+                    .coverageProbabilityXMLList
+                "
+                placeholder="Probabilidad de cobertura"
+              />
+            </div>
+            <!-- Editar valor de Mean Value of Scale Factor Obtained -->
+            <div
+              *ngIf="qty.name == 'Mean Value of Scale Factor Obtained'"
+              class="form-group"
+            >
+              <h5>{{ result.name }}</h5>
+              <label>{{ qty.name }}</label>
+              <input
+                type="text"
+                [(ngModel)]="qty.value"
+                placeholder="Valor obtenido de Scale Factor"
+              />
+            </div>
+            <!-- Editar valor de Linearity of Scale Factor -->
+            <div
+              *ngIf="qty.name == 'Linearity of Scale Factor'"
+              class="form-group"
+            >
+              <h5>{{ result.name }}</h5>
+              <label>{{ qty.name }}</label>
+              <input
+                type="text"
+                [(ngModel)]="qty.value"
+                placeholder="Valor de Linearity"
+              />
+            </div>
+            <!-- Editar valor de Linearity of Scale Factor (voltage dependence) obtained -->
+            <div
+              *ngIf="
+                qty.name ==
+                'Linearity of Scale Factor (voltage dependence) obtained'
+              "
+              class="form-group"
+            >
+              <h5>{{ result.name }}</h5>
+              <label>{{ qty.name }}</label>
+              <input
+                type="text"
+                [(ngModel)]="qty.value"
+                placeholder="Valor de Linearity (voltage dependence)"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- View Mode - MOSTRAR TODO COMO ANTES -->
+      <div *ngIf="!editingMeasurementUncertainty" class="results-view">
         <div class="item-card" *ngFor="let result of results">
           <div class="item-header">
             <h5>{{ result.name || "Sin nombre" }}</h5>
             <span class="ref-type-badge">{{ result.refType }}</span>
           </div>
 
-          <!-- Mostrar datos organizados por tipo -->
           <div class="result-data-section">
             <h6>Data Quantities:</h6>
             <div class="quantities-grid">
               <div class="quantity-item" *ngFor="let data of result.data">
                 <div class="quantity-header">
                   <strong>{{ data.name || data.refType }}</strong>
-                  <span class="data-type-badge" [class]="data.dataType">
-                    {{
-                      data.dataType === "realListXMLList"
-                        ? "Lista"
-                        : "Valor único"
-                    }}
-                  </span>
                 </div>
                 <div class="quantity-content">
+                  <!-- Mostrar lista si existe valueXMLList -->
                   <div
-                    *ngIf="data.dataType === 'realListXMLList'"
+                    *ngIf="data.valueXMLList !== undefined"
                     class="list-data"
                   >
                     <div class="list-values">
@@ -536,16 +488,16 @@
                       <strong>Unidad:</strong>
                       {{ data.unitXMLList || "No definido" }}
                     </div>
-
-                    <!-- Mostrar incertidumbre de medición si existe -->
+                    <!-- Incertidumbre solo para Voltage Error -->
                     <div
+                      class="measurement-uncertainty-display"
                       *ngIf="
+                        data.name === 'Voltage Error' &&
                         data.measurementUncertainty?.expandedMU
                           ?.valueExpandedMUXMLList &&
                         data.measurementUncertainty.expandedMU.valueExpandedMUXMLList.trim() !==
                           ''
                       "
-                      class="measurement-uncertainty-display"
                     >
                       <h6>Measurement Uncertainty</h6>
                       <div class="uncertainty-values">
@@ -553,34 +505,37 @@
                           <span class="uncertainty-label"
                             >Expanded Uncertainty Values:</span
                           >
-                          <span class="uncertainty-value">{{
-                            data.measurementUncertainty.expandedMU
-                              .valueExpandedMUXMLList
-                          }}</span>
+                          <span class="uncertainty-value">
+                            {{ getMeasurementUncertainty(data) }}
+                          </span>
                         </div>
                         <div class="uncertainty-row">
                           <span class="uncertainty-label"
                             >Coverage Factor:</span
                           >
-                          <span class="uncertainty-value">{{
-                            data.measurementUncertainty.expandedMU
-                              .coverageFactorXMLList
-                          }}</span>
+                          <span class="uncertainty-value">
+                            {{
+                              data.measurementUncertainty.expandedMU
+                                .coverageFactorXMLList
+                            }}
+                          </span>
                         </div>
                         <div class="uncertainty-row">
                           <span class="uncertainty-label"
                             >Coverage Probability:</span
                           >
-                          <span class="uncertainty-value">{{
-                            data.measurementUncertainty.expandedMU
-                              .coverageProbabilityXMLList
-                          }}</span>
+                          <span class="uncertainty-value">
+                            {{
+                              data.measurementUncertainty.expandedMU
+                                .coverageProbabilityXMLList
+                            }}
+                          </span>
                         </div>
                       </div>
                     </div>
                   </div>
-
-                  <div *ngIf="data.dataType === 'real'" class="single-data">
+                  <!-- Mostrar valor único si existe value -->
+                  <div *ngIf="data.value !== undefined" class="single-data">
                     <span
                       ><strong>Valor:</strong>
                       {{ data.value || "No definido" }}</span
@@ -593,247 +548,6 @@
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Edit Mode -->
-      <div *ngIf="isEditing('results')" class="results-edit">
-        <div class="edit-form">
-          <div
-            class="item-form"
-            *ngFor="let result of results; let resultIndex = index"
-          >
-            <div class="item-form-header">
-              <h5>Resultado {{ resultIndex + 1 }}</h5>
-              <button class="remove-btn" (click)="removeResult(result.id)">
-                <i class="material-icons">delete</i>
-                Eliminar
-              </button>
-            </div>
-
-            <div class="form-grid">
-              <div class="form-group">
-                <label>Result Name:</label>
-                <input
-                  type="text"
-                  [(ngModel)]="result.name"
-                  placeholder="Ej: Table Results, Linearity Test Results"
-                />
-              </div>
-
-              <div class="form-group">
-                <label>Result Type:</label>
-                <select [(ngModel)]="result.refType">
-                  <option value="">Seleccione el tipo de resultado</option>
-                  <option value="hv_scaleFactor">Scale Factor Results</option>
-                  <option value="hv_linearity">Linearity Test Results</option>
-                  <option value="basic_measurement">Basic Measurement</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Data Quantities Section -->
-            <div class="quantities-section">
-              <div class="quantities-header">
-                <h6>Data Quantities:</h6>
-                <button
-                  class="add-sub-btn"
-                  (click)="addDataToResult(resultIndex)"
-                >
-                  <i class="material-icons">add</i>
-                  Agregar Quantity
-                </button>
-              </div>
-
-              <div
-                class="quantity-form"
-                *ngFor="let data of result.data; let dataIndex = index"
-              >
-                <div class="quantity-form-header">
-                  <h6>Quantity {{ dataIndex + 1 }}</h6>
-                  <button
-                    class="remove-btn small"
-                    (click)="removeDataFromResult(resultIndex, dataIndex)"
-                  >
-                    <i class="material-icons">delete</i>
-                  </button>
-                </div>
-
-                <div class="form-grid">
-                  <div class="form-group">
-                    <label>Quantity Type (refType):</label>
-                    <select [(ngModel)]="data.refType">
-                      <option value="">Seleccione el tipo</option>
-                      <option value="hv_range">Range</option>
-                      <option value="hv_assignedScaleFactor">
-                        Assigned Scale Factor
-                      </option>
-                      <option value="basic_measuredValue">
-                        Measured Value
-                      </option>
-                      <option value="basic_referenceValue">
-                        Reference Value
-                      </option>
-                      <option value="basic_measurementError">
-                        Measurement Error
-                      </option>
-                      <option value="hv_scaleFactor">Scale Factor</option>
-                      <option value="hv_meanScaleFactor">
-                        Mean Scale Factor
-                      </option>
-                      <option value="hv_linearity">Linearity</option>
-                      <option value="basic_uncertainty">Uncertainty</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  <div class="form-group">
-                    <label>Quantity Name:</label>
-                    <input
-                      type="text"
-                      [(ngModel)]="data.name"
-                      placeholder="Ej: Range, Voltage Measured, Scale Factor"
-                    />
-                  </div>
-
-                  <div class="form-group">
-                    <label>Data Type:</label>
-                    <select [(ngModel)]="data.dataType">
-                      <option value="realListXMLList">
-                        Lista de valores (realListXMLList)
-                      </option>
-                      <option value="real">Valor único (real)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <!-- Fields for List Data -->
-                <div
-                  class="data-fields"
-                  *ngIf="data.dataType === 'realListXMLList'"
-                >
-                  <div class="form-group">
-                    <label>Lista de Valores:</label>
-                    <textarea
-                      [(ngModel)]="data.valueXMLList"
-                      placeholder="Ej: 1 10 20 30 40 50 60 70 80 90 100"
-                      rows="2"
-                    ></textarea>
-                    <small class="field-hint"
-                      >Valores separados por espacios</small
-                    >
-                  </div>
-
-                  <div class="form-group">
-                    <label>Unidad:</label>
-                    <select [(ngModel)]="data.unitXMLList">
-                      <option value="">Seleccione la unidad</option>
-                      <option value="\kilovolt">kV (\kilovolt)</option>
-                      <option value="\volt">V (\volt)</option>
-                      <option value="\percent">% (\percent)</option>
-                      <option value="\one">Adimensional (\one)</option>
-                    </select>
-                  </div>
-
-                  <!-- Sección de Incertidumbre de Medición -->
-                  <div
-                    class="measurement-uncertainty-section"
-                    *ngIf="data.refType === 'basic_measurementError'"
-                  >
-                    <h6>Measurement Uncertainty (Opcional)</h6>
-                    <div class="uncertainty-toggle">
-                      <input
-                        type="checkbox"
-                        [id]="'hasUncertainty_' + data.id"
-                        [(ngModel)]="data.hasUncertainty"
-                        (ngModelChange)="onUncertaintyToggle(data)"
-                      />
-                      <label [for]="'hasUncertainty_' + data.id"
-                        >Incluir incertidumbre de medición</label
-                      >
-                    </div>
-
-                    <div class="uncertainty-fields" *ngIf="data.hasUncertainty">
-                      <div class="form-group">
-                        <label>Valores de Incertidumbre Expandida:</label>
-                        <textarea
-                          [(ngModel)]="
-                            data.measurementUncertainty.expandedMU
-                              .valueExpandedMUXMLList
-                          "
-                          placeholder="Ej: 3.0 1.3 1.1 1.0 1.0 0.99 0.98 0.99 0.99 0.98 0.99 0.97"
-                          rows="2"
-                        ></textarea>
-                        <small class="field-hint"
-                          >Valores de incertidumbre separados por
-                          espacios</small
-                        >
-                      </div>
-
-                      <div class="form-group">
-                        <label>Factor de Cobertura:</label>
-                        <input
-                          type="text"
-                          [(ngModel)]="
-                            data.measurementUncertainty.expandedMU
-                              .coverageFactorXMLList
-                          "
-                          placeholder="Ej: 2"
-                          value="2"
-                        />
-                      </div>
-
-                      <div class="form-group">
-                        <label>Probabilidad de Cobertura:</label>
-                        <input
-                          type="text"
-                          [(ngModel)]="
-                            data.measurementUncertainty.expandedMU
-                              .coverageProbabilityXMLList
-                          "
-                          placeholder="Ej: 0.95"
-                          value="0.95"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Fields for Single Value Data -->
-                <div class="data-fields" *ngIf="data.dataType === 'real'">
-                  <div class="form-group">
-                    <label>Valor:</label>
-                    <input
-                      type="text"
-                      [(ngModel)]="data.value"
-                      placeholder="Ej: 0.932, 3.96"
-                    />
-                  </div>
-
-                  <div class="form-group">
-                    <label>Unidad:</label>
-                    <select [(ngModel)]="data.unit">
-                      <option value="">Seleccione la unidad</option>
-                      <option value="\kilovolt">kV (\kilovolt)</option>
-                      <option value="\volt">V (\volt)</option>
-                      <option value="\percent">% (\percent)</option>
-                      <option value="\one">Adimensional (\one)</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button class="save-btn" (click)="saveBlock('results')">
-              Guardar Resultados
-            </button>
-            <button class="cancel-btn" (click)="cancelEdit('results')">
-              Cancelar
-            </button>
           </div>
         </div>
       </div>

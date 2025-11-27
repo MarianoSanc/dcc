@@ -816,3 +816,376 @@
   border-radius: 3px;
   border: 1px solid #e3f2fd;
 }
+
+/* Measuring Equipments Styles */
+.block-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.info-badge .material-icons {
+  font-size: 18px;
+}
+
+.equipments-view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.equipment-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px;
+  transition: box-shadow 0.3s ease;
+}
+
+.equipment-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.equipment-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f5f5f5;
+}
+
+.equipment-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+}
+
+.equipment-icon .material-icons {
+  font-size: 28px;
+}
+
+.equipment-title h5 {
+  margin: 0 0 4px 0;
+  font-size: 1.2rem;
+  color: #333;
+  font-weight: 600;
+}
+
+.equipment-type {
+  display: inline-block;
+  padding: 4px 10px;
+  background-color: #f5f5f5;
+  color: #666;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.equipment-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.detail-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #666;
+  min-width: 150px;
+}
+
+.detail-label .material-icons {
+  font-size: 18px;
+  color: #999;
+}
+
+.detail-value {
+  color: #333;
+  flex: 1;
+}
+
+.identifications-section {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+
+.section-title .material-icons {
+  font-size: 20px;
+  color: #667eea;
+}
+
+.identifications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.identification-item {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr auto;
+  gap: 15px;
+  align-items: center;
+  padding: 12px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+}
+
+.identification-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #555;
+}
+
+.identification-name .material-icons {
+  font-size: 18px;
+  color: #667eea;
+}
+
+.identification-value {
+  font-family: "Courier New", monospace;
+  color: #333;
+  padding: 6px 12px;
+  background-color: #fff;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.issuer-badge {
+  padding: 4px 10px;
+  background-color: #e8eaf6;
+  color: #5e35b1;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.no-identifications {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background-color: #fff3e0;
+  border-radius: 6px;
+  color: #f57c00;
+  font-size: 0.9rem;
+  margin-top: 10px;
+}
+
+.no-identifications .material-icons {
+  font-size: 20px;
+}
+
+/* Empty State for Equipments */
+.equipments-view .empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
+.equipments-view .empty-state .material-icons {
+  font-size: 64px;
+  color: #ddd;
+  margin-bottom: 15px;
+}
+
+.equipments-view .empty-state p {
+  font-size: 1rem;
+  color: #666;
+}
+
+/* Sección de Measurement Uncertainty */
+.uncertainty-section {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.uncertainty-section h6 {
+  margin: 0 0 12px 0;
+  color: #495057;
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.uncertainty-section h6::before {
+  content: "📊";
+  font-size: 1.2rem;
+}
+
+.uncertainty-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Estilos para edición de incertidumbres */
+.results-edit-uncertainties {
+  padding: 20px;
+}
+
+.uncertainty-edit-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border-left: 4px solid #667eea;
+}
+
+.uncertainty-edit-info .material-icons {
+  color: #667eea;
+  font-size: 24px;
+}
+
+.uncertainty-edit-info p {
+  margin: 0;
+  color: #555;
+  font-weight: 500;
+}
+
+.result-uncertainty-section {
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.result-header-readonly {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #f0f0f0;
+  margin-bottom: 20px;
+}
+
+.result-header-readonly h5 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.quantities-uncertainties {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.quantity-uncertainty-item {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.quantity-info-readonly {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.quantity-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.quantity-name strong {
+  font-size: 1.05rem;
+  color: #333;
+}
+
+.quantity-values-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.readonly-label {
+  font-weight: 600;
+  color: #555;
+}
+
+.uncertainty-fields-editable {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  border: 2px solid #667eea;
+}
+
+.uncertainty-fields-editable h6 {
+  margin: 0 0 16px 0;
+  color: #667eea;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.uncertainty-fields-editable h6::before {
+  content: "📊";
+  font-size: 1.2rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.no-uncertainty-available {
+  text-align: center;
+  padding: 12px;
+  color: #999;
+  font-style: italic;
+}
