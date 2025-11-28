@@ -125,68 +125,33 @@
       <!-- Edit Mode -->
       <div *ngIf="isEditing('influence-conditions')" class="conditions-edit">
         <div class="edit-form">
-          <!-- Selector de condiciones a activar -->
-          <div class="conditions-selector">
-            <h6>Seleccionar condiciones a incluir:</h6>
-            <div class="conditions-checkboxes">
-              <div
-                class="condition-checkbox"
-                *ngFor="
-                  let condition of availableInfluenceConditions;
-                  let i = index
-                "
-              >
-                <input
-                  type="checkbox"
-                  [id]="'condition_' + i"
-                  [(ngModel)]="condition.active"
-                  [disabled]="condition.required"
-                  (ngModelChange)="onConditionActiveChange()"
-                />
-                <label [for]="'condition_' + i" class="checkbox-label">
-                  {{ condition.name }}
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <!-- Campos editables para condiciones activas -->
           <div
             class="item-form"
-            *ngFor="
-              let condition of getActiveAvailableConditions();
-              let conditionIndex = index
-            "
+            *ngFor="let condition of influenceConditions; let i = index"
           >
             <div class="item-form-header">
               <h5>{{ condition.name }}</h5>
             </div>
-
             <div class="form-grid">
               <div class="form-group">
                 <label>Name:</label>
                 <input
                   type="text"
                   [(ngModel)]="condition.name"
-                  placeholder="Ingrese el nombre de la condición"
                   readonly
                   class="readonly-field"
                 />
               </div>
-
               <div class="form-group">
                 <label>RefType:</label>
-                <select [(ngModel)]="condition.refType" disabled>
-                  <option [value]="condition.refType">
-                    {{ condition.refType }}
-                  </option>
-                </select>
+                <input
+                  type="text"
+                  [(ngModel)]="condition.refType"
+                  readonly
+                  class="readonly-field"
+                />
               </div>
-
-              <!-- Removido: Status field -->
             </div>
-
-            <!-- Sub-block -->
             <div class="identifications-section">
               <h6>Sub-block Data:</h6>
               <div class="form-grid">
@@ -196,9 +161,10 @@
                     type="text"
                     [(ngModel)]="condition.subBlock.name"
                     placeholder="Ingrese el nombre de la cantidad"
+                    readonly
+                    class="readonly-field"
                   />
                 </div>
-
                 <div class="form-group">
                   <label>Quantity Value:</label>
                   <input
@@ -207,25 +173,18 @@
                     placeholder="Ingrese el valor"
                   />
                 </div>
-
                 <div class="form-group">
                   <label>Quantity Unit:</label>
-                  <select [(ngModel)]="condition.subBlock.unit">
-                    <option value="">Seleccione la unidad</option>
-                    <option
-                      *ngFor="
-                        let unit of getUnitsForCondition(condition.refType)
-                      "
-                      [value]="unit.value"
-                    >
-                      {{ unit.label }}
-                    </option>
-                  </select>
+                  <input
+                    type="text"
+                    [(ngModel)]="condition.subBlock.unit"
+                    readonly
+                    class="readonly-field"
+                  />
                 </div>
               </div>
             </div>
           </div>
-
           <div class="form-actions">
             <button
               class="save-btn"
@@ -306,7 +265,9 @@
                       {{
                         id.issuer === "manufacturer"
                           ? "Manufacturer"
-                          : "Laboratory"
+                          : id.issuer === "Laboratory"
+                          ? "Laboratory"
+                          : id.issuer
                       }}
                     </span>
                   </div>

@@ -79,7 +79,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
         if (certificateNumber && !this.loadingFromDB) {
           this.loadingFromDB = true;
           this.loadInfluenceConditionsFromDB(certificateNumber);
-          this.loadMeasuringEquipmentsFromDB();
+          this.loadMeasuringEquipmentsFromDB(certificateNumber);
           this.loadResultsFromDB();
         } else if (
           !this.influenceConditions ||
@@ -151,32 +151,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
             : this.getDefaultUsedMethods();
         }
 
-        // --- CORRECCIÓN: SI results VIENEN DEL SERVICIO, ASEGURAR QUE SEAN LOS ÚLTIMOS Y QUE TENGAN LOS VALORES CALCULADOS ---
-        // Elimina este bloque para evitar sobrescribir los datos cargados desde la BD:
-        /*
-        if (
-          !this.results ||
-          this.results.length === 0 ||
-          this.results !== data.results
-        ) {
-          if (data.results && data.results.length > 0) {
-            // Si hay resultados generados por PT-23, se deben tomar los del servicio, que ya deberían estar actualizados
-            this.results = data.results.map((result) => ({
-              ...result,
-              data: Array.isArray(result.data)
-                ? result.data.map((qty: any) =>
-                    this.ensureMeasurementUncertaintyStructure(qty)
-                  )
-                : [],
-            }));
-            console.log('Results loaded from DB:', this.results);
-          } else {
-            this.results = this.getDefaultResults();
-            console.log('No results found in DB, using default.');
-          }
-        }
-        */
-
         // Mantén solo la actualización desde PT-23 si realmente quieres que tenga prioridad
         const pt23Results = (this.dccDataService as any).pt23Results || [];
         if (Array.isArray(pt23Results) && pt23Results.length > 0) {
@@ -188,7 +162,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
                 )
               : [],
           }));
-          console.log('Results updated from PT-23:', this.results);
           this.dccDataService.updateResults(this.results);
         }
 
@@ -697,7 +670,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
     this.dccDataService.post(query).subscribe({
       next: (response: any) => {
         if (response?.result && response.result.length > 0) {
-          console.log('Results updated from PT-23:', this.results);
           // Solo actualiza measurementUncertainty en 'Voltage Error'
           response.result.forEach((dbResult: any, idx: number) => {
             const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
@@ -758,7 +730,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
               data: cleanedData,
             };
           });
-          console.log('Results loaded from DB:', this.results);
         } else {
           console.log('No results found in DB, using default.');
           this.results = this.getDefaultResults();
@@ -808,8 +779,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
     return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
 
-  // Agrega los métodos faltantes para evitar los errores de propiedad inexistente
-
   private loadInfluenceConditionsFromDB(dccId: string) {
     // Cargar las condiciones de influencia desde la tabla dcc_influencecondition
     const query = {
@@ -818,7 +787,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
       table: 'dcc_influencecondition',
       opts: {
         where: { id_dcc: dccId, deleted: 0 },
-        order_by: ['orden', 'ASC'],
       },
     };
 
@@ -831,16 +799,20 @@ export class ResultsComponent implements OnInit, OnDestroy {
             name: row.name,
             refType: row.ref_type,
             active: true,
-            required: !!row.required,
+            required: false,
             subBlock: {
-              name: row.subblock_name,
-              value: row.subblock_value,
-              unit: row.subblock_unit,
+              name: row.quantity_name,
+              value: row.quantity_value,
+              unit: row.quantity_unit,
             },
           }));
         } else {
           // Si no hay datos en BD, inicializa con los valores por defecto
           this.influenceConditions = this.getDefaultInfluenceConditions();
+          console.log(
+            'No influence conditions found in DB, using default.',
+            this.influenceConditions
+          );
         }
       },
       error: () => {
@@ -849,9 +821,72 @@ export class ResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  private loadMeasuringEquipmentsFromDB() {
-    // Método vacío para evitar error de compilación
-    // Implementa la lógica real si la necesitas
+  // Guardar edición de Influence Conditions en la BD
+  saveBlock(blockName: string) {
+    if (blockName === 'influence-conditions') {
+      const dccId = this.coreData?.certificate_number;
+      if (!dccId) return;
+
+      // Guardar cada condición en la tabla dcc_influencecondition
+      const promises = this.influenceConditions.map((cond, idx) => {
+        const attributes = {
+          id_dcc: dccId,
+          name: cond.name,
+          ref_type: cond.refType,
+          quantity_name: cond.subBlock.name,
+          quantity_value: cond.subBlock.value,
+          quantity_unit: cond.subBlock.unit,
+        };
+        console.log('Saving condition attributes:', attributes);
+
+        // Si existe id, actualiza; si no, crea
+        if (cond.id) {
+          const updateQuery = {
+            action: 'update',
+            bd: this.database,
+            table: 'dcc_influencecondition',
+            opts: {
+              attributes,
+              where: { id: cond.id },
+            },
+          };
+          console.log('Updating condition with query:', updateQuery);
+          return this.dccDataService.post(updateQuery).toPromise();
+        } else {
+          const createQuery = {
+            action: 'create',
+            bd: this.database,
+            table: 'dcc_influencecondition',
+            opts: { attributes },
+          };
+          return this.dccDataService.post(createQuery).toPromise();
+        }
+      });
+
+      Promise.all(promises)
+        .then(() => {
+          this.editingBlocks[blockName] = false;
+          Swal.fire({
+            icon: 'success',
+            title: '¡Guardado!',
+            text: 'Las condiciones de influencia se han guardado correctamente.',
+            timer: 2000,
+            showConfirmButton: false,
+            position: 'top-end',
+          });
+          // Recargar desde BD para reflejar cambios
+          this.loadInfluenceConditionsFromDB(dccId);
+        })
+        .catch(() => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Ocurrió un error al guardar las condiciones de influencia.',
+            timer: 3000,
+            showConfirmButton: true,
+          });
+        });
+    }
   }
 
   // Método para obtener el Measurement Uncertainty de un quantity (sin logs)
@@ -865,6 +900,63 @@ export class ResultsComponent implements OnInit, OnDestroy {
       return qty.measurementUncertainty.expandedMU.valueExpandedMUXMLList;
     }
     return '';
+  }
+
+  // Agrega el método faltante para cargar equipos de medición desde la BD
+  private loadMeasuringEquipmentsFromDB(dccId: string) {
+    if (!dccId) return;
+
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_measuringequipments',
+      opts: {
+        where: { id_dcc: dccId, deleted: 0 },
+      },
+    };
+
+    this.dccDataService.post(query).subscribe({
+      next: (response: any) => {
+        if (response?.result && response.result.length > 0) {
+          this.measuringEquipments = response.result.map((row: any) => ({
+            id: row.id,
+            name: row.name,
+            refType: row.ref_type,
+            manufacturer: row.manufacturer,
+            model: row.model,
+            // Adaptar identifications para incluir id_asset y serial_number
+            identifications: [
+              ...(Array.isArray(row.identifications)
+                ? row.identifications
+                : []),
+              ...(row.id_asset
+                ? [
+                    {
+                      name: 'Asset ID',
+                      value: row.id_asset,
+                      issuer: 'Laboratory',
+                    },
+                  ]
+                : []),
+              ...(row.serial_number
+                ? [
+                    {
+                      name: 'Serial Number',
+                      value: row.serial_number,
+                      issuer: 'Manufacturer',
+                    },
+                  ]
+                : []),
+            ],
+          }));
+        } else {
+          this.measuringEquipments = this.getDefaultMeasuringEquipments();
+        }
+      },
+      error: () => {
+        this.measuringEquipments = this.getDefaultMeasuringEquipments();
+      },
+    });
   }
 }
 
