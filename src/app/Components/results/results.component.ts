@@ -1,25 +1,223 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DccDataService } from '../../services/dcc-data.service';
 import { Subscription } from 'rxjs';
 import { Pt23ResultsComponent } from './pt23-results/pt23-results.component';
-import { Pt24ResultsComponent } from './pt24-results/pt24-results.component';
 import Swal from 'sweetalert2';
 
 @Component({
   selector: 'app-results',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    Pt23ResultsComponent,
-    Pt24ResultsComponent,
-  ],
+  imports: [CommonModule, FormsModule, Pt23ResultsComponent],
   templateUrl: './results.component.html',
   styleUrl: './results.component.css',
 })
 export class ResultsComponent implements OnInit, OnDestroy {
+  /**
+   * Mapea el bloque de Results desde el XML al formato esperado por el componente
+   * @param xmlData Objeto parseado del XML
+   */
+  loadResultsFromXml(xmlData: any) {
+    const resultsBlock =
+      xmlData?.['dcc:measurementResults']?.['dcc:measurementResult']?.[
+        'dcc:results'
+      ]?.['dcc:result'];
+
+    if (!resultsBlock) {
+      this.results = [];
+      return;
+    }
+
+    const resultsArray = Array.isArray(resultsBlock)
+      ? resultsBlock
+      : [resultsBlock];
+
+    this.results = resultsArray.map((res: any) => {
+      const name = this.getText(res?.['dcc:name']);
+      const refType = res?.['@refType'] || res?.['refType'] || '';
+      // Data block
+      let data: any[] = [];
+      const dataBlock = res?.['dcc:data'];
+      if (dataBlock?.['dcc:list']?.['dcc:quantity']) {
+        // Lista de quantities
+        const quantities = dataBlock['dcc:list']['dcc:quantity'];
+        const qtyArray = Array.isArray(quantities) ? quantities : [quantities];
+        data = qtyArray.map((qty: any) => {
+          const qtyName = this.getText(qty?.['dcc:name']);
+          const qtyRefType = qty?.['@refType'] || qty?.['refType'] || '';
+          // RealListXMLList
+          const realList = qty?.['si:realListXMLList'] || {};
+          const valueXMLList = this.getText(realList?.['si:valueXMLList']);
+          const unitXMLList = this.getText(realList?.['si:unitXMLList']);
+          // Measurement Uncertainty
+          let measurementUncertainty;
+          if (
+            realList?.['si:measurementUncertaintyUnivariateXMLList']?.[
+              'si:expandedMUXMLList'
+            ]
+          ) {
+            const mu =
+              realList['si:measurementUncertaintyUnivariateXMLList'][
+                'si:expandedMUXMLList'
+              ];
+            measurementUncertainty = {
+              expandedMU: {
+                valueExpandedMUXMLList: this.getText(
+                  mu?.['si:valueExpandedMUXMLList']
+                ),
+                coverageFactorXMLList: this.getText(
+                  mu?.['si:coverageFactorXMLList']
+                ),
+                coverageProbabilityXMLList: this.getText(
+                  mu?.['si:coverageProbabilityXMLList']
+                ),
+              },
+            };
+          }
+          return {
+            name: qtyName,
+            refType: qtyRefType,
+            dataType: 'realListXMLList',
+            valueXMLList,
+            unitXMLList,
+            measurementUncertainty,
+          };
+        });
+      } else if (dataBlock?.['dcc:quantity']) {
+        // Un solo quantity
+        const qty = dataBlock['dcc:quantity'];
+        const qtyName = this.getText(qty?.['dcc:name']);
+        const qtyRefType = qty?.['@refType'] || qty?.['refType'] || '';
+        const real = qty?.['si:real'] || {};
+        const value = this.getText(real?.['si:value']);
+        const unit = this.getText(real?.['si:unit']);
+        data = [
+          {
+            name: qtyName,
+            refType: qtyRefType,
+            dataType: 'real',
+            value,
+            unit,
+          },
+        ];
+      }
+      return {
+        name,
+        refType,
+        data,
+      };
+    });
+  }
+  /**
+   * Mapea el bloque de Measuring Equipments desde el XML al formato esperado por el componente
+   * @param xmlData Objeto parseado del XML
+   */
+  loadMeasuringEquipmentsFromXml(xmlData: any) {
+    const equipmentsBlock =
+      xmlData?.['dcc:measurementResults']?.['dcc:measurementResult']?.[
+        'dcc:measuringEquipments'
+      ]?.['dcc:measuringEquipment'];
+
+    if (!equipmentsBlock) {
+      this.measuringEquipments = [];
+      return;
+    }
+
+    const equipmentsArray = Array.isArray(equipmentsBlock)
+      ? equipmentsBlock
+      : [equipmentsBlock];
+
+    this.measuringEquipments = equipmentsArray.map((eq: any) => {
+      // Extraer campos principales
+      const name = this.getText(eq?.['dcc:name']);
+      const refType = eq?.['@refType'] || eq?.['refType'] || '';
+      const manufacturer = this.getText(eq?.['dcc:manufacturer']?.['dcc:name']);
+      const model = this.getText(eq?.['dcc:model']);
+
+      // Identifications
+      const identificationsBlock =
+        eq?.['dcc:identifications']?.['dcc:identification'];
+      let identifications: any[] = [];
+      if (identificationsBlock) {
+        const identArray = Array.isArray(identificationsBlock)
+          ? identificationsBlock
+          : [identificationsBlock];
+        identifications = identArray.map((id: any) => ({
+          issuer: this.getText(id?.['dcc:issuer']),
+          value: this.getText(id?.['dcc:value']),
+          name: this.getText(id?.['dcc:name']),
+        }));
+      }
+
+      return {
+        name,
+        refType,
+        manufacturer,
+        model,
+        identifications,
+      };
+    });
+  }
+  // Helper para extraer texto de un campo XML parseado
+  private getText(obj: any): string {
+    if (!obj) return '';
+    if (typeof obj === 'string') return obj;
+    if (obj['#text']) return obj['#text'];
+    if (obj['dcc:content']) return this.getText(obj['dcc:content']);
+    if (obj['si:value']) return this.getText(obj['si:value']);
+    if (obj['si:unit']) return this.getText(obj['si:unit']);
+    return '';
+  }
+  /**
+   * Mapea el bloque de Influence Conditions desde el XML al formato esperado por el componente
+   * @param xmlData Objeto parseado del XML
+   */
+  loadInfluenceConditionsFromXml(xmlData: any) {
+    // Navega hasta el bloque de influenceConditions (ajustado a la estructura real del XML parseado)
+    const influenceBlock =
+      xmlData?.['dcc:measurementResults']?.['dcc:measurementResult']?.[
+        'dcc:influenceConditions'
+      ]?.['dcc:influenceCondition'];
+
+    console.log('influenceBlock extracted from XML:', influenceBlock);
+    if (!influenceBlock) {
+      console.log('No influence conditions found in XML.');
+      this.influenceConditions = [];
+      return;
+    }
+
+    // Si solo hay un objeto, conviértelo en array
+    const conditionsArray = Array.isArray(influenceBlock)
+      ? influenceBlock
+      : [influenceBlock];
+    this.influenceConditions = conditionsArray.map((cond: any) => {
+      // Extraer nombre, refType, y subBlock
+      const name = this.getText(cond?.['dcc:name']);
+      const refType = cond?.['@refType'] || cond?.['refType'] || '';
+      // SubBlock
+      const quantity = cond?.['dcc:data']?.['dcc:quantity'] || {};
+      const subBlockName = this.getText(quantity?.['dcc:name']);
+      const subBlockValue = this.getText(quantity?.['si:real']?.['si:value']);
+      const subBlockUnit = this.getText(quantity?.['si:real']?.['si:unit']);
+      return {
+        name,
+        refType,
+        active: true,
+        required: false,
+        subBlock: {
+          name: subBlockName,
+          value: subBlockValue,
+          unit: subBlockUnit,
+        },
+      };
+    });
+    console.log('Final influenceConditions:', this.influenceConditions);
+  }
+  // Recibe el modo de operación desde el componente padre
+  // Recibe el modo de operación desde el componente padre
+  @Input() operationMode: 'create' | 'load' | 'xml' | null = null;
   measurementResult: any = {};
   usedMethods: any[] = [];
   influenceConditions: any[] = [];
@@ -73,19 +271,26 @@ export class ResultsComponent implements OnInit, OnDestroy {
         this.coreData = data.administrativeData.core;
         this.resultsData = data.results;
 
-        // Elimina cualquier sobrescritura de this.results aquí, solo actualiza si es necesario
-        const certificateNumber =
-          data.administrativeData?.core?.certificate_number;
-        if (certificateNumber && !this.loadingFromDB) {
-          this.loadingFromDB = true;
-          this.loadInfluenceConditionsFromDB(certificateNumber);
-          this.loadMeasuringEquipmentsFromDB(certificateNumber);
-          this.loadResultsFromDB();
-        } else if (
-          !this.influenceConditions ||
-          this.influenceConditions.length === 0
-        ) {
-          this.initializeAvailableInfluenceConditions();
+        // Si el modo es xml y existe xmlData, cargar desde XML
+        if (this.operationMode === 'xml' && data.xmlData) {
+          this.loadInfluenceConditionsFromXml(data.xmlData);
+          this.loadMeasuringEquipmentsFromXml(data.xmlData);
+          this.loadResultsFromXml(data.xmlData);
+        } else {
+          // Elimina cualquier sobrescritura de this.results aquí, solo actualiza si es necesario
+          const certificateNumber =
+            data.administrativeData?.core?.certificate_number;
+          if (certificateNumber && !this.loadingFromDB) {
+            this.loadingFromDB = true;
+            this.loadInfluenceConditionsFromDB(certificateNumber);
+            this.loadMeasuringEquipmentsFromDB(certificateNumber);
+            this.loadResultsFromDB();
+          } else if (
+            !this.influenceConditions ||
+            this.influenceConditions.length === 0
+          ) {
+            this.initializeAvailableInfluenceConditions();
+          }
         }
 
         if (
@@ -96,14 +301,12 @@ export class ResultsComponent implements OnInit, OnDestroy {
             ? { ...data.measurementResult }
             : {};
         } else {
-          // Actualiza measurementResult con los datos de la BD si existen
           if (
             data.measurementResult &&
             Object.keys(data.measurementResult).length > 0
           ) {
             this.measurementResult = { ...data.measurementResult };
           } else {
-            // Si no hay measurementResult en el servicio, intenta cargarlo desde la BD
             const dccId = data.administrativeData?.core?.certificate_number;
             if (dccId) {
               const query = {
@@ -118,7 +321,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
               this.dccDataService.post(query).subscribe({
                 next: (response: any) => {
                   if (response?.result && response.result.length > 0) {
-                    // Busca el bloque measurementResult en los resultados de la BD
                     const measurementResultFromDB = response.result.find(
                       (r: any) => r.ref_type === 'measurementResult'
                     );
@@ -129,22 +331,14 @@ export class ResultsComponent implements OnInit, OnDestroy {
                       this.measurementResult = JSON.parse(
                         measurementResultFromDB.data
                       );
-                    } else {
-                      this.measurementResult = {};
                     }
-                  } else {
-                    this.measurementResult = {};
                   }
                 },
-                error: () => {
-                  this.measurementResult = {};
-                },
               });
-            } else {
-              this.measurementResult = {};
             }
           }
         }
+
         if (!this.usedMethods || this.usedMethods.length === 0) {
           this.usedMethods = data.usedMethods
             ? [...data.usedMethods]
@@ -593,6 +787,8 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
         Promise.all(promises)
           .then(() => {
+            // Actualiza el servicio para que Preview reciba los datos reales guardados
+            this.dccDataService.updateResults(this.results);
             Swal.fire({
               icon: 'success',
               title: '¡Guardado!',

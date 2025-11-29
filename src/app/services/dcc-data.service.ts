@@ -187,6 +187,10 @@ export interface DCCData {
       };
     }>;
   }>;
+  /**
+   * Objeto JSON parseado del XML, solo presente si se cargó desde XML
+   */
+  xmlData?: any;
 }
 
 export interface QuantityData {
@@ -605,10 +609,49 @@ export class DccDataService {
       }
 
       const dccData = this.parseXMLToDCCData(xmlDoc);
+      // Guardar el objeto XML parseado en la propiedad xmlData
+      (dccData as any).xmlData = this.xmlToJson(xmlDoc.documentElement);
       this.dccDataSubject.next(dccData);
     } catch (error) {
       throw error;
     }
+  }
+
+  /**
+   * Convierte un Element XML a un objeto JSON simple
+   */
+  private xmlToJson(xml: Element): any {
+    const obj: any = {};
+    // Atributos
+    if (xml.attributes && xml.attributes.length > 0) {
+      for (let j = 0; j < xml.attributes.length; j++) {
+        const attribute = xml.attributes.item(j);
+        obj[`@${attribute!.nodeName}`] = attribute!.nodeValue;
+      }
+    }
+    // Hijos
+    if (xml.hasChildNodes()) {
+      for (let i = 0; i < xml.childNodes.length; i++) {
+        const item = xml.childNodes.item(i);
+        if (item!.nodeType === 1) {
+          const nodeName = item!.nodeName;
+          if (!obj[nodeName]) {
+            obj[nodeName] = this.xmlToJson(item as Element);
+          } else {
+            if (!Array.isArray(obj[nodeName])) {
+              obj[nodeName] = [obj[nodeName]];
+            }
+            obj[nodeName].push(this.xmlToJson(item as Element));
+          }
+        } else if (item!.nodeType === 3) {
+          const text = item!.nodeValue?.trim();
+          if (text) {
+            obj['#text'] = text;
+          }
+        }
+      }
+    }
+    return obj;
   }
 
   private parseXMLToDCCData(xmlDoc: Document): DCCData {

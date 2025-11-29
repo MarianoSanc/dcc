@@ -1,7 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DccDataService, DCCData } from '../../services/dcc-data.service';
-import { Pt23XmlGeneratorService } from '../../services/pt23-xml-generator.service';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -17,24 +16,57 @@ export class PreviewComponent implements OnInit, OnDestroy {
   dccData: DCCData | null = null;
   private subscription: Subscription = new Subscription();
   private database: string = 'calibraciones';
-  private pt23Data: any[] = [];
   private isGeneratingXML: boolean = false; // NUEVO: Flag para evitar regeneración múltiple
 
-  constructor(
-    private dccDataService: DccDataService,
-    private pt23XmlGenerator: Pt23XmlGeneratorService
-  ) {}
+  constructor(private dccDataService: DccDataService) {}
 
   ngOnInit() {
     this.subscription.add(
       this.dccDataService.dccData$.subscribe((data) => {
-        // OPTIMIZACIÓN: Solo regenerar si los datos realmente cambiaron
-        if (JSON.stringify(this.dccData) !== JSON.stringify(data)) {
-          this.dccData = data;
-          this.loadPT23DataAndGenerateXML();
-        }
+        // Antes de generar el XML, fuerza recarga de resultados desde la BD
+        this.dccData = data;
+        this.reloadResultsFromDBAndGenerateXML();
       })
     );
+  }
+
+  // Nuevo método para recargar resultados finales desde la BD antes de generar el XML
+  private reloadResultsFromDBAndGenerateXML() {
+    const certificateNumber =
+      this.dccData?.administrativeData.core.certificate_number;
+    if (!certificateNumber) {
+      this.loadPT23DataAndGenerateXML();
+      return;
+    }
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_results',
+      opts: {
+        where: { id_dcc: certificateNumber, deleted: 0 },
+      },
+    };
+    this.dccDataService.post(query).subscribe({
+      next: (response: any) => {
+        if (response?.result && response.result.length > 0 && this.dccData) {
+          console.log('Resultados recargados desde BD:', response.result);
+          // Mapear los resultados finales y actualizar dccData
+          this.dccData.results = response.result.map((dbResult: any) => {
+            const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
+            return {
+              id: dbResult.id,
+              name: dbResult.name,
+              refType: dbResult.ref_type,
+              data: dbData,
+            };
+          });
+        }
+        this.loadPT23DataAndGenerateXML();
+      },
+      error: () => {
+        this.loadPT23DataAndGenerateXML();
+      },
+    });
   }
 
   ngOnDestroy() {
@@ -43,9 +75,14 @@ export class PreviewComponent implements OnInit, OnDestroy {
 
   switchView(view: 'xml' | 'pdf') {
     this.currentView = view;
+    if (view === 'xml') {
+      this.generateXMLContent();
+    }
   }
 
   downloadXML() {
+    // Fuerza la regeneración del XML antes de descargar
+    this.generateXMLContent();
     if (!this.xmlContent) return;
 
     const blob = new Blob([this.xmlContent], { type: 'application/xml' });
@@ -77,12 +114,6 @@ export class PreviewComponent implements OnInit, OnDestroy {
       this.generateXMLContent();
       this.isGeneratingXML = false;
       return;
-    }
-
-    try {
-      this.pt23Data = await this.loadPT23Data(certificateNumber);
-    } catch (error) {
-      this.pt23Data = [];
     }
 
     this.generateXMLContent();
@@ -165,7 +196,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
   <!-- ========== Datos administrativos ========== -->
   <dcc:administrativeData>
 
-    <!-- 1️⃣ Datos del software -->
+    <!-- Datos del software -->
     <dcc:dccSoftware>
       <dcc:software>
         <dcc:name>
@@ -191,7 +222,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
       </dcc:software>
     </dcc:dccSoftware>
 
-    <!-- 2️⃣ Datos centrales -->
+    <!-- Datos centrales -->
     <dcc:coreData>
       <dcc:countryCodeISO3166_1>${this.escapeXml(
         data.administrativeData.core.country_code
@@ -208,12 +239,12 @@ export class PreviewComponent implements OnInit, OnDestroy {
       ${this.generateCorePerformanceDataXML(data)}
     </dcc:coreData>
 
-    <!-- 3️⃣ Equipos y objetos calibrados -->
+    <!-- Equipos y objetos calibrados -->
     <dcc:items>
       ${this.generateItemsXML(data)}
     </dcc:items>
 
-    <!-- 4️⃣ Laboratorio de calibración -->
+    <!-- Laboratorio de calibración -->
     <dcc:calibrationLaboratory>
       <dcc:contact>
         <dcc:name>
@@ -251,7 +282,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
       </dcc:contact>
     </dcc:calibrationLaboratory>
 
-    <!-- 5️⃣ Personas responsables -->
+    <!-- Personas responsables -->
     <dcc:respPersons>
       ${data.administrativeData.responsiblePersons
         .filter((person) => person.role && person.role.trim() !== '')
@@ -272,7 +303,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
         .join('')}
     </dcc:respPersons>
 
-    <!-- 6️⃣ Cliente -->
+    <!-- Cliente -->
     <dcc:customer>
       <dcc:name>
         <dcc:content>${this.escapeXml(
@@ -301,7 +332,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
       </dcc:location>
     </dcc:customer>
 
-    <!-- 7️⃣ Declaraciones -->
+    <!-- Declaraciones -->
     <dcc:statements>
       ${this.generateStatementsXML(data)}
     </dcc:statements>
@@ -825,80 +856,98 @@ export class PreviewComponent implements OnInit, OnDestroy {
   private generateResultsXML(data: DCCData): string {
     if (!data.results || data.results.length === 0) return '';
 
-    // Separar resultados PT-23 de otros resultados
-    const pt23Results = data.results.filter(
-      (r) => r.refType?.includes('hv_') || r.name?.includes('SF ')
-    );
-
-    const otherResults = data.results.filter(
-      (r) => !r.refType?.includes('hv_') && !r.name?.includes('SF ')
-    );
-
-    console.log('📊 Generating Results XML:', {
-      pt23Results: pt23Results.length,
-      otherResults: otherResults.length,
-      hasFreshPT23Data: this.pt23Data.length > 0,
-    });
-
-    // Si hay datos frescos de PT-23, regenerar el XML con esos datos
-    let pt23XML = '';
-    if (this.pt23Data.length > 0 && data.administrativeData) {
-      // Obtener SFx y SFref de la configuración guardada
-      this.loadPT23Config(data.administrativeData.core.certificate_number).then(
-        (config) => {
-          const sfx = config?.sfx || 1;
-          const sfref = config?.sfref || 1;
-
-          // Generar XML PT-23 fresco
-          pt23XML = this.pt23XmlGenerator.generateResultsXML(
-            this.pt23Data,
-            sfx,
-            sfref
-          );
-        }
-      );
-    }
+    // Adaptar los nombres y refType para coincidir con el XML de ejemplo
+    // Forzar valueXMLList y unitXMLList para todos los resultados tipo lista
+    const nameMap: { [key: string]: { refType: string; xmlName: string } } = {
+      Range: { refType: 'hv_range', xmlName: 'Range' },
+      'Voltage Measured': {
+        refType: 'basic_measuredValue',
+        xmlName: 'Voltage Measured',
+      },
+      'Ref. Voltage': {
+        refType: 'basic_referenceValue',
+        xmlName: 'Ref. Voltage',
+      },
+      'Voltage Error': {
+        refType: 'basic_measurementError',
+        xmlName: 'Voltage Error',
+      },
+      'Obtained Scale Factor': {
+        refType: 'hv_scaleFactor',
+        xmlName: 'Obtained Scale Factor',
+      },
+    };
 
     return `
       <dcc:results>
-        ${otherResults
-          .map(
-            (result) => `
+${data.results
+  .map((result) => {
+    if (Array.isArray(result.data)) {
+      return `
+
         <dcc:result${
           result.refType ? ` refType="${this.escapeXml(result.refType)}"` : ''
         }>
           <dcc:name>
             <dcc:content lang="en">${this.escapeXml(result.name)}</dcc:content>
           </dcc:name>
+
           <dcc:data>
-            ${this.generateResultDataXML(result.data)}
+            <dcc:list>
+${result.data
+  .map((qty: any) => {
+    const mapInfo = nameMap[qty.name] || {
+      refType: '',
+      xmlName: qty.name,
+    };
+    const forcedQty = {
+      ...qty,
+      dataType: 'realListXMLList',
+      valueXMLList: qty.valueXMLList || qty.value || '',
+      unitXMLList: qty.unitXMLList || qty.unit || '',
+    };
+    return `
+                <dcc:quantity${
+                  mapInfo.refType ? ` refType="${mapInfo.refType}"` : ''
+                }>
+                  <dcc:name>
+                    <dcc:content lang="en">${this.escapeXml(
+                      mapInfo.xmlName
+                    )}</dcc:content>
+                  </dcc:name>
+${this.generateQuantityValueXML(forcedQty)}
+                </dcc:quantity>`;
+  })
+  .join('')}
+            </dcc:list>
           </dcc:data>
-        </dcc:result>`
-          )
-          .join('')}
-        ${pt23XML}
-      </dcc:results>`;
+
+        </dcc:result>
+`;
+    } else {
+      return `
+
+        <dcc:result${
+          result.refType ? ` refType="${this.escapeXml(result.refType)}"` : ''
+        }>
+          <dcc:name>
+            <dcc:content lang="en">${this.escapeXml(result.name)}</dcc:content>
+          </dcc:name>
+
+          <dcc:data>
+${this.generateResultDataXML(result.data)}
+          </dcc:data>
+
+        </dcc:result>
+`;
+    }
+  })
+  .join('')}
+      </dcc:results>
+`;
   }
 
-  private loadPT23Config(dccId: string): Promise<any> {
-    return new Promise((resolve) => {
-      const query = {
-        action: 'get',
-        bd: this.database,
-        table: 'dcc_pt23_config',
-        opts: {
-          where: { id_dcc: dccId },
-        },
-      };
-
-      this.dccDataService.post(query).subscribe({
-        next: (response: any) => {
-          resolve(response?.result?.[0] || null);
-        },
-        error: () => resolve(null),
-      });
-    });
-  }
+  // ...existing code...
 
   // =======================
   // Métodos de utilidad
@@ -954,14 +1003,15 @@ export class PreviewComponent implements OnInit, OnDestroy {
 
   private generateQuantityValueXML(data: any): string {
     if (data.dataType === 'realListXMLList') {
+      // Siempre mostrar valueXMLList y unitXMLList aunque estén vacíos
       let xmlContent = `
-                <si:realListXMLList>
-                  <si:valueXMLList>${this.escapeXml(
-                    data.valueXMLList
-                  )}</si:valueXMLList>
-                  <si:unitXMLList>${this.escapeXml(
-                    data.unitXMLList
-                  )}</si:unitXMLList>`;
+                    <si:realListXMLList>
+                      <si:valueXMLList>${this.escapeXml(
+                        data.valueXMLList || ''
+                      )}</si:valueXMLList>
+                      <si:unitXMLList>${this.escapeXml(
+                        data.unitXMLList || ''
+                      )}</si:unitXMLList>`;
 
       // Agregar incertidumbre de medición si existe
       if (
@@ -970,35 +1020,35 @@ export class PreviewComponent implements OnInit, OnDestroy {
           ''
       ) {
         xmlContent += `
-                  <si:measurementUncertaintyUnivariateXMLList>
-                    <si:expandedMUXMLList>
-                      <si:valueExpandedMUXMLList>${this.escapeXml(
-                        data.measurementUncertainty.expandedMU
-                          .valueExpandedMUXMLList
-                      )}</si:valueExpandedMUXMLList>
-                      <si:coverageFactorXMLList>${this.escapeXml(
-                        data.measurementUncertainty.expandedMU
-                          .coverageFactorXMLList
-                      )}</si:coverageFactorXMLList>
-                      <si:coverageProbabilityXMLList>${this.escapeXml(
-                        data.measurementUncertainty.expandedMU
-                          .coverageProbabilityXMLList
-                      )}</si:coverageProbabilityXMLList>
-                    </si:expandedMUXMLList>
-                  </si:measurementUncertaintyUnivariateXMLList>`;
+                      <si:measurementUncertaintyUnivariateXMLList>
+                        <si:expandedMUXMLList>
+                          <si:valueExpandedMUXMLList>${this.escapeXml(
+                            data.measurementUncertainty.expandedMU
+                              .valueExpandedMUXMLList || ''
+                          )}</si:valueExpandedMUXMLList>
+                          <si:coverageFactorXMLList>${this.escapeXml(
+                            data.measurementUncertainty.expandedMU
+                              .coverageFactorXMLList || ''
+                          )}</si:coverageFactorXMLList>
+                          <si:coverageProbabilityXMLList>${this.escapeXml(
+                            data.measurementUncertainty.expandedMU
+                              .coverageProbabilityXMLList || ''
+                          )}</si:coverageProbabilityXMLList>
+                        </si:expandedMUXMLList>
+                      </si:measurementUncertaintyUnivariateXMLList>`;
       }
 
       xmlContent += `
-                </si:realListXMLList>`;
+                    </si:realListXMLList>`;
 
       return xmlContent;
     } else {
       // dataType === 'real' o valor simple
       return `
-                <si:real>
-                  <si:value>${this.escapeXml(data.value)}</si:value>
-                  <si:unit>${this.escapeXml(data.unit)}</si:unit>
-                </si:real>`;
+                    <si:real>
+                      <si:value>${this.escapeXml(data.value || '')}</si:value>
+                      <si:unit>${this.escapeXml(data.unit || '')}</si:unit>
+                    </si:real>`;
     }
   }
 

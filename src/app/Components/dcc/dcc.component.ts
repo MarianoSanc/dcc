@@ -29,6 +29,8 @@ import { UrlClass } from '../../shared/models/url.model';
   styleUrl: './dcc.component.css',
 })
 export class DccComponent implements OnInit {
+  // Variable para guardar el modo de operación actual
+  operationMode: 'create' | 'load' | 'xml' | null = null;
   // Controla la pantalla inicial de opciones
   showInitialOptions: boolean = true;
   // Controla la visualización de la interfaz principal (tabs)
@@ -160,6 +162,7 @@ export class DccComponent implements OnInit {
 
   // Inicia la creación de un nuevo DCC (pantalla principal)
   createNewDCC() {
+    this.operationMode = 'create';
     this.dccDataService.resetData();
     this.showInitialOptions = false;
     this.showMainInterface = true;
@@ -168,6 +171,7 @@ export class DccComponent implements OnInit {
 
   // Abre el modal para cargar un archivo XML
   loadExistingDCC() {
+    this.operationMode = 'xml';
     // Si hay datos en el DCC current, mostrar confirmación
     const currentData = this.dccDataService.getCurrentData();
     const hasCurrentData =
@@ -282,6 +286,7 @@ export class DccComponent implements OnInit {
 
   // Abre el modal para seleccionar un DCC existente
   openDccSelectModal() {
+    this.operationMode = 'load';
     // Si hay datos en el DCC current, mostrar confirmación
     const currentData = this.dccDataService.getCurrentData();
     const hasCurrentData =

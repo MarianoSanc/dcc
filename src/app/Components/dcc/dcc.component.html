@@ -221,7 +221,7 @@
 
       <!-- Results Tab -->
       <div *ngIf="activeTab === 'results'" class="tab-panel">
-        <app-results></app-results>
+        <app-results [operationMode]="operationMode"></app-results>
       </div>
 
       <!-- Preview Tab -->

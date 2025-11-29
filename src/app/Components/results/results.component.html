@@ -292,8 +292,8 @@
     </div>
   </div>
 
-  <!-- SF PT-XX Block -->
-  <div class="data-block">
+  <!-- SF PT-XX Block: solo visible si NO se cargó XML -->
+  <div class="data-block" *ngIf="operationMode !== 'xml'">
     <ng-container [ngSwitch]="coreData.pt_id">
       <div *ngSwitchCase="'PT-23'">
         <app-pt23-results></app-pt23-results>
@@ -356,6 +356,7 @@
                 [(ngModel)]="
                   qty.measurementUncertainty.expandedMU.valueExpandedMUXMLList
                 "
+                (ngModelChange)="dccDataService.updateResults(results)"
                 placeholder="Valor de incertidumbre expandida"
               />
               <input
@@ -363,6 +364,7 @@
                 [(ngModel)]="
                   qty.measurementUncertainty.expandedMU.coverageFactorXMLList
                 "
+                (ngModelChange)="dccDataService.updateResults(results)"
                 placeholder="Factor de cobertura"
               />
               <input
@@ -371,6 +373,7 @@
                   qty.measurementUncertainty.expandedMU
                     .coverageProbabilityXMLList
                 "
+                (ngModelChange)="dccDataService.updateResults(results)"
                 placeholder="Probabilidad de cobertura"
               />
             </div>
