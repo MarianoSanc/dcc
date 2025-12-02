@@ -175,6 +175,7 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
     // Permitir 0 Scale Factors
     if (this.numeroScaleFactor === 0) {
       this.scaleFactorData = [];
+      this.guardarScaleFactor();
       return;
     }
 
@@ -202,6 +203,8 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
       // Si tenías prueba 1 y 2, y reduces a 1, solo te quedas con prueba 1
       // NO renumeras la prueba 2 a ser prueba 1
     }
+    // Guardar automáticamente los cambios al modificar el número de SF
+    this.guardarScaleFactor();
   }
 
   onNumeroLinearityTestChange() {}
@@ -424,7 +427,13 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
             estadisticas
           ).then((nivelId) => {
             // 2. Guardar mediciones individuales
-            return this.guardarMediciones(nivelId, tabla.dut, tabla.patron);
+            return this.guardarMediciones(
+              nivelId,
+              tabla.dut,
+              tabla.patron,
+              sf.prueba,
+              this.dccId
+            );
           });
 
           promises.push(nivelPromise);
@@ -696,7 +705,9 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
   private async guardarMediciones(
     idNivel: number,
     dut: (number | null)[],
-    patron: (number | null)[]
+    patron: (number | null)[],
+    prueba: number,
+    id_dcc?: string
   ): Promise<void> {
     if (!idNivel || isNaN(idNivel)) {
       throw new Error(`Invalid nivel ID: ${idNivel}`);
@@ -713,23 +724,23 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Soft delete usando UPDATE con deleted = 1
+    // Soft delete solo para mediciones del nivel y prueba actual
     const updateQuery = {
       action: 'update',
       bd: this.database,
       table: 'dcc_pt23_scalefactor_medicion',
       opts: {
         attributes: { deleted: 1 },
-        where: { id_nivel: idNivel },
+        where: { id_nivel: idNivel, prueba: prueba },
       },
     };
 
-    // Try to soft delete existing measurements
+    // Try to soft delete existing measurements solo de este nivel y prueba
     try {
       await lastValueFrom(this.dccDataService.post(updateQuery));
     } catch (err) {}
 
-    // Insert new measurements
+    // Insert new measurements con id_dcc, prueba y deleted: 0
     await this.insertarMediciones(idNivel, dut, patron);
   }
 
@@ -794,7 +805,6 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
           id_dcc: this.dccId,
           deleted: 0,
         },
-        order_by: ['prueba', 'ASC', 'nivel_tension', 'ASC'],
       },
     };
 
@@ -802,6 +812,7 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
       next: (response: any) => {
         if (response?.result?.length > 0) {
           const niveles = response.result;
+          console.log('Niveles crudos de la BD:', niveles);
           const promises = niveles.map((nivel: any) =>
             this.cargarMedicionesNivel(nivel.id)
           );
@@ -827,6 +838,8 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
               });
             });
 
+            console.log('Niveles agrupados por prueba:', groupedByPrueba);
+
             this.scaleFactorData = Object.keys(groupedByPrueba)
               .map(Number)
               .sort((a, b) => a - b)
@@ -834,6 +847,8 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
                 prueba,
                 tablas: groupedByPrueba[prueba],
               }));
+
+            console.log('scaleFactorData final:', this.scaleFactorData);
 
             // Limpiar caches después de cargar datos
             this.clearCalculationCaches();
@@ -860,14 +875,20 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
         opts: {
           where: {
             id_nivel: idNivel,
-            deleted: 0, // Solo cargar mediciones no eliminadas
+            deleted: 0,
           },
-          order_by: ['numero_medicion', 'ASC'],
         },
       };
+      console.log(
+        'Query para cargar mediciones del nivel',
+        idNivel,
+        ':',
+        query
+      );
 
       this.dccDataService.post(query).subscribe({
         next: (response: any) => {
+          console.log('Mediciones crudas para nivel', idNivel, ':', response);
           const dut = Array(10).fill(null);
           const patron = Array(10).fill(null);
 
@@ -1121,12 +1142,16 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
           this.sfx!,
           this.sfref!
         );
+      console.log('AUTO-GENERATED PT-23 Results:', generatedResults);
+      console.log('Number of results generated:', generatedResults.length);
       this.dccDataService.updatePT23Results(generatedResults);
+
+      // NO guardar en BD automáticamente - solo actualizar en memoria
     } catch (error) {
+      console.error('Error auto-generating results:', error);
       // Silencioso en auto-generación
     }
   }
-
   /**
    * Generar resultados manualmente (con confirmación)
    */
@@ -1167,20 +1192,15 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
           this.sfref
         );
 
+      console.log('MANUAL PT-23 Results Generated:', generatedResults);
+      console.log('Number of results generated:', generatedResults.length);
+      console.log('Scale Factor Data used:', this.scaleFactorData);
+
       // Actualizar los resultados en el servicio DCC
       this.dccDataService.updatePT23Results(generatedResults);
 
-      Swal.fire({
-        icon: 'success',
-        title: '¡Resultados regenerados!',
-        html:
-          '<p>Se han regenerado <strong>' +
-          generatedResults.length +
-          ' resultados</strong> basados en los datos actuales de PT-23.</p>' +
-          '<p>Los resultados se han actualizado automáticamente en el bloque de Results.</p>' +
-          '<p><small>💡 Puede visualizar el XML completo en la pestaña <strong>"Preview"</strong>.</small></p>',
-        confirmButtonText: 'Entendido',
-      });
+      // NUEVO: Guardar automáticamente en BD
+      this.saveResultsToDB(generatedResults);
     } catch (error) {
       Swal.fire({
         icon: 'error',
@@ -1188,6 +1208,149 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
         text: 'Ocurrió un error al generar los resultados.',
       });
     }
+  }
+
+  /**
+   * NUEVO: Guardar resultados en BD con verificación de existencia
+   */
+  private saveResultsToDB(results: any[]) {
+    const dccId = this.dccId;
+    if (!dccId) {
+      console.error('No dccId available for saving results');
+      return;
+    }
+
+    // Primero, obtener los resultados existentes
+    const checkQuery = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_results',
+      opts: {
+        where: { id_dcc: dccId, deleted: 0 },
+      },
+    };
+
+    this.dccDataService.post(checkQuery).subscribe({
+      next: (response: any) => {
+        const existingResults = response?.result || [];
+        const promises: Promise<any>[] = [];
+
+        console.log('💾 Saving', results.length, 'results to DB');
+
+        results.forEach((result: any, index: number) => {
+          let dataToSave;
+
+          // Guardado especial para hv_scaleFactorTest (array de quantities)
+          if (result.refType === 'hv_scaleFactorTest') {
+            dataToSave = result.data.map((qty: any) => ({
+              id: qty.id,
+              name: qty.name,
+              refType: qty.refType,
+              dataType: qty.dataType,
+              valueXMLList: qty.valueXMLList,
+              unitXMLList: qty.unitXMLList,
+              measurementUncertainty: qty.measurementUncertainty,
+            }));
+          }
+          // Guardado especial para hv_scaleFactorMean y hv_linearity
+          else if (
+            result.refType === 'hv_scaleFactorMean' ||
+            result.refType === 'hv_linearity'
+          ) {
+            if (Array.isArray(result.data)) {
+              dataToSave = result.data.map((qty: any) => ({
+                id: qty.id,
+                refType: qty.refType,
+                name: qty.name,
+                dataType: qty.dataType,
+                value: qty.value,
+                unit: qty.unit,
+              }));
+            } else {
+              dataToSave = {
+                id: result.data.id,
+                refType: result.data.refType,
+                name: result.data.name,
+                dataType: result.data.dataType,
+                value: result.data.value,
+                unit: result.data.unit,
+              };
+            }
+          }
+          // Otros resultados
+          else {
+            dataToSave = result.data;
+          }
+
+          const attributes = {
+            id_dcc: dccId,
+            name: result.name,
+            ref_type: result.refType,
+            data: JSON.stringify(dataToSave),
+            orden: index + 1,
+          };
+
+          // Buscar resultado existente por nombre Y ref_type
+          const existingResult = existingResults.find(
+            (r: any) => r.name === result.name && r.ref_type === result.refType
+          );
+
+          if (existingResult) {
+            console.log(`  🔄 Updating: ${result.name}`);
+            const updateQuery = {
+              action: 'update',
+              bd: this.database,
+              table: 'dcc_results',
+              opts: {
+                attributes: {
+                  name: attributes.name,
+                  ref_type: attributes.ref_type,
+                  data: attributes.data,
+                  orden: attributes.orden,
+                },
+                where: { id: existingResult.id },
+              },
+            };
+            promises.push(this.dccDataService.post(updateQuery).toPromise());
+          } else {
+            console.log(`  ➕ Creating: ${result.name}`);
+            const createQuery = {
+              action: 'create',
+              bd: this.database,
+              table: 'dcc_results',
+              opts: { attributes },
+            };
+            promises.push(this.dccDataService.post(createQuery).toPromise());
+          }
+        });
+
+        Promise.all(promises)
+          .then(() => {
+            console.log('✅ All PT-23 results saved to DB successfully');
+            Swal.fire({
+              icon: 'success',
+              title: '¡Resultados guardados!',
+              html:
+                '<p>Se han generado y guardado <strong>' +
+                results.length +
+                ' resultados</strong> en la base de datos.</p>' +
+                '<p>Los resultados están disponibles en el bloque de Results.</p>',
+              confirmButtonText: 'Entendido',
+            });
+          })
+          .catch((error) => {
+            console.error('❌ Error saving results to DB:', error);
+            Swal.fire({
+              icon: 'error',
+              title: 'Error al guardar',
+              text: 'Los resultados se generaron pero hubo un error al guardarlos en la base de datos.',
+            });
+          });
+      },
+      error: (error) => {
+        console.error('❌ Error checking existing results:', error);
+      },
+    });
   }
 
   /**

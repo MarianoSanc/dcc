@@ -449,10 +449,16 @@ ${resultsXML}
     sfx: number,
     sfref: number
   ): any[] {
+    console.log('=== generateResultsForComponent START ===');
+    console.log('Input scaleFactorData:', scaleFactorData);
+    console.log('Number of Scale Factors:', scaleFactorData.length);
+
     const results: any[] = [];
 
     // Procesar cada Scale Factor (prueba)
     scaleFactorData.forEach((sf, sfIndex) => {
+      console.log(`Processing SF ${sf.prueba} (index ${sfIndex}):`, sf);
+
       // Arrays para almacenar los datos de cada nivel
       const rangeValues: string[] = [];
       const dutValues: string[] = [];
@@ -520,12 +526,9 @@ ${resultsXML}
       }
 
       // Crear el resultado para este Scale Factor
-      const nombreSF =
-        sf.prueba === 1 ? 'BEFORE ADJUSTMENT' : 'AFTER ADJUSTMENT';
-
       results.push({
         id: this.generateId(),
-        name: `SF ${sf.prueba} - Table Results (${nombreSF})`,
+        name: `SF ${sf.prueba} - Table Results`,
         refType: 'hv_scaleFactorTest',
         data: [
           {
@@ -592,7 +595,7 @@ ${resultsXML}
       const meanSF = this.calcularPromedioArray(scaleFactorValues.map(Number));
       results.push({
         id: this.generateId(),
-        name: `SF ${sf.prueba} - Mean Scale Factor (${nombreSF})`,
+        name: `SF ${sf.prueba} - Mean Scale Factor`,
         refType: 'hv_scaleFactorMean',
         data: [
           {
@@ -612,7 +615,7 @@ ${resultsXML}
       const linearity = this.calcularLinealidad(scaleFactorValues.map(Number));
       results.push({
         id: this.generateId(),
-        name: `SF ${sf.prueba} - Linearity Test (${nombreSF})`,
+        name: `SF ${sf.prueba} - Linearity Test`,
         refType: 'hv_linearity',
         data: [
           {
@@ -628,6 +631,10 @@ ${resultsXML}
         ],
       });
     });
+
+    console.log('=== generateResultsForComponent END ===');
+    console.log('Total results generated:', results.length);
+    console.log('Results:', results);
 
     return results;
   }

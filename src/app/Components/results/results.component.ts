@@ -1,10 +1,12 @@
+import { ViewChild } from '@angular/core';
+import { Pt23ResultsComponent } from './pt23-results/pt23-results.component';
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DccDataService } from '../../services/dcc-data.service';
 import { Subscription } from 'rxjs';
-import { Pt23ResultsComponent } from './pt23-results/pt23-results.component';
+// import already present above
 import Swal from 'sweetalert2';
 
 @Component({
@@ -15,6 +17,12 @@ import Swal from 'sweetalert2';
   styleUrl: './results.component.css',
 })
 export class ResultsComponent implements OnInit, OnDestroy {
+  logResults() {
+    console.log('RENDER this.results:', this.results);
+    return '';
+  }
+  @ViewChild('pt23ResultsComponent')
+  pt23ResultsComponent?: Pt23ResultsComponent;
   /**
    * Mapea el bloque de Results desde el XML al formato esperado por el componente
    * @param xmlData Objeto parseado del XML
@@ -222,29 +230,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
   usedMethods: any[] = [];
   influenceConditions: any[] = [];
   measuringEquipments: any[] = [];
-  results: any[] = [
-    {
-      id: 'result1',
-      name: 'Result 1',
-      refType: 'type1',
-      data: [
-        {
-          id: 'qty1',
-          name: 'Quantity 1',
-          dataType: 'realListXMLList',
-          valueXMLList: '',
-          unitXMLList: '',
-          measurementUncertainty: {
-            expandedMU: {
-              valueExpandedMUXMLList: '',
-              coverageFactorXMLList: '2',
-              coverageProbabilityXMLList: '0.95',
-            },
-          },
-        },
-      ],
-    },
-  ];
+  results: any[] = [];
   editingBlocks: { [key: string]: boolean } = {};
   private subscription: Subscription = new Subscription();
   loadingFromDB: boolean = false;
@@ -266,115 +252,60 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     console.log('ResultsComponent initialized');
+
+    // Cargar coreData una sola vez del observable solo para obtener el certificate_number
     this.subscription.add(
       this.dccDataService.dccData$.subscribe((data) => {
-        this.coreData = data.administrativeData.core;
-        this.resultsData = data.results;
+        const certificateNumber =
+          data.administrativeData?.core?.certificate_number;
+        const ptId = data.administrativeData?.core?.pt_id;
 
-        // Si el modo es xml y existe xmlData, cargar desde XML
-        if (this.operationMode === 'xml' && data.xmlData) {
-          this.loadInfluenceConditionsFromXml(data.xmlData);
-          this.loadMeasuringEquipmentsFromXml(data.xmlData);
-          this.loadResultsFromXml(data.xmlData);
-        } else {
-          // Elimina cualquier sobrescritura de this.results aquí, solo actualiza si es necesario
-          const certificateNumber =
-            data.administrativeData?.core?.certificate_number;
-          if (certificateNumber && !this.loadingFromDB) {
-            this.loadingFromDB = true;
-            this.loadInfluenceConditionsFromDB(certificateNumber);
-            this.loadMeasuringEquipmentsFromDB(certificateNumber);
-            this.loadResultsFromDB();
-          } else if (
-            !this.influenceConditions ||
-            this.influenceConditions.length === 0
-          ) {
-            this.initializeAvailableInfluenceConditions();
-          }
-        }
-
+        // Solo actualizar coreData si cambió el certificado
         if (
-          !this.measurementResult ||
-          Object.keys(this.measurementResult).length === 0
+          certificateNumber &&
+          certificateNumber !== this.coreData?.certificate_number
         ) {
-          this.measurementResult = data.measurementResult
-            ? { ...data.measurementResult }
-            : {};
-        } else {
-          if (
-            data.measurementResult &&
-            Object.keys(data.measurementResult).length > 0
-          ) {
-            this.measurementResult = { ...data.measurementResult };
+          this.coreData = {
+            certificate_number: certificateNumber,
+            pt_id: ptId,
+          };
+
+          // Si el modo es xml, cargar desde XML
+          if (this.operationMode === 'xml' && data.xmlData) {
+            this.loadInfluenceConditionsFromXml(data.xmlData);
+            this.loadMeasuringEquipmentsFromXml(data.xmlData);
+            this.loadResultsFromXml(data.xmlData);
           } else {
-            const dccId = data.administrativeData?.core?.certificate_number;
-            if (dccId) {
-              const query = {
-                action: 'get',
-                bd: this.database,
-                table: 'dcc_results',
-                opts: {
-                  where: { id_dcc: dccId, deleted: 0 },
-                  order_by: ['orden', 'ASC'],
-                },
-              };
-              this.dccDataService.post(query).subscribe({
-                next: (response: any) => {
-                  if (response?.result && response.result.length > 0) {
-                    const measurementResultFromDB = response.result.find(
-                      (r: any) => r.ref_type === 'measurementResult'
-                    );
-                    if (
-                      measurementResultFromDB &&
-                      measurementResultFromDB.data
-                    ) {
-                      this.measurementResult = JSON.parse(
-                        measurementResultFromDB.data
-                      );
-                    }
-                  }
-                },
-              });
-            }
+            // Cargar TODO desde BD directamente
+            this.loadAllDataFromDB(certificateNumber);
           }
-        }
-
-        if (!this.usedMethods || this.usedMethods.length === 0) {
-          this.usedMethods = data.usedMethods
-            ? [...data.usedMethods]
-            : this.getDefaultUsedMethods();
-        }
-
-        // Mantén solo la actualización desde PT-23 si realmente quieres que tenga prioridad
-        const pt23Results = (this.dccDataService as any).pt23Results || [];
-        if (Array.isArray(pt23Results) && pt23Results.length > 0) {
-          this.results = pt23Results.map((result: any) => ({
-            ...result,
-            data: Array.isArray(result.data)
-              ? result.data.map((qty: any) =>
-                  this.ensureMeasurementUncertaintyStructure(qty)
-                )
-              : [],
-          }));
-          this.dccDataService.updateResults(this.results);
-        }
-
-        if (this.coreData?.pt_id && this.usedMethods?.length) {
-          const ptId = this.coreData.pt_id;
-          this.usedMethods = this.usedMethods.map((method) => {
-            if (method.refType === 'hv_method' && method.description) {
-              method.description = method.description.replace(
-                /PT-\d{2}/g,
-                ptId
-              );
-            }
-            return method;
-          });
         }
       })
     );
+  }
 
-    // OPTIMIZACIÓN: Cargar métodos solo una vez
+  // Método centralizado para cargar todos los datos desde BD
+  private loadAllDataFromDB(dccId: string) {
+    console.log('Loading all data from DB for dccId:', dccId);
+
+    // Cargar influence conditions
+    this.loadInfluenceConditionsFromDB(dccId);
+
+    // Cargar measuring equipments
+    this.loadMeasuringEquipmentsFromDB(dccId);
+
+    // Cargar used methods
+    this.loadUsedMethodsFromDB(dccId);
+
+    // Cargar measurement result
+    this.loadMeasurementResultFromDB(dccId);
+
+    // Cargar results (incluye PT-23 si existe)
+    this.loadResultsFromDB();
+  }
+
+  // Nuevo método para cargar used methods desde BD
+  private loadUsedMethodsFromDB(dccId: string) {
     this.dccDataService.getAllUsedMethodsFromDatabase(this.database).subscribe({
       next: (methods) => {
         const ptId = this.coreData?.pt_id;
@@ -384,9 +315,41 @@ export class ResultsComponent implements OnInit, OnDestroy {
           }
           return method;
         });
+        console.log('Used methods loaded from DB:', this.usedMethods.length);
       },
       error: () => {
-        // Silencioso
+        console.log('No used methods in DB, using defaults');
+        this.usedMethods = this.getDefaultUsedMethods();
+      },
+    });
+  }
+
+  // Nuevo método para cargar measurement result desde BD
+  private loadMeasurementResultFromDB(dccId: string) {
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_results',
+      opts: {
+        where: { id_dcc: dccId, ref_type: 'measurementResult', deleted: 0 },
+      },
+    };
+
+    this.dccDataService.post(query).subscribe({
+      next: (response: any) => {
+        if (response?.result && response.result.length > 0) {
+          const measurementResultFromDB = response.result[0];
+          if (measurementResultFromDB && measurementResultFromDB.data) {
+            this.measurementResult = JSON.parse(measurementResultFromDB.data);
+            console.log('Measurement result loaded from DB');
+          }
+        } else {
+          this.measurementResult = {};
+          console.log('No measurement result in DB');
+        }
+      },
+      error: () => {
+        this.measurementResult = {};
       },
     });
   }
@@ -635,9 +598,8 @@ export class ResultsComponent implements OnInit, OnDestroy {
       // Limpiar datos de incertidumbre cuando se desactiva
       if (data.measurementUncertainty?.expandedMU) {
         data.measurementUncertainty.expandedMU.valueExpandedMUXMLList = '';
-        data.measurementUncertainty.expandedMU.coverageFactorXMLList = '2';
-        data.measurementUncertainty.expandedMU.coverageProbabilityXMLList =
-          '0.95';
+        data.measurementUncertainty.expandedMU.coverageFactorXMLList = '';
+        data.measurementUncertainty.expandedMU.coverageProbabilityXMLList = '';
       }
     } else {
       // Inicializar estructura si no existe
@@ -645,8 +607,8 @@ export class ResultsComponent implements OnInit, OnDestroy {
         data.measurementUncertainty = {
           expandedMU: {
             valueExpandedMUXMLList: '',
-            coverageFactorXMLList: '2',
-            coverageProbabilityXMLList: '0.95',
+            coverageFactorXMLList: '',
+            coverageProbabilityXMLList: '',
           },
         };
       }
@@ -720,6 +682,8 @@ export class ResultsComponent implements OnInit, OnDestroy {
             dataToSave = result.data.map((qty: any) => ({
               id: qty.id,
               name: qty.name,
+              refType: qty.refType,
+              dataType: qty.dataType,
               valueXMLList: qty.valueXMLList,
               unitXMLList: qty.unitXMLList,
               measurementUncertainty: qty.measurementUncertainty,
@@ -734,14 +698,18 @@ export class ResultsComponent implements OnInit, OnDestroy {
             if (Array.isArray(result.data)) {
               dataToSave = result.data.map((qty: any) => ({
                 id: qty.id,
+                refType: qty.refType,
                 name: qty.name,
+                dataType: qty.dataType,
                 value: qty.value,
                 unit: qty.unit,
               }));
             } else {
               dataToSave = {
                 id: result.data.id,
+                refType: result.data.refType,
                 name: result.data.name,
+                dataType: result.data.dataType,
                 value: result.data.value,
                 unit: result.data.unit,
               };
@@ -760,7 +728,11 @@ export class ResultsComponent implements OnInit, OnDestroy {
             orden: index + 1,
           };
 
-          const existingResult = existingResults[index];
+          // Buscar resultado existente por nombre Y ref_type (no por índice)
+          const existingResult = existingResults.find(
+            (r: any) => r.name === result.name && r.ref_type === result.refType
+          );
+
           if (existingResult) {
             const updateQuery = {
               action: 'update',
@@ -768,7 +740,10 @@ export class ResultsComponent implements OnInit, OnDestroy {
               table: 'dcc_results',
               opts: {
                 attributes: {
+                  name: attributes.name,
+                  ref_type: attributes.ref_type,
                   data: attributes.data,
+                  orden: attributes.orden,
                 },
                 where: { id: existingResult.id },
               },
@@ -787,6 +762,15 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
         Promise.all(promises)
           .then(() => {
+            console.log(
+              '✅ All results saved to DB. Total:',
+              this.results.length
+            );
+            console.log('Saved results breakdown:');
+            this.results.forEach((r, i) => {
+              console.log(`  ${i + 1}. ${r.name} (${r.refType})`);
+            });
+
             // Actualiza el servicio para que Preview reciba los datos reales guardados
             this.dccDataService.updateResults(this.results);
             Swal.fire({
@@ -815,38 +799,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
   }
 
   // Mantén solo UNA implementación de getDefaultResults:
-  private getDefaultResults(): any[] {
-    return [
-      {
-        id: this.generateId(),
-        name: 'Table Results',
-        refType: '',
-        data: [
-          this.ensureMeasurementUncertaintyStructure({
-            id: this.generateId(),
-            refType: 'hv_range',
-            name: 'Range',
-            dataType: 'realListXMLList',
-            valueXMLList: '',
-            unitXMLList: '\\volt',
-            value: '',
-            unit: '',
-          }),
-          this.ensureMeasurementUncertaintyStructure({
-            id: this.generateId(),
-            refType: 'basic_measurementError',
-            name: 'Voltage Error',
-            dataType: 'realListXMLList',
-            valueXMLList: '',
-            unitXMLList: '\\one',
-            value: '',
-            unit: '',
-            hasUncertainty: false,
-          }),
-        ],
-      },
-    ];
-  }
+  // Removed default results to avoid overriding DB values
 
   // Cargar Measurement Uncertainty desde BD y actualizar los datos en memoria
   private loadMeasurementUncertaintyFromDB() {
@@ -866,30 +819,46 @@ export class ResultsComponent implements OnInit, OnDestroy {
     this.dccDataService.post(query).subscribe({
       next: (response: any) => {
         if (response?.result && response.result.length > 0) {
-          // Solo actualiza measurementUncertainty en 'Voltage Error'
-          response.result.forEach((dbResult: any, idx: number) => {
-            const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
-            if (this.results[idx] && Array.isArray(this.results[idx].data)) {
-              this.results[idx].data.forEach((qty: any) => {
-                if (qty.name === 'Voltage Error') {
+          // Sincronizar con los resultados actuales en memoria
+          response.result
+            .filter(
+              (dbResult: any) => dbResult.ref_type !== 'measurementResult'
+            )
+            .forEach((dbResult: any) => {
+              const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
+              const resultInMemory = this.results.find(
+                (r) => r.id === dbResult.id
+              );
+
+              if (
+                resultInMemory &&
+                Array.isArray(resultInMemory.data) &&
+                Array.isArray(dbData)
+              ) {
+                resultInMemory.data.forEach((qty: any) => {
                   const dbQty = dbData.find((q: any) => q.id === qty.id);
                   if (dbQty && dbQty.measurementUncertainty) {
                     qty.measurementUncertainty = dbQty.measurementUncertainty;
                   }
-                }
-              });
-            }
-          });
+                });
+              }
+            });
+          console.log('Measurement uncertainties synced from DB');
         }
       },
-      error: () => {},
+      error: () => {
+        console.error('Error loading measurement uncertainties from DB');
+      },
     });
   }
 
-  // Modifica loadResultsFromDB para limpiar measurementUncertainty en quantities que no sean 'Voltage Error'
+  // Modifica loadResultsFromDB para cargar directamente sin limpiar
   private loadResultsFromDB() {
     const dccId = this.coreData?.certificate_number;
-    if (!dccId) return;
+    if (!dccId) {
+      console.log('No dccId available for loading results');
+      return;
+    }
 
     const query = {
       action: 'get',
@@ -904,69 +873,58 @@ export class ResultsComponent implements OnInit, OnDestroy {
     this.dccDataService.post(query).subscribe({
       next: (response: any) => {
         if (response?.result && response.result.length > 0) {
-          // Reemplaza el array completo de this.results por los datos de la BD
-          this.results = response.result.map((dbResult: any) => {
-            const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
-            // Limpia measurementUncertainty en quantities que no sean 'Voltage Error'
-            const cleanedData = Array.isArray(dbData)
-              ? dbData.map((qty: any) => {
-                  if (
-                    qty.name !== 'Voltage Error' &&
-                    qty.measurementUncertainty
-                  ) {
-                    delete qty.measurementUncertainty;
-                  }
-                  return qty;
-                })
-              : dbData;
-            return {
-              id: dbResult.id,
-              name: dbResult.name,
-              refType: dbResult.ref_type,
-              data: cleanedData,
-            };
+          console.log('📦 Raw DB response:', response.result.length, 'rows');
+
+          // Cargar TODOS los resultados sin filtrar por ref_type
+          this.results = response.result
+            .filter((dbResult: any) => {
+              const isMeasurementResult =
+                dbResult.ref_type === 'measurementResult';
+              if (isMeasurementResult) {
+                console.log('  ⏭️  Skipping measurementResult');
+              }
+              return !isMeasurementResult;
+            })
+            .map((dbResult: any) => {
+              const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
+              console.log(
+                `  ✅ Loading: ${dbResult.name} (${dbResult.ref_type})`
+              );
+              return {
+                id: dbResult.id,
+                name: dbResult.name,
+                refType: dbResult.ref_type,
+                data: Array.isArray(dbData) ? dbData : [],
+              };
+            });
+          console.log(
+            '✅ Results loaded from DB:',
+            this.results.length,
+            'items'
+          );
+          console.log('Results breakdown:');
+          this.results.forEach((r, i) => {
+            console.log(
+              `  ${i + 1}. ${r.name} (${r.refType}) - ${
+                Array.isArray(r.data) ? r.data.length : 1
+              } quantities`
+            );
           });
         } else {
-          console.log('No results found in DB, using default.');
-          this.results = this.getDefaultResults();
+          console.log('⚠️  No results found in DB.');
+          this.results = [];
         }
       },
-      error: () => {
-        console.log('No results found in DB, using default 2');
-
-        this.results = this.getDefaultResults();
+      error: (err) => {
+        console.error('❌ Error loading results from DB:', err);
+        this.results = [];
       },
     });
   }
 
   // Modifica ensureMeasurementUncertaintyStructure para solo inicializar measurementUncertainty en 'Voltage Error'
   private ensureMeasurementUncertaintyStructure(qty: any): any {
-    if (!qty) qty = {};
-    if (qty.name === 'Voltage Error' && !qty.measurementUncertainty) {
-      qty.measurementUncertainty = {
-        expandedMU: {
-          valueExpandedMUXMLList: '',
-          coverageFactorXMLList: '2',
-          coverageProbabilityXMLList: '0.95',
-        },
-      };
-    }
-    // Si existe measurementUncertainty, asegura estructura interna
-    if (
-      qty.name === 'Voltage Error' &&
-      qty.measurementUncertainty &&
-      !qty.measurementUncertainty.expandedMU
-    ) {
-      qty.measurementUncertainty.expandedMU = {
-        valueExpandedMUXMLList: '',
-        coverageFactorXMLList: '2',
-        coverageProbabilityXMLList: '0.95',
-      };
-    }
-    // Si NO es 'Voltage Error', elimina measurementUncertainty si existe
-    if (qty.name !== 'Voltage Error' && qty.measurementUncertainty) {
-      delete qty.measurementUncertainty;
-    }
+    // No crear valores por defecto; preservar lo que venga de la BD
     return qty;
   }
 
@@ -1159,17 +1117,17 @@ export class ResultsComponent implements OnInit, OnDestroy {
 /*
 Explicación de por qué se guardan estos valores en Results:
 
-1. **SF 1 - Mean Scale Factor (BEFORE ADJUSTMENT)**
+1. **SF 1 - Mean Scale Factor**
    - Este resultado representa el promedio del Scale Factor calculado para la prueba SF 1 antes de cualquier ajuste.
    - Se guarda para documentar el valor obtenido en la calibración inicial, antes de aplicar correcciones o ajustes.
    - Es útil para trazabilidad y para comparar con el valor ajustado final.
 
-2. **SF 1 - Table Results (BEFORE ADJUSTMENT)**
+2. **SF 1 - Table Results**
    - Este resultado contiene la tabla completa de mediciones (niveles de tensión, valores DUT y patrón) para la prueba SF 1 antes del ajuste.
    - Se guarda para tener el detalle de todas las mediciones y cómo se obtuvo el Scale Factor promedio.
    - Permite reconstruir el proceso de cálculo y validar los datos originales.
 
-3. **SF 1 - Linearity Test (BEFORE ADJUSTMENT)**
+3. **SF 1 - Linearity Test**
    - Este resultado representa la prueba de linealidad para SF 1 antes del ajuste.
    - Aunque la configuración de Linearity Test aún no está implementada, el sistema reserva este espacio para cuando se agregue la funcionalidad.
    - Se guarda para mantener la estructura y permitir futuras extensiones sin romper el formato del certificado.

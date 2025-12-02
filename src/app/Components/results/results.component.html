@@ -296,10 +296,10 @@
   <div class="data-block" *ngIf="operationMode !== 'xml'">
     <ng-container [ngSwitch]="coreData.pt_id">
       <div *ngSwitchCase="'PT-23'">
-        <app-pt23-results></app-pt23-results>
+        <app-pt23-results #pt23ResultsComponent></app-pt23-results>
       </div>
       <div *ngSwitchCase="'PT-24'">
-        <app-pt23-results></app-pt23-results>
+        <app-pt23-results #pt23ResultsComponent></app-pt23-results>
       </div>
       <div *ngSwitchDefault>
         <p>Seleccione un PT válido para mostrar los cálculos.</p>
@@ -425,6 +425,7 @@
 
       <!-- View Mode - MOSTRAR TODO COMO ANTES -->
       <div *ngIf="!editingMeasurementUncertainty" class="results-view">
+        {{ logResults() }}
         <div class="item-card" *ngFor="let result of results">
           <div class="item-header">
             <h5>{{ result.name || "Sin nombre" }}</h5>
@@ -446,11 +447,11 @@
                   >
                     <div class="list-values">
                       <strong>Valores:</strong>
-                      {{ data.valueXMLList || "No definido" }}
+                      {{ data.valueXMLList || data.value }}
                     </div>
                     <div class="list-unit">
                       <strong>Unidad:</strong>
-                      {{ data.unitXMLList || "No definido" }}
+                      {{ data.unitXMLList || data.unit }}
                     </div>
                     <!-- Incertidumbre solo para Voltage Error -->
                     <div
@@ -498,16 +499,23 @@
                       </div>
                     </div>
                   </div>
-                  <!-- Mostrar valor único si existe value -->
-                  <div *ngIf="data.value !== undefined" class="single-data">
-                    <span
-                      ><strong>Valor:</strong>
-                      {{ data.value || "No definido" }}</span
-                    >
-                    <span
-                      ><strong>Unidad:</strong>
-                      {{ data.unit || "No definido" }}</span
-                    >
+
+                  <!-- Mostrar valor simple si NO tiene valueXMLList (Mean Scale Factor, Linearity) -->
+                  <div
+                    *ngIf="
+                      data.valueXMLList === undefined &&
+                      (data.value !== undefined || data.unit !== undefined)
+                    "
+                    class="simple-data"
+                  >
+                    <div class="simple-value">
+                      <strong>Valor:</strong>
+                      {{ data.value || "N/A" }}
+                    </div>
+                    <div class="simple-unit">
+                      <strong>Unidad:</strong>
+                      {{ data.unit || "N/A" }}
+                    </div>
                   </div>
                 </div>
               </div>
