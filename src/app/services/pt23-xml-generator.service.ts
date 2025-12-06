@@ -446,19 +446,15 @@ ${resultsXML}
    */
   generateResultsForComponent(
     scaleFactorData: any[],
+    linearityTestData: any[],
+    stabilityTestData: any[],
     sfx: number,
     sfref: number
   ): any[] {
-    console.log('=== generateResultsForComponent START ===');
-    console.log('Input scaleFactorData:', scaleFactorData);
-    console.log('Number of Scale Factors:', scaleFactorData.length);
-
     const results: any[] = [];
 
     // Procesar cada Scale Factor (prueba)
     scaleFactorData.forEach((sf, sfIndex) => {
-      console.log(`Processing SF ${sf.prueba} (index ${sfIndex}):`, sf);
-
       // Arrays para almacenar los datos de cada nivel
       const rangeValues: string[] = [];
       const dutValues: string[] = [];
@@ -632,9 +628,337 @@ ${resultsXML}
       });
     });
 
-    console.log('=== generateResultsForComponent END ===');
-    console.log('Total results generated:', results.length);
-    console.log('Results:', results);
+    // ═══════════════════════════════════════════════════════
+    // LINEARITY TEST (LT) - GENERA 3 RESULTADOS POR PRUEBA
+    // ═══════════════════════════════════════════════════════
+    linearityTestData.forEach((lt, ltIndex) => {
+      const rangeValues: string[] = [];
+      const dutValues: string[] = [];
+      const patronValues: string[] = [];
+      const errorValues: string[] = [];
+      const uncertaintyValues: string[] = [];
+      const scaleFactorValues: string[] = [];
+
+      lt.tablas.forEach((tabla: any) => {
+        const nivel = tabla.nivel || 0;
+        const promedioDUTkV = tabla.promedio_dut
+          ? parseFloat(tabla.promedio_dut)
+          : this.calcularPromedio(tabla.dut);
+        const promedioPatronkV = tabla.promedio_patron
+          ? parseFloat(tabla.promedio_patron)
+          : this.calcularPromedio(tabla.patron);
+        const promedioDUT = promedioDUTkV * 1000;
+        const promedioPatron = promedioPatronkV * 1000;
+
+        rangeValues.push((nivel * 1000).toString());
+        dutValues.push(Math.round(promedioDUT).toString());
+        patronValues.push(Math.round(promedioPatron).toString());
+
+        const error = this.calcularError(promedioDUT, promedioPatron);
+        errorValues.push(error.toFixed(2));
+
+        const desviacionDUT = tabla.desviacion_std_dut
+          ? parseFloat(tabla.desviacion_std_dut)
+          : null;
+        const desviacionPatron = tabla.desviacion_std_patron
+          ? parseFloat(tabla.desviacion_std_patron)
+          : null;
+
+        let uncertainty = 1.0;
+        if (desviacionDUT !== null && desviacionPatron !== null) {
+          const desviacionCombinada = Math.sqrt(
+            Math.pow(desviacionDUT, 2) + Math.pow(desviacionPatron, 2)
+          );
+          uncertainty = (desviacionCombinada / promedioDUTkV) * 100 * 2;
+        }
+        uncertaintyValues.push(Math.max(uncertainty, 0.5).toFixed(2));
+
+        // Calcular Scale Factor obtenido para LT
+        const scaleFactor = this.calcularScaleFactorCorregido(
+          tabla,
+          sfx,
+          sfref
+        );
+        scaleFactorValues.push(scaleFactor.toFixed(3));
+      });
+
+      if (rangeValues.length === 0) return;
+
+      // RESULTADO 1: Tabla de datos LT
+      results.push({
+        id: this.generateId(),
+        name: `LT ${lt.prueba} - Linearity Test Results`,
+        refType: 'hv_linearityTest',
+        data: [
+          {
+            id: this.generateId(),
+            refType: 'hv_range',
+            name: 'Range',
+            dataType: 'realListXMLList',
+            valueXMLList: rangeValues.join(' '),
+            unitXMLList: '\\volt',
+            value: '',
+            unit: '',
+          },
+          {
+            id: this.generateId(),
+            refType: 'basic_measuredValue',
+            name: 'Voltage Measured',
+            dataType: 'realListXMLList',
+            valueXMLList: dutValues.join(' '),
+            unitXMLList: '\\volt',
+            value: '',
+            unit: '',
+          },
+          {
+            id: this.generateId(),
+            refType: 'basic_referenceValue',
+            name: 'Ref. Voltage',
+            dataType: 'realListXMLList',
+            valueXMLList: patronValues.join(' '),
+            unitXMLList: '\\volt',
+            value: '',
+            unit: '',
+          },
+          {
+            id: this.generateId(),
+            refType: 'basic_measurementError',
+            name: 'Voltage Error',
+            dataType: 'realListXMLList',
+            valueXMLList: errorValues.join(' '),
+            unitXMLList: '\\one',
+            value: '',
+            unit: '',
+            measurementUncertainty: {
+              expandedMU: {
+                valueExpandedMUXMLList: uncertaintyValues.join(' '),
+                coverageFactorXMLList: '2',
+                coverageProbabilityXMLList: '0.95',
+              },
+            },
+          },
+          {
+            id: this.generateId(),
+            refType: 'hv_scaleFactor',
+            name: 'Obtained Scale Factor',
+            dataType: 'realListXMLList',
+            valueXMLList: scaleFactorValues.join(' '),
+            unitXMLList: '\\one',
+            value: '',
+            unit: '',
+          },
+        ],
+      });
+
+      // RESULTADO 2: Mean Scale Factor para LT
+      const meanSF = this.calcularPromedioArray(scaleFactorValues.map(Number));
+      results.push({
+        id: this.generateId(),
+        name: `LT ${lt.prueba} - Mean Value of Scale Factor Obtained`,
+        refType: 'hv_linearityMean',
+        data: [
+          {
+            id: this.generateId(),
+            refType: 'hv_meanScaleFactor',
+            name: 'Mean Value of Scale Factor Obtained',
+            dataType: 'real',
+            valueXMLList: '',
+            unitXMLList: '',
+            value: meanSF.toFixed(3),
+            unit: '\\one',
+          },
+        ],
+      });
+
+      // RESULTADO 3: Linearity of Scale Factor para LT
+      const linearity = this.calcularLinealidad(scaleFactorValues.map(Number));
+      results.push({
+        id: this.generateId(),
+        name: `LT ${lt.prueba} - Linearity of Scale Factor`,
+        refType: 'hv_linearityValue',
+        data: [
+          {
+            id: this.generateId(),
+            refType: 'hv_linearity',
+            name: 'Linearity of Scale Factor (voltage dependence) obtained',
+            dataType: 'real',
+            valueXMLList: '',
+            unitXMLList: '',
+            value: linearity.toFixed(2),
+            unit: '\\one',
+          },
+        ],
+      });
+    });
+
+    // ═══════════════════════════════════════════════════════
+    // STABILITY TEST (ST) - GENERA 3 RESULTADOS POR PRUEBA
+    // ═══════════════════════════════════════════════════════
+    stabilityTestData.forEach((st, stIndex) => {
+      const rangeValues: string[] = [];
+      const dutValues: string[] = [];
+      const patronValues: string[] = [];
+      const errorValues: string[] = [];
+      const uncertaintyValues: string[] = [];
+      const stabilityValues: string[] = [];
+      const scaleFactorValues: string[] = [];
+
+      st.tablas.forEach((tabla: any) => {
+        const nivel = tabla.nivel || 0;
+        const promedioDUTkV = tabla.promedio_dut
+          ? parseFloat(tabla.promedio_dut)
+          : this.calcularPromedio(tabla.dut);
+        const promedioPatronkV = tabla.promedio_patron
+          ? parseFloat(tabla.promedio_patron)
+          : this.calcularPromedio(tabla.patron);
+        const promedioDUT = promedioDUTkV * 1000;
+        const promedioPatron = promedioPatronkV * 1000;
+
+        rangeValues.push((nivel * 1000).toString());
+        dutValues.push(Math.round(promedioDUT).toString());
+        patronValues.push(Math.round(promedioPatron).toString());
+
+        const error = this.calcularError(promedioDUT, promedioPatron);
+        errorValues.push(error.toFixed(2));
+
+        const desviacionDUT = tabla.desviacion_std_dut
+          ? parseFloat(tabla.desviacion_std_dut)
+          : null;
+        const desviacionPatron = tabla.desviacion_std_patron
+          ? parseFloat(tabla.desviacion_std_patron)
+          : null;
+
+        let uncertainty = 1.0;
+        if (desviacionDUT !== null && desviacionPatron !== null) {
+          const desviacionCombinada = Math.sqrt(
+            Math.pow(desviacionDUT, 2) + Math.pow(desviacionPatron, 2)
+          );
+          uncertainty = (desviacionCombinada / promedioDUTkV) * 100 * 2;
+        }
+        uncertaintyValues.push(Math.max(uncertainty, 0.5).toFixed(2));
+
+        // Calcular estabilidad como desviación relativa
+        const stability =
+          desviacionDUT !== null ? (desviacionDUT / promedioDUTkV) * 100 : 0;
+        stabilityValues.push(stability.toFixed(2));
+
+        // Calcular Scale Factor obtenido para ST
+        const scaleFactor = this.calcularScaleFactorCorregido(
+          tabla,
+          sfx,
+          sfref
+        );
+        scaleFactorValues.push(scaleFactor.toFixed(3));
+      });
+
+      if (rangeValues.length === 0) return;
+
+      // RESULTADO 1: Tabla de datos ST
+      results.push({
+        id: this.generateId(),
+        name: `ST ${st.prueba} - Short-term Stability Test Results`,
+        refType: 'hv_stabilityTest',
+        data: [
+          {
+            id: this.generateId(),
+            refType: 'hv_range',
+            name: 'Range',
+            dataType: 'realListXMLList',
+            valueXMLList: rangeValues.join(' '),
+            unitXMLList: '\\volt',
+            value: '',
+            unit: '',
+          },
+          {
+            id: this.generateId(),
+            refType: 'basic_measuredValue',
+            name: 'Voltage Measured',
+            dataType: 'realListXMLList',
+            valueXMLList: dutValues.join(' '),
+            unitXMLList: '\\volt',
+            value: '',
+            unit: '',
+          },
+          {
+            id: this.generateId(),
+            refType: 'basic_referenceValue',
+            name: 'Ref. Voltage',
+            dataType: 'realListXMLList',
+            valueXMLList: patronValues.join(' '),
+            unitXMLList: '\\volt',
+            value: '',
+            unit: '',
+          },
+          {
+            id: this.generateId(),
+            refType: 'basic_measurementError',
+            name: 'Voltage Error',
+            dataType: 'realListXMLList',
+            valueXMLList: errorValues.join(' '),
+            unitXMLList: '\\one',
+            value: '',
+            unit: '',
+            measurementUncertainty: {
+              expandedMU: {
+                valueExpandedMUXMLList: uncertaintyValues.join(' '),
+                coverageFactorXMLList: '2',
+                coverageProbabilityXMLList: '0.95',
+              },
+            },
+          },
+          {
+            id: this.generateId(),
+            refType: 'hv_stability',
+            name: 'Short-term Stability',
+            dataType: 'realListXMLList',
+            valueXMLList: stabilityValues.join(' '),
+            unitXMLList: '\\one',
+            value: '',
+            unit: '',
+          },
+        ],
+      });
+
+      // RESULTADO 2: Mean Scale Factor para ST
+      const meanSF = this.calcularPromedioArray(scaleFactorValues.map(Number));
+      results.push({
+        id: this.generateId(),
+        name: `ST ${st.prueba} - Mean Value of Scale Factor Obtained`,
+        refType: 'hv_stabilityMean',
+        data: [
+          {
+            id: this.generateId(),
+            refType: 'hv_meanScaleFactor',
+            name: 'Mean Value of Scale Factor Obtained',
+            dataType: 'real',
+            valueXMLList: '',
+            unitXMLList: '',
+            value: meanSF.toFixed(3),
+            unit: '\\one',
+          },
+        ],
+      });
+
+      // RESULTADO 3: Short-term Stability Value
+      const maxStability = Math.max(...stabilityValues.map(Number));
+      results.push({
+        id: this.generateId(),
+        name: `ST ${st.prueba} - Short-term Stability Value`,
+        refType: 'hv_stabilityValue',
+        data: [
+          {
+            id: this.generateId(),
+            refType: 'hv_stability',
+            name: 'Short-term Stability (maximum deviation)',
+            dataType: 'real',
+            valueXMLList: '',
+            unitXMLList: '',
+            value: maxStability.toFixed(2),
+            unit: '\\one',
+          },
+        ],
+      });
+    });
 
     return results;
   }

@@ -18,7 +18,6 @@ import Swal from 'sweetalert2';
 })
 export class ResultsComponent implements OnInit, OnDestroy {
   logResults() {
-    console.log('RENDER this.results:', this.results);
     return '';
   }
   @ViewChild('pt23ResultsComponent')
@@ -852,6 +851,11 @@ export class ResultsComponent implements OnInit, OnDestroy {
     });
   }
 
+  // Método público para refrescar resultados (usado por componentes hijos)
+  refreshResultsFromDB() {
+    this.loadResultsFromDB();
+  }
+
   // Modifica loadResultsFromDB para cargar directamente sin limpiar
   private loadResultsFromDB() {
     const dccId = this.coreData?.certificate_number;
@@ -982,7 +986,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
       if (!dccId) return;
 
       // Guardar cada condición en la tabla dcc_influencecondition
-      const promises = this.influenceConditions.map((cond, idx) => {
+      const promises = this.influenceConditions.map((cond) => {
         const attributes = {
           id_dcc: dccId,
           name: cond.name,
@@ -993,28 +997,108 @@ export class ResultsComponent implements OnInit, OnDestroy {
         };
         console.log('Saving condition attributes:', attributes);
 
-        // Si existe id, actualiza; si no, crea
-        if (cond.id) {
-          const updateQuery = {
-            action: 'update',
-            bd: this.database,
-            table: 'dcc_influencecondition',
-            opts: {
-              attributes,
-              where: { id: cond.id },
+        // Buscar existencia por claves naturales (id_dcc + name [+ ref_type])
+        const existsQuery = {
+          action: 'get',
+          bd: this.database,
+          table: 'dcc_influencecondition',
+          opts: {
+            where: {
+              id_dcc: dccId,
+              name: cond.name,
+              ref_type: cond.refType,
+              deleted: 0,
             },
-          };
-          console.log('Updating condition with query:', updateQuery);
-          return this.dccDataService.post(updateQuery).toPromise();
-        } else {
-          const createQuery = {
-            action: 'create',
-            bd: this.database,
-            table: 'dcc_influencecondition',
-            opts: { attributes },
-          };
-          return this.dccDataService.post(createQuery).toPromise();
-        }
+          },
+        };
+
+        console.log('Checking existence with query:', existsQuery);
+
+        return this.dccDataService
+          .post(existsQuery)
+          .toPromise()
+          .then((getResp: any) => {
+            const existing = Array.isArray(getResp?.result)
+              ? getResp.result[0]
+              : null;
+
+            if (existing) {
+              console.log('Existing record found:', existing);
+              // UPDATE por id encontrado
+              const updateQuery = {
+                action: 'update',
+                bd: this.database,
+                table: 'dcc_influencecondition',
+                opts: {
+                  attributes,
+                  where: { id: existing.id },
+                },
+              };
+              console.log(
+                'Upserting: existing found, updating ID:',
+                existing.id
+              );
+              return this.dccDataService
+                .post(updateQuery)
+                .toPromise()
+                .then((r) => {
+                  // Sincronizar id en memoria
+                  cond.id = existing.id;
+                  return r;
+                });
+            } else {
+              // CREATE porque no existe
+              const createQuery = {
+                action: 'create',
+                bd: this.database,
+                table: 'dcc_influencecondition',
+                opts: { attributes },
+              };
+              console.log('Upserting: no existing, creating new');
+              return this.dccDataService
+                .post(createQuery)
+                .toPromise()
+                .then((createResp: any) => {
+                  // Intentar recuperar el ID del insert si el backend lo retorna
+                  const insertedId =
+                    createResp?.result?.insertId ||
+                    createResp?.insertId ||
+                    null;
+                  if (insertedId) {
+                    cond.id = insertedId;
+                    console.log('Assigned insertId to condition:', insertedId);
+                    return createResp;
+                  }
+                  // Si no viene insertId, hacer una consulta para obtenerlo por claves
+                  const fetchQuery = {
+                    action: 'get',
+                    bd: this.database,
+                    table: 'dcc_influencecondition',
+                    opts: {
+                      where: {
+                        id_dcc: dccId,
+                        name: cond.name,
+                        ref_type: cond.refType,
+                        deleted: 0,
+                      },
+                    },
+                  };
+                  return this.dccDataService
+                    .post(fetchQuery)
+                    .toPromise()
+                    .then((fetchResp: any) => {
+                      const rec = Array.isArray(fetchResp?.result)
+                        ? fetchResp.result[0]
+                        : null;
+                      if (rec?.id) {
+                        cond.id = rec.id;
+                        console.log('Fetched new record ID:', cond.id);
+                      }
+                      return createResp;
+                    });
+                });
+            }
+          });
       });
 
       Promise.all(promises)

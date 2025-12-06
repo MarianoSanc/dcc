@@ -7,7 +7,9 @@
       </div>
       <div class="header-actions">
         <button
-          *ngIf="!isEditing && numeroScaleFactor > 0"
+          *ngIf="
+            !isEditingConfig && !isEditingLevelsSection && numeroScaleFactor > 0
+          "
           class="generate-results-btn"
           (click)="generarYActualizarResultados()"
           title="Regenerar resultados manualmente con los datos actuales"
@@ -15,23 +17,13 @@
           <i class="material-icons">refresh</i>
           Regenerar Resultados
         </button>
-        <button *ngIf="!isEditing" class="edit-btn" (click)="toggleEdit()">
-          <i class="material-icons">edit</i>
-          Editar
-        </button>
-        <ng-container *ngIf="isEditing">
-          <button class="save-btn" (click)="guardarScaleFactor()">
-            <i class="material-icons">save</i>
-            Guardar
-          </button>
-          <button class="cancel-btn" (click)="cancelarEdicion()">
-            <i class="material-icons">close</i>
-            Cancelar
-          </button>
-        </ng-container>
       </div>
     </div>
   </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+  <!-- SECCIÓN 1: CONFIGURACIÓN (SFx, SFref, número de pruebas) - INDEPENDIENTE -->
+  <!-- ═══════════════════════════════════════════════════════════════════════════ -->
 
   <!-- Parámetros de referencia SFx y SFref -->
   <div class="parameters-section">
@@ -39,6 +31,36 @@
       <div class="card-header-params">
         <div class="header-text">
           <h4>Parámetros de Referencia</h4>
+        </div>
+        <!-- Botones INDEPENDIENTES de configuración -->
+        <div class="header-buttons">
+          <button
+            *ngIf="!isEditingConfig"
+            class="edit-btn"
+            (click)="toggleEditConfig()"
+            title="Editar parámetros de referencia"
+          >
+            <i class="material-icons">edit</i>
+            Editar
+          </button>
+          <ng-container *ngIf="isEditingConfig">
+            <button
+              class="save-btn"
+              (click)="guardarConfig()"
+              title="Guardar configuración"
+            >
+              <i class="material-icons">save</i>
+              Guardar
+            </button>
+            <button
+              class="cancel-btn"
+              (click)="cancelarConfig()"
+              title="Cancelar edición"
+            >
+              <i class="material-icons">close</i>
+              Cancelar
+            </button>
+          </ng-container>
         </div>
       </div>
 
@@ -51,10 +73,11 @@
           <div class="parameter-input-wrapper">
             <input
               type="number"
-              [(ngModel)]="sfx"
+              [ngModel]="isEditingConfig ? sfxTemp : sfx"
+              (ngModelChange)="isEditingConfig && (sfxTemp = $event)"
               placeholder="Ingrese SFx"
               class="parameter-input"
-              [disabled]="!isEditing"
+              [disabled]="!isEditingConfig"
               step="0.000001"
             />
             <span class="parameter-hint">Valor de referencia X</span>
@@ -69,10 +92,11 @@
           <div class="parameter-input-wrapper">
             <input
               type="number"
-              [(ngModel)]="sfref"
+              [ngModel]="isEditingConfig ? sfrefTemp : sfref"
+              (ngModelChange)="isEditingConfig && (sfrefTemp = $event)"
               placeholder="Ingrese SFref"
               class="parameter-input"
-              [disabled]="!isEditing"
+              [disabled]="!isEditingConfig"
               step="0.000001"
             />
             <span class="parameter-hint">Valor de referencia</span>
@@ -80,7 +104,10 @@
         </div>
       </div>
 
-      <div class="parameters-warning" *ngIf="isEditing && (!sfx || !sfref)">
+      <div
+        class="parameters-warning"
+        *ngIf="isEditingConfig && (!sfxTemp || !sfrefTemp)"
+      >
         <i class="material-icons">warning</i>
         <span>Se requieren ambos valores (SFx y SFref) para guardar</span>
       </div>
@@ -89,6 +116,10 @@
 
   <!-- Configuración de pruebas -->
   <div class="config-section">
+    <h4 style="margin-bottom: 1rem; color: #666">
+      Configuración de Número de Pruebas
+    </h4>
+
     <!-- Scale Factor Config -->
     <div class="config-card">
       <div class="card-icon scale-factor-icon">
@@ -101,13 +132,13 @@
           <div
             *ngFor="let opcion of opcionesScaleFactor"
             class="option-box"
-            [class.selected]="numeroScaleFactor === opcion"
-            [class.disabled]="!isEditing"
-            (click)="
-              isEditing &&
-                (numeroScaleFactor = opcion) &&
-                onNumeroScaleFactorChange()
+            [class.selected]="
+              isEditingConfig
+                ? numeroScaleFactorTemp === opcion
+                : numeroScaleFactor === opcion
             "
+            [class.disabled]="!isEditingConfig"
+            (click)="isEditingConfig && (numeroScaleFactorTemp = opcion)"
           >
             <span class="option-number">{{ opcion }}</span>
           </div>
@@ -127,13 +158,13 @@
           <div
             *ngFor="let opcion of opcionesLinearityTest"
             class="option-box"
-            [class.selected]="numeroLinearityTest === opcion"
-            [class.disabled]="!isEditing"
-            (click)="
-              isEditing &&
-                (numeroLinearityTest = opcion) &&
-                onNumeroLinearityTestChange()
+            [class.selected]="
+              isEditingConfig
+                ? numeroLinearityTestTemp === opcion
+                : numeroLinearityTest === opcion
             "
+            [class.disabled]="!isEditingConfig"
+            (click)="isEditingConfig && (numeroLinearityTestTemp = opcion)"
           >
             <span class="option-number">{{ opcion }}</span>
           </div>
@@ -153,18 +184,74 @@
           <div
             *ngFor="let opcion of opcionesStabilityTest"
             class="option-box"
-            [class.selected]="numeroStabilityTest === opcion"
-            [class.disabled]="!isEditing"
-            (click)="
-              isEditing &&
-                (numeroStabilityTest = opcion) &&
-                onNumeroStabilityTestChange()
+            [class.selected]="
+              isEditingConfig
+                ? numeroStabilityTestTemp === opcion
+                : numeroStabilityTest === opcion
             "
+            [class.disabled]="!isEditingConfig"
+            (click)="isEditingConfig && (numeroStabilityTestTemp = opcion)"
           >
             <span class="option-number">{{ opcion }}</span>
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+  <!-- SECCIÓN 2: DATOS DE NIVELES (Mediciones) - INDEPENDIENTE -->
+  <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Botones INDEPENDIENTES de sección de niveles -->
+  <div
+    class="levels-section-header"
+    *ngIf="
+      numeroScaleFactor > 0 ||
+      numeroLinearityTest > 0 ||
+      numeroStabilityTest > 0
+    "
+  >
+    <h4 style="margin: 2rem 0 1rem 0; color: #333">
+      Datos de Niveles y Mediciones
+    </h4>
+    <div class="levels-buttons">
+      <button
+        *ngIf="!isEditingLevelsSection"
+        class="edit-btn"
+        (click)="toggleEditLevels()"
+        title="Editar niveles y mediciones"
+      >
+        <i class="material-icons">edit</i>
+        Editar Niveles
+      </button>
+      <button
+        *ngIf="!isEditingLevelsSection"
+        class="generate-btn"
+        (click)="generarResultadosManuales()"
+        title="Generar resultados en dcc_results con los datos actuales"
+      >
+        <i class="material-icons">auto_awesome</i>
+        Generar Resultados
+      </button>
+      <ng-container *ngIf="isEditingLevelsSection">
+        <button
+          class="save-btn"
+          (click)="guardarNiveles()"
+          title="Guardar todos los niveles"
+        >
+          <i class="material-icons">save</i>
+          Guardar Todo
+        </button>
+        <button
+          class="cancel-btn"
+          (click)="cancelarNiveles()"
+          title="Cancelar edición"
+        >
+          <i class="material-icons">close</i>
+          Cancelar
+        </button>
+      </ng-container>
     </div>
   </div>
 
@@ -174,204 +261,230 @@
     <p>No se han configurado pruebas de Scale Factor</p>
   </div>
 
-  <div
-    *ngFor="let sf of scaleFactorData; let sfIndex = index"
-    class="test-section"
-  >
-    <div class="test-header scale-factor-header">
-      <div class="test-title">
-        <i class="material-icons">straighten</i>
-        <h3>Scale Factor {{ numeroScaleFactor > 1 ? sfIndex + 1 : "" }}</h3>
-        <span class="test-badge sf-badge"
-          >SF{{ numeroScaleFactor > 1 ? sfIndex + 1 : "" }}</span
-        >
+  <ng-container *ngIf="numeroScaleFactor > 0 && scaleFactorData.length > 0">
+    <div
+      *ngFor="let sf of scaleFactorData; let sfIndex = index"
+      class="test-section"
+    >
+      <div class="test-header scale-factor-header">
+        <div class="test-title">
+          <i class="material-icons">straighten</i>
+          <h3>Scale Factor {{ numeroScaleFactor > 1 ? sfIndex + 1 : "" }}</h3>
+          <span class="test-badge sf-badge"
+            >SF{{ numeroScaleFactor > 1 ? sfIndex + 1 : "" }}</span
+          >
+        </div>
+        <div class="nivel-buttons" *ngIf="isEditingLevelsSection">
+          <button class="add-nivel-btn" (click)="agregarNivel('sf', sfIndex)">
+            <i class="material-icons">add</i>
+            Agregar Nivel
+          </button>
+          <button
+            class="remove-nivel-btn"
+            (click)="quitarUltimoNivel('sf', sfIndex)"
+            [disabled]="sf.tablas.length <= 1"
+          >
+            <i class="material-icons">remove</i>
+            Quitar Nivel
+          </button>
+        </div>
       </div>
-      <button
-        *ngIf="isEditing"
-        class="add-nivel-btn"
-        (click)="agregarNivel(sfIndex)"
-      >
-        <i class="material-icons">add</i>
-        Agregar Nivel
-      </button>
-    </div>
 
-    <div class="test-content">
-      <!-- Tablas en grid horizontal -->
-      <div class="tables-grid">
-        <div
-          class="tabla-nivel-vertical"
-          *ngFor="let tabla of sf.tablas; let tablaIndex = index"
-        >
-          <div class="tabla-header-vertical">
-            <div class="nivel-info">
-              <h4>Nivel {{ tablaIndex + 1 }}</h4>
-              <div class="nivel-input-wrapper">
-                <input
-                  type="number"
-                  [(ngModel)]="tabla.nivel"
-                  placeholder="kV"
-                  class="nivel-input-compact"
-                  [disabled]="!isEditing"
-                  step="0.001"
-                />
-                <span class="unit-label">kV</span>
+      <div class="test-content">
+        <!-- Tablas en grid horizontal -->
+        <div class="tables-grid">
+          <div
+            class="tabla-nivel-vertical"
+            *ngFor="let tabla of sf.tablas; let tablaIndex = index"
+          >
+            <div class="tabla-header-vertical">
+              <div class="nivel-info">
+                <h4>Nivel {{ tablaIndex + 1 }}</h4>
+                <div class="nivel-input-wrapper">
+                  <input
+                    type="number"
+                    [(ngModel)]="tabla.nivel"
+                    placeholder="kV"
+                    class="nivel-input-compact"
+                    [disabled]="!isEditingLevelsSection"
+                    step="0.001"
+                  />
+                  <span class="unit-label">kV</span>
+                </div>
               </div>
+              <button
+                *ngIf="isEditing && sf.tablas.length > 1"
+                class="delete-nivel-btn-compact"
+                (click)="eliminarNivel('sf', sfIndex, tablaIndex)"
+                title="Eliminar nivel"
+              >
+                <i class="material-icons">delete</i>
+              </button>
             </div>
-            <button
-              *ngIf="isEditing && sf.tablas.length > 1"
-              class="delete-nivel-btn-compact"
-              (click)="eliminarNivel(sfIndex, tablaIndex)"
-              title="Eliminar nivel"
-            >
-              <i class="material-icons">delete</i>
-            </button>
-          </div>
 
-          <div class="table-vertical-wrapper">
-            <table class="results-table-vertical">
-              <thead>
-                <tr>
-                  <th class="row-number-header">#</th>
-                  <th class="dut-header-vertical">
-                    <div class="header-with-actions">
-                      <span>DUT (kV)</span>
-                      <div *ngIf="isEditing" class="column-actions">
-                        <button
-                          class="paste-btn"
-                          (click)="pegarValores(sfIndex, tablaIndex, 'dut')"
-                          title="Pegar valores desde portapapeles"
+            <div class="table-vertical-wrapper">
+              <table class="results-table-vertical">
+                <thead>
+                  <tr>
+                    <th class="row-number-header">#</th>
+                    <th class="dut-header-vertical">
+                      <div class="header-with-actions">
+                        <span>DUT (kV)</span>
+                        <div
+                          *ngIf="isEditingLevelsSection"
+                          class="column-actions"
                         >
-                          <i class="material-icons">content_paste</i>
-                        </button>
-                        <button
-                          class="clear-btn"
-                          (click)="limpiarColumna(sfIndex, tablaIndex, 'dut')"
-                          title="Limpiar columna"
-                        >
-                          <i class="material-icons">clear_all</i>
-                        </button>
+                          <button
+                            class="paste-btn"
+                            (click)="
+                              pegarValores('sf', sfIndex, tablaIndex, 'dut')
+                            "
+                            title="Pegar valores desde portapapeles"
+                          >
+                            <i class="material-icons">content_paste</i>
+                          </button>
+                          <button
+                            class="clear-btn"
+                            (click)="
+                              limpiarColumna('sf', sfIndex, tablaIndex, 'dut')
+                            "
+                            title="Limpiar columna"
+                          >
+                            <i class="material-icons">clear_all</i>
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </th>
-                  <th class="patron-header-vertical">
-                    <div class="header-with-actions">
-                      <span>Patrón (kV)</span>
-                      <div *ngIf="isEditing" class="column-actions">
-                        <button
-                          class="paste-btn"
-                          (click)="pegarValores(sfIndex, tablaIndex, 'patron')"
-                          title="Pegar valores desde portapapeles"
+                    </th>
+                    <th class="patron-header-vertical">
+                      <div class="header-with-actions">
+                        <span>Patrón (kV)</span>
+                        <div
+                          *ngIf="isEditingLevelsSection"
+                          class="column-actions"
                         >
-                          <i class="material-icons">content_paste</i>
-                        </button>
-                        <button
-                          class="clear-btn"
-                          (click)="
-                            limpiarColumna(sfIndex, tablaIndex, 'patron')
-                          "
-                          title="Limpiar columna"
-                        >
-                          <i class="material-icons">clear_all</i>
-                        </button>
+                          <button
+                            class="paste-btn"
+                            (click)="
+                              pegarValores('sf', sfIndex, tablaIndex, 'patron')
+                            "
+                            title="Pegar valores desde portapapeles"
+                          >
+                            <i class="material-icons">content_paste</i>
+                          </button>
+                          <button
+                            class="clear-btn"
+                            (click)="
+                              limpiarColumna(
+                                'sf',
+                                sfIndex,
+                                tablaIndex,
+                                'patron'
+                              )
+                            "
+                            title="Limpiar columna"
+                          >
+                            <i class="material-icons">clear_all</i>
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </th>
-                  <!-- NUEVAS COLUMNAS CALCULADAS -->
-                  <th class="error-header-vertical">
-                    <span>Error (%)</span>
-                  </th>
-                  <th class="sf-corrected-header-vertical">
-                    <span>SF Corrected</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let fila of filas; let i = index">
-                  <td class="row-number">{{ i + 1 }}</td>
-                  <td class="data-cell-vertical">
-                    <input
-                      type="number"
-                      [(ngModel)]="tabla.dut[i]"
-                      placeholder="---"
-                      class="data-input-vertical"
-                      [disabled]="!isEditing"
-                      step="0.001"
-                    />
-                  </td>
-                  <td class="data-cell-vertical">
-                    <input
-                      type="number"
-                      [(ngModel)]="tabla.patron[i]"
-                      placeholder="---"
-                      class="data-input-vertical"
-                      [disabled]="!isEditing"
-                      step="0.001"
-                    />
-                  </td>
-                  <!-- NUEVAS CELDAS CALCULADAS -->
-                  <td class="calculated-cell error-cell">
-                    <span
-                      class="calculated-value"
-                      *ngIf="getErrorForRow(tabla.dut[i], tabla.patron[i])"
-                    >
-                      {{ getErrorForRow(tabla.dut[i], tabla.patron[i]) }}
-                      <span class="unit">%</span>
-                    </span>
-                    <span
-                      class="empty-indicator"
-                      *ngIf="!getErrorForRow(tabla.dut[i], tabla.patron[i])"
-                      >-</span
-                    >
-                  </td>
-                  <td class="calculated-cell sf-cell">
-                    <span
-                      class="calculated-value"
-                      *ngIf="
-                        getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
-                      "
-                    >
-                      {{ getSFCorrectedForRow(tabla.dut[i], tabla.patron[i]) }}
-                    </span>
-                    <span
-                      class="empty-indicator"
-                      *ngIf="
-                        !getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
-                      "
-                      >-</span
-                    >
-                  </td>
-                </tr>
-              </tbody>
-              <tfoot>
-                <tr class="average-row-vertical">
-                  <td class="average-label-vertical">
-                    <i class="material-icons">functions</i>
-                  </td>
-                  <td class="average-cell-vertical dut-average">
-                    {{ getAverage(tabla.dut) }}
-                  </td>
-                  <td class="average-cell-vertical patron-average">
-                    {{ getAverage(tabla.patron) }}
-                  </td>
-                  <!-- NUEVAS CELDAS DE PROMEDIO -->
-                  <td class="average-cell-vertical error-average">
-                    <strong>{{
-                      getError(tabla.dut, tabla.patron) || "N/A"
-                    }}</strong>
-                  </td>
-                  <td class="average-cell-vertical sf-average">
-                    <strong>{{
-                      getObtainedScaleFactor(tabla.dut, tabla.patron) || "N/A"
-                    }}</strong>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                    </th>
+                    <!-- NUEVAS COLUMNAS CALCULADAS -->
+                    <th class="error-header-vertical">
+                      <span>Error (%)</span>
+                    </th>
+                    <th class="sf-corrected-header-vertical">
+                      <span>SF Corrected</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let fila of filas; let i = index">
+                    <td class="row-number">{{ i + 1 }}</td>
+                    <td class="data-cell-vertical">
+                      <input
+                        type="number"
+                        [(ngModel)]="tabla.dut[i]"
+                        placeholder="---"
+                        class="data-input-vertical"
+                        [disabled]="!isEditingLevelsSection"
+                        step="0.001"
+                      />
+                    </td>
+                    <td class="data-cell-vertical">
+                      <input
+                        type="number"
+                        [(ngModel)]="tabla.patron[i]"
+                        placeholder="---"
+                        class="data-input-vertical"
+                        [disabled]="!isEditingLevelsSection"
+                        step="0.001"
+                      />
+                    </td>
+                    <!-- NUEVAS CELDAS CALCULADAS -->
+                    <td class="calculated-cell error-cell">
+                      <span
+                        class="calculated-value"
+                        *ngIf="getErrorForRow(tabla.dut[i], tabla.patron[i])"
+                      >
+                        {{ getErrorForRow(tabla.dut[i], tabla.patron[i]) }}
+                        <span class="unit">%</span>
+                      </span>
+                      <span
+                        class="empty-indicator"
+                        *ngIf="!getErrorForRow(tabla.dut[i], tabla.patron[i])"
+                        >-</span
+                      >
+                    </td>
+                    <td class="calculated-cell sf-cell">
+                      <span
+                        class="calculated-value"
+                        *ngIf="
+                          getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
+                        "
+                      >
+                        {{
+                          getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
+                        }}
+                      </span>
+                      <span
+                        class="empty-indicator"
+                        *ngIf="
+                          !getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
+                        "
+                        >-</span
+                      >
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr class="average-row-vertical">
+                    <td class="average-label-vertical">
+                      <i class="material-icons">functions</i>
+                    </td>
+                    <td class="average-cell-vertical dut-average">
+                      {{ getAverage(tabla.dut) }}
+                    </td>
+                    <td class="average-cell-vertical patron-average">
+                      {{ getAverage(tabla.patron) }}
+                    </td>
+                    <!-- NUEVAS CELDAS DE PROMEDIO -->
+                    <td class="average-cell-vertical error-average">
+                      <strong>{{
+                        getError(tabla.dut, tabla.patron) || "N/A"
+                      }}</strong>
+                    </td>
+                    <td class="average-cell-vertical sf-average">
+                      <strong>{{
+                        getObtainedScaleFactor(tabla.dut, tabla.patron) || "N/A"
+                      }}</strong>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
 
-          <!-- ELIMINAR ESTAS COLUMNAS ANTIGUAS -->
-          <!-- 
+            <!-- ELIMINAR ESTAS COLUMNAS ANTIGUAS -->
+            <!-- 
           <div class="table-column average-column">
             <div class="column-header">
               <h6>Error (%)</h6>
@@ -391,78 +504,496 @@
               }}</strong>
             </div>
           </div>
-          -->
+          --></div>
+        </div>
+
+        <div
+          *ngIf="!sf.tablas || sf.tablas.length === 0"
+          class="empty-state-small"
+        >
+          <i class="material-icons">assessment</i>
+          <p>No hay datos de Scale Factor disponibles.</p>
         </div>
       </div>
-
-      <div
-        *ngIf="!sf.tablas || sf.tablas.length === 0"
-        class="empty-state-small"
-      >
-        <i class="material-icons">assessment</i>
-        <p>No hay datos de Scale Factor disponibles.</p>
-      </div>
     </div>
-  </div>
+  </ng-container>
 
   <!-- Linearity Test Sections -->
-  <div
-    *ngFor="let lt of [].constructor(numeroLinearityTest); let ltIndex = index"
-    class="test-section"
-  >
-    <div class="test-header linearity-header">
-      <div class="test-title">
-        <i class="material-icons">show_chart</i>
-        <h3>Linearity Test {{ numeroLinearityTest > 1 ? ltIndex + 1 : "" }}</h3>
-        <span class="test-badge lt-badge"
-          >LT{{ numeroLinearityTest > 1 ? ltIndex + 1 : "" }}</span
-        >
-      </div>
-    </div>
-
-    <div class="test-content">
-      <div class="placeholder-content">
-        <i class="material-icons">construction</i>
-        <p>Linearity Test - Próximamente</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Empty state cuando no hay Linearity Test -->
   <div *ngIf="numeroLinearityTest === 0" class="info-message">
     <i class="material-icons">info</i>
     <p>No se han configurado pruebas de Linearity Test</p>
   </div>
 
-  <!-- Stability Test Sections -->
-  <div
-    *ngFor="let st of [].constructor(numeroStabilityTest); let stIndex = index"
-    class="test-section"
-  >
-    <div class="test-header stability-header">
-      <div class="test-title">
-        <i class="material-icons">timeline</i>
-        <h3>
-          Short-term Stability Test
-          {{ numeroStabilityTest > 1 ? stIndex + 1 : "" }}
-        </h3>
-        <span class="test-badge st-badge"
-          >ST{{ numeroStabilityTest > 1 ? stIndex + 1 : "" }}</span
+  <ng-container *ngIf="numeroLinearityTest > 0 && linearityTestData.length > 0">
+    <div
+      *ngFor="let lt of linearityTestData; let ltIndex = index"
+      class="test-section"
+    >
+      <div class="test-header linearity-header">
+        <div class="test-title">
+          <i class="material-icons">show_chart</i>
+          <h3>
+            Linearity Test {{ numeroLinearityTest > 1 ? ltIndex + 1 : "" }}
+          </h3>
+          <span class="test-badge lt-badge"
+            >LT{{ numeroLinearityTest > 1 ? ltIndex + 1 : "" }}</span
+          >
+        </div>
+        <div class="nivel-buttons" *ngIf="isEditingLevelsSection">
+          <button class="add-nivel-btn" (click)="agregarNivel('lt', ltIndex)">
+            <i class="material-icons">add</i>
+            Agregar Nivel
+          </button>
+          <button
+            class="remove-nivel-btn"
+            (click)="quitarUltimoNivel('lt', ltIndex)"
+            [disabled]="lt.tablas.length <= 1"
+          >
+            <i class="material-icons">remove</i>
+            Quitar Nivel
+          </button>
+        </div>
+      </div>
+
+      <div class="test-content">
+        <div class="tables-grid">
+          <div
+            class="tabla-nivel-vertical"
+            *ngFor="let tabla of lt.tablas; let tablaIndex = index"
+          >
+            <div class="tabla-header-vertical">
+              <div class="nivel-info">
+                <h4>Nivel {{ tablaIndex + 1 }}</h4>
+                <div class="nivel-input-wrapper">
+                  <input
+                    type="number"
+                    [(ngModel)]="tabla.nivel"
+                    placeholder="kV"
+                    class="nivel-input-compact"
+                    [disabled]="!isEditingLevelsSection"
+                    step="0.001"
+                  />
+                  <span class="unit-label">kV</span>
+                </div>
+              </div>
+              <button
+                *ngIf="isEditing && lt.tablas.length > 1"
+                class="delete-nivel-btn-compact"
+                (click)="eliminarNivel('lt', ltIndex, tablaIndex)"
+                title="Eliminar nivel"
+              >
+                <i class="material-icons">delete</i>
+              </button>
+            </div>
+
+            <div class="table-vertical-wrapper">
+              <table class="results-table-vertical">
+                <thead>
+                  <tr>
+                    <th class="row-number-header">#</th>
+                    <th class="dut-header-vertical">
+                      <div class="header-with-actions">
+                        <span>DUT (kV)</span>
+                        <div
+                          *ngIf="isEditingLevelsSection"
+                          class="column-actions"
+                        >
+                          <button
+                            class="paste-btn"
+                            (click)="
+                              pegarValores('lt', ltIndex, tablaIndex, 'dut')
+                            "
+                            title="Pegar valores desde portapapeles"
+                          >
+                            <i class="material-icons">content_paste</i>
+                          </button>
+                          <button
+                            class="clear-btn"
+                            (click)="
+                              limpiarColumna('lt', ltIndex, tablaIndex, 'dut')
+                            "
+                            title="Limpiar columna"
+                          >
+                            <i class="material-icons">clear_all</i>
+                          </button>
+                        </div>
+                      </div>
+                    </th>
+                    <th class="patron-header-vertical">
+                      <div class="header-with-actions">
+                        <span>Patrón (kV)</span>
+                        <div
+                          *ngIf="isEditingLevelsSection"
+                          class="column-actions"
+                        >
+                          <button
+                            class="paste-btn"
+                            (click)="
+                              pegarValores('lt', ltIndex, tablaIndex, 'patron')
+                            "
+                            title="Pegar valores desde portapapeles"
+                          >
+                            <i class="material-icons">content_paste</i>
+                          </button>
+                          <button
+                            class="clear-btn"
+                            (click)="
+                              limpiarColumna(
+                                'lt',
+                                ltIndex,
+                                tablaIndex,
+                                'patron'
+                              )
+                            "
+                            title="Limpiar columna"
+                          >
+                            <i class="material-icons">clear_all</i>
+                          </button>
+                        </div>
+                      </div>
+                    </th>
+                    <th class="error-header-vertical">
+                      <span>Error (%)</span>
+                    </th>
+                    <th class="sf-corrected-header-vertical">
+                      <span>LT Corrected</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let fila of filas; let i = index">
+                    <td class="row-number">{{ i + 1 }}</td>
+                    <td class="data-cell-vertical">
+                      <input
+                        type="number"
+                        [(ngModel)]="tabla.dut[i]"
+                        placeholder="---"
+                        class="data-input-vertical"
+                        [disabled]="!isEditingLevelsSection"
+                        step="0.001"
+                      />
+                    </td>
+                    <td class="data-cell-vertical">
+                      <input
+                        type="number"
+                        [(ngModel)]="tabla.patron[i]"
+                        placeholder="---"
+                        class="data-input-vertical"
+                        [disabled]="!isEditingLevelsSection"
+                        step="0.001"
+                      />
+                    </td>
+                    <td class="calculated-cell error-cell">
+                      <span
+                        class="calculated-value"
+                        *ngIf="getErrorForRow(tabla.dut[i], tabla.patron[i])"
+                      >
+                        {{ getErrorForRow(tabla.dut[i], tabla.patron[i]) }}
+                        <span class="unit">%</span>
+                      </span>
+                      <span
+                        class="empty-indicator"
+                        *ngIf="!getErrorForRow(tabla.dut[i], tabla.patron[i])"
+                        >-</span
+                      >
+                    </td>
+                    <td class="calculated-cell sf-cell">
+                      <span
+                        class="calculated-value"
+                        *ngIf="
+                          getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
+                        "
+                      >
+                        {{
+                          getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
+                        }}
+                      </span>
+                      <span
+                        class="empty-indicator"
+                        *ngIf="
+                          !getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
+                        "
+                        >-</span
+                      >
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr class="average-row-vertical">
+                    <td class="average-label-vertical">
+                      <i class="material-icons">functions</i>
+                    </td>
+                    <td class="average-cell-vertical dut-average">
+                      {{ getAverage(tabla.dut) }}
+                    </td>
+                    <td class="average-cell-vertical patron-average">
+                      {{ getAverage(tabla.patron) }}
+                    </td>
+                    <td class="average-cell-vertical error-average">
+                      <strong>{{
+                        getError(tabla.dut, tabla.patron) || "N/A"
+                      }}</strong>
+                    </td>
+                    <td class="average-cell-vertical sf-average">
+                      <strong>{{
+                        getObtainedScaleFactor(tabla.dut, tabla.patron) || "N/A"
+                      }}</strong>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div
+          *ngIf="!lt.tablas || lt.tablas.length === 0"
+          class="empty-state-small"
         >
+          <i class="material-icons">assessment</i>
+          <p>No hay datos de Linearity Test disponibles.</p>
+        </div>
       </div>
     </div>
+  </ng-container>
 
-    <div class="test-content">
-      <div class="placeholder-content">
-        <i class="material-icons">construction</i>
-        <p>Short-term Stability Test - Próximamente</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Empty state cuando no hay Stability Test -->
+  <!-- Stability Test Sections -->
   <div *ngIf="numeroStabilityTest === 0" class="info-message">
     <i class="material-icons">info</i>
     <p>No se han configurado pruebas de Short-term Stability Test</p>
   </div>
+
+  <ng-container *ngIf="numeroStabilityTest > 0 && stabilityTestData.length > 0">
+    <div
+      *ngFor="let st of stabilityTestData; let stIndex = index"
+      class="test-section"
+    >
+      <div class="test-header stability-header">
+        <div class="test-title">
+          <i class="material-icons">timeline</i>
+          <h3>
+            Short-term Stability Test
+            {{ numeroStabilityTest > 1 ? stIndex + 1 : "" }}
+          </h3>
+          <span class="test-badge st-badge"
+            >ST{{ numeroStabilityTest > 1 ? stIndex + 1 : "" }}</span
+          >
+        </div>
+        <div class="nivel-buttons" *ngIf="isEditingLevelsSection">
+          <button class="add-nivel-btn" (click)="agregarNivel('st', stIndex)">
+            <i class="material-icons">add</i>
+            Agregar Nivel
+          </button>
+          <button
+            class="remove-nivel-btn"
+            (click)="quitarUltimoNivel('st', stIndex)"
+            [disabled]="st.tablas.length <= 1"
+          >
+            <i class="material-icons">remove</i>
+            Quitar Nivel
+          </button>
+        </div>
+      </div>
+
+      <div class="test-content">
+        <div class="tables-grid">
+          <div
+            class="tabla-nivel-vertical"
+            *ngFor="let tabla of st.tablas; let tablaIndex = index"
+          >
+            <div class="tabla-header-vertical">
+              <div class="nivel-info">
+                <h4>Nivel {{ tablaIndex + 1 }}</h4>
+                <div class="nivel-input-wrapper">
+                  <input
+                    type="number"
+                    [(ngModel)]="tabla.nivel"
+                    placeholder="kV"
+                    class="nivel-input-compact"
+                    [disabled]="!isEditingLevelsSection"
+                    step="0.001"
+                  />
+                  <span class="unit-label">kV</span>
+                </div>
+              </div>
+              <button
+                *ngIf="isEditing && st.tablas.length > 1"
+                class="delete-nivel-btn-compact"
+                (click)="eliminarNivel('st', stIndex, tablaIndex)"
+                title="Eliminar nivel"
+              >
+                <i class="material-icons">delete</i>
+              </button>
+            </div>
+
+            <div class="table-vertical-wrapper">
+              <table class="results-table-vertical">
+                <thead>
+                  <tr>
+                    <th class="row-number-header">#</th>
+                    <th class="dut-header-vertical">
+                      <div class="header-with-actions">
+                        <span>DUT (kV)</span>
+                        <div
+                          *ngIf="isEditingLevelsSection"
+                          class="column-actions"
+                        >
+                          <button
+                            class="paste-btn"
+                            (click)="
+                              pegarValores('st', stIndex, tablaIndex, 'dut')
+                            "
+                            title="Pegar valores desde portapapeles"
+                          >
+                            <i class="material-icons">content_paste</i>
+                          </button>
+                          <button
+                            class="clear-btn"
+                            (click)="
+                              limpiarColumna('st', stIndex, tablaIndex, 'dut')
+                            "
+                            title="Limpiar columna"
+                          >
+                            <i class="material-icons">clear_all</i>
+                          </button>
+                        </div>
+                      </div>
+                    </th>
+                    <th class="patron-header-vertical">
+                      <div class="header-with-actions">
+                        <span>Patrón (kV)</span>
+                        <div
+                          *ngIf="isEditingLevelsSection"
+                          class="column-actions"
+                        >
+                          <button
+                            class="paste-btn"
+                            (click)="
+                              pegarValores('st', stIndex, tablaIndex, 'patron')
+                            "
+                            title="Pegar valores desde portapapeles"
+                          >
+                            <i class="material-icons">content_paste</i>
+                          </button>
+                          <button
+                            class="clear-btn"
+                            (click)="
+                              limpiarColumna(
+                                'st',
+                                stIndex,
+                                tablaIndex,
+                                'patron'
+                              )
+                            "
+                            title="Limpiar columna"
+                          >
+                            <i class="material-icons">clear_all</i>
+                          </button>
+                        </div>
+                      </div>
+                    </th>
+                    <th class="error-header-vertical">
+                      <span>Error (%)</span>
+                    </th>
+                    <th class="sf-corrected-header-vertical">
+                      <span>ST Corrected</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let fila of filas; let i = index">
+                    <td class="row-number">{{ i + 1 }}</td>
+                    <td class="data-cell-vertical">
+                      <input
+                        type="number"
+                        [(ngModel)]="tabla.dut[i]"
+                        placeholder="---"
+                        class="data-input-vertical"
+                        [disabled]="!isEditingLevelsSection"
+                        step="0.001"
+                      />
+                    </td>
+                    <td class="data-cell-vertical">
+                      <input
+                        type="number"
+                        [(ngModel)]="tabla.patron[i]"
+                        placeholder="---"
+                        class="data-input-vertical"
+                        [disabled]="!isEditingLevelsSection"
+                        step="0.001"
+                      />
+                    </td>
+                    <td class="calculated-cell error-cell">
+                      <span
+                        class="calculated-value"
+                        *ngIf="getErrorForRow(tabla.dut[i], tabla.patron[i])"
+                      >
+                        {{ getErrorForRow(tabla.dut[i], tabla.patron[i]) }}
+                        <span class="unit">%</span>
+                      </span>
+                      <span
+                        class="empty-indicator"
+                        *ngIf="!getErrorForRow(tabla.dut[i], tabla.patron[i])"
+                        >-</span
+                      >
+                    </td>
+                    <td class="calculated-cell sf-cell">
+                      <span
+                        class="calculated-value"
+                        *ngIf="
+                          getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
+                        "
+                      >
+                        {{
+                          getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
+                        }}
+                      </span>
+                      <span
+                        class="empty-indicator"
+                        *ngIf="
+                          !getSFCorrectedForRow(tabla.dut[i], tabla.patron[i])
+                        "
+                        >-</span
+                      >
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr class="average-row-vertical">
+                    <td class="average-label-vertical">
+                      <i class="material-icons">functions</i>
+                    </td>
+                    <td class="average-cell-vertical dut-average">
+                      {{ getAverage(tabla.dut) }}
+                    </td>
+                    <td class="average-cell-vertical patron-average">
+                      {{ getAverage(tabla.patron) }}
+                    </td>
+                    <td class="average-cell-vertical error-average">
+                      <strong>{{
+                        getError(tabla.dut, tabla.patron) || "N/A"
+                      }}</strong>
+                    </td>
+                    <td class="average-cell-vertical sf-average">
+                      <strong>{{
+                        getObtainedScaleFactor(tabla.dut, tabla.patron) || "N/A"
+                      }}</strong>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div
+          *ngIf="!st.tablas || st.tablas.length === 0"
+          class="empty-state-small"
+        >
+          <i class="material-icons">assessment</i>
+          <p>No hay datos de Short-term Stability Test disponibles.</p>
+        </div>
+      </div>
+    </div>
+  </ng-container>
 </div>

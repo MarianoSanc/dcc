@@ -296,10 +296,16 @@
   <div class="data-block" *ngIf="operationMode !== 'xml'">
     <ng-container [ngSwitch]="coreData.pt_id">
       <div *ngSwitchCase="'PT-23'">
-        <app-pt23-results #pt23ResultsComponent></app-pt23-results>
+        <app-pt23-results
+          #pt23ResultsComponent
+          (resultsGenerated)="refreshResultsFromDB()"
+        ></app-pt23-results>
       </div>
       <div *ngSwitchCase="'PT-24'">
-        <app-pt23-results #pt23ResultsComponent></app-pt23-results>
+        <app-pt23-results
+          #pt23ResultsComponent
+          (resultsGenerated)="refreshResultsFromDB()"
+        ></app-pt23-results>
       </div>
       <div *ngSwitchDefault>
         <p>Seleccione un PT válido para mostrar los cálculos.</p>

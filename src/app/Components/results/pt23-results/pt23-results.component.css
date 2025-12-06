@@ -40,7 +40,8 @@
 .edit-btn,
 .save-btn,
 .cancel-btn,
-.generate-results-btn {
+.generate-results-btn,
+.generate-btn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -96,6 +97,17 @@
   background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.generate-btn {
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  color: white;
+}
+
+.generate-btn:hover {
+  background: linear-gradient(135deg, #f57c00 0%, #ef6c00 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
 }
 
 .edit-btn:active,
@@ -292,8 +304,34 @@
 .tables-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  max-width: 100%;
   gap: 20px;
   margin-top: 20px;
+}
+
+/* Limitar a máximo 4 columnas */
+@media (min-width: 1400px) {
+  .tables-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1100px) and (max-width: 1399px) {
+  .tables-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  .tables-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .tables-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .tabla-nivel-vertical {
@@ -696,6 +734,14 @@
   color: white;
 }
 
+.prueba-option.selected .option-number {
+  color: white;
+}
+
+.prueba-option.selected .option-label {
+  color: white;
+}
+
 .prueba-option.disabled {
   cursor: not-allowed;
   opacity: 0.6;
@@ -826,6 +872,45 @@
 
 .add-nivel-btn .material-icons {
   font-size: 18px;
+}
+
+.remove-nivel-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.remove-nivel-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+}
+
+.remove-nivel-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.remove-nivel-btn .material-icons {
+  font-size: 18px;
+}
+
+.nivel-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
 }
 
 /* Placeholder para Linearity Test */
@@ -992,21 +1077,37 @@
 }
 
 .option-box:hover:not(.disabled) {
-  border-color: #616161;
-  background: #fafafa;
+  border-color: #2196f3;
+  background: #e3f2fd;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
 }
 
 .option-box.selected {
-  background: linear-gradient(135deg, #616161 0%, #424242 100%);
-  border-color: #424242;
+  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+  border-color: #0d47a1;
   color: white;
+  box-shadow: 0 6px 16px rgba(33, 150, 243, 0.6);
+  font-weight: 900;
+  transform: scale(1.05);
+}
+
+.option-box.selected:hover {
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 8px 20px rgba(33, 150, 243, 0.7);
 }
 
 .option-box.disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.5;
+  background: #eeeeee;
+  border-color: #bdbdbd;
+}
+
+.option-box.disabled:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .option-number {
@@ -1016,6 +1117,8 @@
 
 .option-box.selected .option-number {
   color: white;
+  font-weight: 900;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Test sections */
@@ -1135,10 +1238,23 @@
 .card-header-params {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 2px solid #f0f0f0;
+  flex-wrap: wrap;
+}
+
+.header-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 .header-icon {
@@ -1466,4 +1582,87 @@
 /* Ajustar el ancho de la tabla para que se ajuste a las nuevas columnas */
 .results-table-vertical {
   min-width: 600px; /* Aumentar el ancho mínimo */
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* ESTILOS PARA SECCIÓN DE NIVELES INDEPENDIENTE */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+.levels-section-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f5f5f5 0%, #eeeeee 100%);
+  border-radius: 12px;
+  border-left: 4px solid #2196f3;
+  flex-wrap: wrap;
+}
+
+.levels-section-header h4 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: #333;
+  font-weight: 600;
+  flex: 1;
+  min-width: 250px;
+}
+
+.levels-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.levels-buttons .edit-btn,
+.levels-buttons .save-btn,
+.levels-buttons .cancel-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95em;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.levels-buttons .edit-btn {
+  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+  color: white;
+}
+
+.levels-buttons .edit-btn:hover {
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+}
+
+.levels-buttons .save-btn {
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+  color: white;
+}
+
+.levels-buttons .save-btn:hover {
+  background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.levels-buttons .cancel-btn {
+  background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
+  color: white;
+}
+
+.levels-buttons .cancel-btn:hover {
+  background: linear-gradient(135deg, #757575 0%, #616161 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(117, 117, 117, 0.4);
 }

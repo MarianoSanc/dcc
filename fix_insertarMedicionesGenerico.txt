@@ -1,0 +1,35 @@
+Contenido correcto para insertarMedicionesGenerico desde línea 2461:
+
+  private async insertarMedicionesGenerico(
+    testType: 'sf' | 'lt' | 'st',
+    idNivel: number,
+    dut: (number | null)[],
+    patron: (number | null)[]
+  ): Promise<void> {
+    const tables = this.getTableNames(testType);
+    const logPrefix =
+      testType === 'sf' ? '[SF]' : testType === 'lt' ? '[LT]' : '[ST]';
+
+    console.log(
+      `${logPrefix} MEDICION TRACE] ▶ Iniciando insertarMedicionesGenerico`
+    );
+    console.log(`${logPrefix} MEDICION TRACE] Parámetros:`, {
+      testType,
+      idNivel,
+      tabla: tables.medicion,
+      dut,
+      patron,
+    });
+
+    // CORREGIDO: Si idNivel es -1, significa que no se guardó el nivel (no había datos)
+    if (idNivel === -1) {
+      console.log(`${logPrefix} MEDICION TRACE] ⊘ Nivel no fue guardado (ID -1), saltando mediciones`);
+      return;
+    }
+
+    const checkQuery = {
+      action: 'get',
+      bd: this.database,
+      table: tables.medicion,
+      opts: { where: { id_nivel: idNivel } },
+    };
