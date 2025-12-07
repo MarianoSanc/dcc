@@ -405,7 +405,7 @@ export class DccComponent implements OnInit {
       loadTasks.push(loadLabPromise);
     }
 
-    // Si hay id_customer, cargar datos del cliente
+    // Cargar customer desde dcc_data.id_customer -> hvtest2.account
     if (dccData.id_customer) {
       const loadCustomerPromise = this.loadCustomerData(dccData.id_customer)
         .then((customerData) => {
@@ -452,12 +452,12 @@ export class DccComponent implements OnInit {
       });
   }
 
-  // Nuevo método para cargar datos del cliente
+  // Nuevo método para cargar datos del cliente desde hvtest2.account
   private loadCustomerData(customerId: string): Promise<any> {
     const getCustomer = {
       action: 'get',
-      bd: this.database,
-      table: 'dcc_customer',
+      bd: 'hvtest2',
+      table: 'account',
       opts: {
         where: { id: customerId, deleted: 0 },
       },
@@ -467,7 +467,23 @@ export class DccComponent implements OnInit {
       .post(getCustomer, UrlClass.URLNuevo)
       .toPromise()
       .then((response: any) => {
-        return response?.result?.[0] || null;
+        const account = response?.result?.[0];
+        if (account) {
+          // Mapear campos de account al formato de customer
+          return {
+            name: account.name || '',
+            email: '', // Se cargará después si es necesario
+            phone: '', // Se cargará después si es necesario
+            street: account.billing_address_street || '',
+            city: account.billing_address_city || '',
+            state: account.billing_address_state || '',
+            country: account.billing_address_country || '',
+            postal_code: account.billing_address_postalcode || '',
+            fax: '',
+            number: '',
+          };
+        }
+        return null;
       });
   }
 
@@ -478,18 +494,8 @@ export class DccComponent implements OnInit {
       bd: this.database,
       table: 'dcc_responsiblepersons',
       opts: {
-        relationship: {
-          'administracion.user': [
-            'dcc_responsiblepersons.no_nomina',
-            'administracion.user.no_nomina',
-          ],
-        },
-        customSelect: `
-      dcc_responsiblepersons.*,
-      CONCAT(administracion.user.first_name, ' ', administracion.user.last_name) AS name
-    `,
-        where: { id_dcc: dccId },
-        order_by: ['dcc_responsiblepersons.id', 'ASC'],
+        where: { id_dcc: dccId, deleted: 0 },
+        order_by: ['id', 'ASC'],
       },
     };
 
@@ -497,7 +503,67 @@ export class DccComponent implements OnInit {
       .post(getResponsiblePersons, UrlClass.URLNuevo)
       .toPromise()
       .then((response: any) => {
-        return response?.result || [];
+        const responsibleData = response?.result || [];
+
+        // Si hay datos, cargar usuarios para mapear nombres
+        if (responsibleData.length > 0) {
+          return this.loadUsersForMapping(responsibleData);
+        }
+        return responsibleData;
+      })
+      .catch((error) => {
+        console.error('Error en loadResponsiblePersons:', error);
+        return [];
+      });
+  }
+
+  // Nuevo método para cargar usuarios y mapear con responsible persons
+  private loadUsersForMapping(responsibleData: any[]): Promise<any[]> {
+    const getUsersQuery = {
+      action: 'get',
+      bd: 'administracion',
+      table: 'user',
+      opts: {
+        where: {
+          deleted: 0,
+          organizacion: 0,
+        },
+        order_by: ['first_name', 'ASC'],
+      },
+    };
+
+    return this.apiService
+      .post(getUsersQuery, UrlClass.URLNuevo)
+      .toPromise()
+      .then((response: any) => {
+        const rawUsers = Array.isArray(response?.result) ? response.result : [];
+
+        // Mapear usuarios para tener el formato esperado
+        const users = rawUsers.map((user: any) => ({
+          no_nomina: user.no_nomina,
+          name: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+          email: user.email || '',
+          phone: user.telefono || '',
+        }));
+
+        // Mapear responsible persons con datos de usuarios
+        const mapped = responsibleData.map((person: any) => {
+          const foundUser = users.find(
+            (u: any) => String(u.no_nomina) === String(person.no_nomina)
+          );
+          return {
+            ...person,
+            user_name: foundUser ? foundUser.name : null,
+            user_email: foundUser ? foundUser.email : null,
+            user_phone: foundUser ? foundUser.phone : null,
+          };
+        });
+        return mapped;
+      })
+      .catch((error) => {
+        console.error('Error en loadUsersForMapping:', error);
+        // Si falla cargar usuarios, devolver datos sin mapear
+        return responsibleData;
       });
   }
 
@@ -583,15 +649,17 @@ export class DccComponent implements OnInit {
       // Asignar datos de responsible persons si existen
       if (dccData.responsibleInfo && dccData.responsibleInfo.length > 0) {
         mergedData.administrativeData.responsiblePersons =
-          dccData.responsibleInfo.map((person: any) => ({
-            role: person.role || '',
-            no_nomina: person.no_nomina || '',
-            name: person.name || '',
-            full_name: person.name || '', // Usar el nombre de la BD como full_name
-            email: '', // Los datos adicionales del usuario se cargarán después si es necesario
-            phone: '',
-            mainSigner: Boolean(person.main), // Mapear el campo 'main' desde la BD
-          }));
+          dccData.responsibleInfo.map((person: any) => {
+            return {
+              role: person.role || '',
+              no_nomina: person.no_nomina || '',
+              name: person.user_name || person.no_nomina || '',
+              full_name: person.user_name || person.no_nomina || '',
+              email: person.user_email || '',
+              phone: person.user_phone || '',
+              mainSigner: Boolean(person.main),
+            };
+          });
       }
     }
 
@@ -602,8 +670,6 @@ export class DccComponent implements OnInit {
       this.loadSubItems(dccData.id),
     ])
       .then(([mainItemData, objectGroups, subItems]) => {
-        console.log('🔧 SubItems:', subItems);
-
         // Procesar Main Item Data
         if (mainItemData) {
           // Asegurar que el array de items existe
@@ -682,23 +748,36 @@ export class DccComponent implements OnInit {
         // Procesar SubItems
         if (subItems && subItems.length > 0) {
           // Mapear SubItems desde la BD
-          mergedData.items[0].subItems = subItems.map((subItem: any) => ({
-            id: `subitem_${subItem.id}`,
-            name: subItem.description || '',
-            manufacturer: subItem.manufacturer || '',
-            model: subItem.model || '',
-            identifications: this.createIdentificationsFromSubItem(subItem),
-            itemQuantities: this.createQuantitiesFromSubItem(subItem),
-          }));
+          const subItemPromises = subItems.map((subItem: any) => {
+            return this.loadSubItemIdentifiers(subItem.id).then(
+              (identifiers: any[]) => {
+                return {
+                  id: `subitem_${subItem.id}`,
+                  dbId: subItem.id,
+                  name: subItem.description || '',
+                  manufacturer: subItem.manufacturer || '',
+                  model: subItem.model || '',
+                  identifiers: identifiers,
+                };
+              }
+            );
+          });
+
+          Promise.all(subItemPromises).then((subItemsWithIdentifiers) => {
+            mergedData.items[0].subItems = subItemsWithIdentifiers;
+            // Cargar los datos con los identificadores
+            this.dccDataService.loadFromObject(mergedData);
+            this.showInitialOptions = false;
+            this.showMainInterface = true;
+            this.showDccSelect = false;
+          });
         } else {
+          // Sin subItems, cargar datos directamente
+          this.dccDataService.loadFromObject(mergedData);
+          this.showInitialOptions = false;
+          this.showMainInterface = true;
+          this.showDccSelect = false;
         }
-
-        // Finalmente cargar los datos en el servicio
-        this.dccDataService.loadFromObject(mergedData);
-
-        this.showInitialOptions = false;
-        this.showMainInterface = true;
-        this.showDccSelect = false;
       })
       .catch((error) => {
         console.error('❌ Error loading item data:', error);
@@ -778,6 +857,38 @@ export class DccComponent implements OnInit {
       })
       .catch((error) => {
         console.error('❌ Error loading subitems:', error);
+        return [];
+      });
+  }
+
+  // Nuevo método para cargar identificadores de un subitem desde dcc_subitem_identificador
+  private loadSubItemIdentifiers(subItemId: number): Promise<any[]> {
+    const getIdentifiers = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_subitem_identificador',
+      opts: {
+        where: {
+          id_subitem: subItemId,
+          deleted: 0,
+        },
+        order_by: ['id', 'ASC'],
+      },
+    };
+
+    return this.apiService
+      .post(getIdentifiers, UrlClass.URLNuevo)
+      .toPromise()
+      .then((response: any) => {
+        const identifiers = response?.result || [];
+        return identifiers.map((id: any) => ({
+          id: id.id,
+          name: id.name || '',
+          value: id.value || '',
+        }));
+      })
+      .catch((error) => {
+        console.error('Error loading subitem identifiers:', error);
         return [];
       });
   }
@@ -863,6 +974,30 @@ export class DccComponent implements OnInit {
   // Cambia la tab activa
   selectTab(tabId: string) {
     this.activeTab = tabId;
+  }
+
+  // Navega al siguiente step/tab
+  nextStep() {
+    const currentIndex = this.tabs.findIndex(
+      (tab) => tab.id === this.activeTab
+    );
+    if (currentIndex < this.tabs.length - 1) {
+      this.activeTab = this.tabs[currentIndex + 1].id;
+      // Scroll al inicio de la página
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  // Navega al step/tab anterior
+  previousStep() {
+    const currentIndex = this.tabs.findIndex(
+      (tab) => tab.id === this.activeTab
+    );
+    if (currentIndex > 0) {
+      this.activeTab = this.tabs[currentIndex - 1].id;
+      // Scroll al inicio de la página
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   // Método actualizado para volver a las opciones iniciales y limpiar todo
@@ -997,7 +1132,7 @@ export class DccComponent implements OnInit {
     ) {
       const ptNumber = this.newDccPtId.replace('PT-', '');
       const dutFormatted = this.newDccDutNumber.toString().padStart(2, '0');
-      this.generatedCertificateNumber = `${projectId} DCC ${ptNumber} ${dutFormatted}`;
+      this.generatedCertificateNumber = `${projectId}-00 DCC ${ptNumber} ${dutFormatted}`;
     } else {
       this.generatedCertificateNumber = '';
     }

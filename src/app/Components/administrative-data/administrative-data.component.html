@@ -720,158 +720,85 @@
       </table>
 
       <div class="edit-form" *ngIf="isEditing('customer')">
-        <!-- Opciones de acción para cliente -->
-        <div class="customer-action-selector">
-          <div class="action-buttons">
-            <button
-              type="button"
-              class="action-btn"
-              [class.active]="customerAction === 'edit'"
-              (click)="setCustomerAction('edit')"
-              [disabled]="!hasLoadedCustomer()"
-            >
-              <i class="material-icons">edit</i>
-              Editar Actual
-            </button>
-            <button
-              type="button"
-              class="action-btn"
-              [class.active]="customerAction === 'select'"
-              (click)="setCustomerAction('select')"
-            >
-              <i class="material-icons">swap_horiz</i>
-              Seleccionar Otro
-            </button>
-            <button
-              type="button"
-              class="action-btn"
-              [class.active]="customerAction === 'create'"
-              (click)="setCustomerAction('create')"
-            >
-              <i class="material-icons">add</i>
-              Crear Nuevo
-            </button>
-          </div>
-        </div>
-
-        <!-- Selector de cliente (solo para seleccionar otro) -->
-        <div class="form-group" *ngIf="customerAction === 'select'">
+        <!-- Selector de cliente con búsqueda (siempre visible) -->
+        <div class="form-group">
           <label>Seleccionar Cliente:</label>
-          <select
-            [(ngModel)]="tempCustomerId"
-            (ngModelChange)="loadSelectedCustomer()"
+          <ng-multiselect-dropdown
+            class="fixed-width-dropdown"
+            [settings]="dropdownCustomer"
+            [data]="customerList"
+            [(ngModel)]="selectedCustomerDropdown"
+            (onSelect)="onCustomerDropdownSelect($event)"
+            (onDeSelect)="onCustomerDropdownDeselect($event)"
+            [placeholder]="'Buscar cliente...'"
           >
-            <option value="">Seleccione un cliente</option>
-            <option *ngFor="let customer of customerList" [value]="customer.id">
-              {{ customer.name }}
-            </option>
-          </select>
+          </ng-multiselect-dropdown>
         </div>
 
-        <!-- Campos de cliente -->
-        <div class="customer-fields" *ngIf="customerAction">
-          <div class="form-group">
-            <label>Name:</label>
-            <input
-              type="text"
-              [(ngModel)]="customerData.name"
-              [disabled]="areCustomerFieldsDisabled()"
-              [class.disabled-field]="areCustomerFieldsDisabled()"
-            />
-          </div>
-          <div class="form-group">
-            <label>Email:</label>
-            <input
-              type="email"
-              [(ngModel)]="customerData.email"
-              [disabled]="areCustomerFieldsDisabled()"
-              [class.disabled-field]="areCustomerFieldsDisabled()"
-            />
-          </div>
-          <div class="form-group">
-            <label>Phone:</label>
-            <input
-              type="text"
-              [(ngModel)]="customerData.phone"
-              [disabled]="areCustomerFieldsDisabled()"
-              [class.disabled-field]="areCustomerFieldsDisabled()"
-            />
-          </div>
-          <div class="form-group">
-            <label>Fax:</label>
-            <input
-              type="text"
-              [(ngModel)]="customerData.fax"
-              [disabled]="areCustomerFieldsDisabled()"
-              [class.disabled-field]="areCustomerFieldsDisabled()"
-            />
-          </div>
-          <div class="form-group">
-            <label>Postal Code:</label>
-            <input
-              type="text"
-              [(ngModel)]="customerData.postal_code"
-              [disabled]="areCustomerFieldsDisabled()"
-              [class.disabled-field]="areCustomerFieldsDisabled()"
-            />
-          </div>
-          <div class="form-group">
-            <label>City:</label>
-            <input
-              type="text"
-              [(ngModel)]="customerData.city"
-              [disabled]="areCustomerFieldsDisabled()"
-              [class.disabled-field]="areCustomerFieldsDisabled()"
-            />
-          </div>
-          <div class="form-group">
-            <label>Street:</label>
-            <input
-              type="text"
-              [(ngModel)]="customerData.street"
-              [disabled]="areCustomerFieldsDisabled()"
-              [class.disabled-field]="areCustomerFieldsDisabled()"
-            />
-          </div>
-          <div class="form-group">
-            <label>Street Number:</label>
-            <input
-              type="text"
-              [(ngModel)]="customerData.street_number"
-              [disabled]="areCustomerFieldsDisabled()"
-              [class.disabled-field]="areCustomerFieldsDisabled()"
-            />
-          </div>
-          <div class="form-group">
-            <label>State:</label>
-            <input
-              type="text"
-              [(ngModel)]="customerData.state"
-              [disabled]="areCustomerFieldsDisabled()"
-              [class.disabled-field]="areCustomerFieldsDisabled()"
-            />
-          </div>
-          <div class="form-group">
-            <label>Country:</label>
-            <input
-              type="text"
-              [(ngModel)]="customerData.country"
-              [disabled]="areCustomerFieldsDisabled()"
-              [class.disabled-field]="areCustomerFieldsDisabled()"
-            />
+        <!-- Loading indicator para detalles -->
+        <div
+          class="loading-indicator"
+          *ngIf="loadingCustomers && selectedCustomerId"
+        >
+          <i class="material-icons spinning">sync</i>
+          <span>Cargando detalles del cliente...</span>
+        </div>
+
+        <!-- Vista previa de datos del cliente seleccionado (solo lectura) -->
+        <div
+          class="customer-preview"
+          *ngIf="selectedCustomerId && !loadingCustomers"
+        >
+          <h5>Datos del Cliente Seleccionado:</h5>
+          <div class="preview-grid">
+            <div class="preview-item">
+              <span class="preview-label">Nombre:</span>
+              <span class="preview-value">{{ customerData.name }}</span>
+            </div>
+            <div class="preview-item">
+              <span class="preview-label">Email:</span>
+              <span class="preview-value">{{ customerData.email || "-" }}</span>
+            </div>
+            <div class="preview-item">
+              <span class="preview-label">Teléfono:</span>
+              <span class="preview-value">{{ customerData.phone || "-" }}</span>
+            </div>
+            <div class="preview-item">
+              <span class="preview-label">Calle:</span>
+              <span class="preview-value">{{
+                customerData.street || "-"
+              }}</span>
+            </div>
+            <div class="preview-item">
+              <span class="preview-label">Ciudad:</span>
+              <span class="preview-value">{{ customerData.city || "-" }}</span>
+            </div>
+            <div class="preview-item">
+              <span class="preview-label">Estado:</span>
+              <span class="preview-value">{{ customerData.state || "-" }}</span>
+            </div>
+            <div class="preview-item">
+              <span class="preview-label">País:</span>
+              <span class="preview-value">{{
+                customerData.country || "-"
+              }}</span>
+            </div>
+            <div class="preview-item">
+              <span class="preview-label">Código Postal:</span>
+              <span class="preview-value">{{
+                customerData.postal_code || "-"
+              }}</span>
+            </div>
           </div>
         </div>
 
         <div class="form-actions">
           <button
             class="save-btn"
-            (click)="saveBlock('customer')"
-            [disabled]="
-              !customerAction ||
-              (customerAction === 'select' && !selectedCustomerId)
-            "
+            (click)="saveCustomer()"
+            [disabled]="!selectedCustomerId || loadingCustomers"
           >
-            {{ getCustomerSaveButtonText() }}
+            Guardar
           </button>
           <button class="cancel-btn" (click)="cancelEdit('customer')">
             Cancelar

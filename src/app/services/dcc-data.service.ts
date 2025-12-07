@@ -79,15 +79,21 @@ export interface DCCData {
     }>;
     subItems: Array<{
       id: string;
+      dbId?: number;
       name: string;
       model: string;
       manufacturer: string;
-      identifications: Array<{
+      identifiers?: Array<{
+        id?: number;
+        name: string;
+        value: string;
+      }>;
+      identifications?: Array<{
         issuer: string;
         value: string;
         name: string;
       }>;
-      itemQuantities: Array<{
+      itemQuantities?: Array<{
         refType: string;
         name: string;
         value: string;

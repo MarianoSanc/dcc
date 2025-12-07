@@ -522,3 +522,126 @@
 .customer-fields {
   margin-top: 20px;
 }
+
+/* Estilos para la vista previa del cliente */
+.customer-preview {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.customer-preview h5 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 1.1em;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 10px;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.preview-item {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #eee;
+}
+
+.preview-label {
+  font-size: 0.85em;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.preview-value {
+  font-size: 1em;
+  color: #333;
+}
+
+@media (max-width: 768px) {
+  .preview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Loading indicator styles */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 30px;
+  color: #666;
+  font-size: 1em;
+}
+
+.loading-indicator i.spinning {
+  animation: spin 1s linear infinite;
+  font-size: 1.5em;
+  color: #2196f3;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Main signer badge and styles */
+.main-signer-badge {
+  display: inline-block;
+  background: #ff9800;
+  color: white;
+  font-size: 0.8em;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.no-main-signer {
+  color: #999;
+}
+
+/* Main signer checkbox group */
+.main-signer-group {
+  margin-bottom: 20px;
+}
+
+.main-signer-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.main-signer-checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  transform: scale(1.3);
+}
+
+.checkbox-label {
+  cursor: pointer;
+  font-weight: normal;
+  margin: 0;
+}
+
+.main-signer-text {
+  color: #ff9800;
+  font-weight: 500;
+}
+
+.not-main-signer-text {
+  color: #666;
+}

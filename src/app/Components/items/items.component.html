@@ -127,235 +127,6 @@
     </div>
   </div>
 
-  <!-- Object Identifications Groups -->
-  <div class="data-block">
-    <div class="block-header">
-      <h4>Object Identifications Groups</h4>
-      <div class="block-actions">
-        <button
-          *ngIf="!isEditing('object-identifications')"
-          class="edit-btn"
-          (click)="toggleEdit('object-identifications')"
-        >
-          <i class="material-icons">edit</i>
-          Editar
-        </button>
-
-        <ng-container *ngIf="isEditing('object-identifications')">
-          <button class="add-btn" (click)="addObjectGroup()">
-            <i class="material-icons">add</i>
-            Agregar Grupo
-          </button>
-          <button
-            class="save-btn"
-            (click)="saveBlock('object-identifications')"
-          >
-            <i class="material-icons">save</i>
-            Guardar
-          </button>
-          <button
-            class="cancel-btn"
-            (click)="cancelEdit('object-identifications')"
-          >
-            <i class="material-icons">close</i>
-            Cancelar
-          </button>
-        </ng-container>
-      </div>
-    </div>
-
-    <div class="block-content">
-      <!-- View Mode -->
-      <div
-        *ngIf="!isEditing('object-identifications')"
-        class="object-groups-view"
-      >
-        <div
-          *ngFor="let group of objectIdentifications; let i = index"
-          class="identification-group"
-        >
-          <div class="group-header">
-            <h6>{{ group.groupName }}</h6>
-          </div>
-          <div class="group-content">
-            <div class="quantity-section">
-              <h7>Assigned Measurement Range</h7>
-              <div class="quantity-display">
-                <strong>Value:</strong>
-                {{ group.assignedMeasurementRange?.value || "No definido" }}
-                {{ group.assignedMeasurementRange?.unit || "" }}
-              </div>
-            </div>
-            <div class="quantity-section">
-              <h7>Assigned Scale Factor</h7>
-              <div class="quantity-display">
-                <strong>Value:</strong>
-                {{ group.assignedScaleFactor?.value || "No definido" }}
-                {{ group.assignedScaleFactor?.unit || "" }}
-              </div>
-            </div>
-            <div class="quantity-section" *ngIf="group.ratedFrequency?.value">
-              <h7>Rated Frequency (Opcional)</h7>
-              <div class="quantity-display">
-                <strong>Value:</strong> {{ group.ratedFrequency.value }}
-                {{ group.ratedFrequency.unit || "" }}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Edit Mode -->
-      <div
-        *ngIf="isEditing('object-identifications')"
-        class="object-groups-edit"
-      >
-        <div
-          *ngFor="let group of objectIdentifications; let i = index"
-          class="identification-group"
-        >
-          <div class="group-header">
-            <div class="form-group">
-              <label>Group Name:</label>
-              <input
-                type="text"
-                [(ngModel)]="group.groupName"
-                placeholder="Nombre del grupo"
-              />
-            </div>
-            <button
-              class="remove-btn"
-              (click)="removeObjectGroup(i)"
-              [disabled]="objectIdentifications.length <= 1"
-              title="Eliminar grupo"
-            >
-              <i class="material-icons">delete</i>
-            </button>
-          </div>
-
-          <div class="group-content">
-            <!-- Assigned Measurement Range -->
-            <div class="quantity-section">
-              <h7>Assigned Measurement Range</h7>
-              <div class="quantity-fields">
-                <div class="form-group">
-                  <label>Label:</label>
-                  <input
-                    type="text"
-                    [(ngModel)]="group.assignedMeasurementRange.label"
-                    class="readonly-field"
-                    readonly
-                    title="Este campo no es editable"
-                  />
-                </div>
-                <div class="form-group">
-                  <label>Value:</label>
-                  <input
-                    type="text"
-                    [(ngModel)]="group.assignedMeasurementRange.value"
-                    placeholder="Ingrese el valor"
-                  />
-                </div>
-                <div class="form-group">
-                  <label>Unit:</label>
-                  <input
-                    type="text"
-                    [(ngModel)]="group.assignedMeasurementRange.unit"
-                    class="readonly-field"
-                    readonly
-                    title="Este campo no es editable"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- Assigned Scale Factor -->
-            <div class="quantity-section">
-              <h7>Assigned Scale Factor</h7>
-              <div class="quantity-fields">
-                <div class="form-group">
-                  <label>Label:</label>
-                  <input
-                    type="text"
-                    [(ngModel)]="group.assignedScaleFactor.label"
-                    class="readonly-field"
-                    readonly
-                    title="Este campo no es editable"
-                  />
-                </div>
-                <div class="form-group">
-                  <label>Value:</label>
-                  <input
-                    type="text"
-                    [(ngModel)]="group.assignedScaleFactor.value"
-                    placeholder="Ingrese el valor"
-                  />
-                </div>
-                <div class="form-group">
-                  <label>Unit:</label>
-                  <input
-                    type="text"
-                    [(ngModel)]="group.assignedScaleFactor.unit"
-                    class="readonly-field"
-                    readonly
-                    title="Este campo no es editable"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- Rated Frequency (Opcional) -->
-            <div class="quantity-section">
-              <h7>Rated Frequency</h7>
-              <div class="quantity-fields">
-                <div class="form-group">
-                  <label>Label:</label>
-                  <input
-                    type="text"
-                    [(ngModel)]="group.ratedFrequency.label"
-                    class="readonly-field"
-                    readonly
-                    title="Este campo no es editable"
-                  />
-                </div>
-                <div class="form-group">
-                  <label>Value (opcional):</label>
-                  <input
-                    type="text"
-                    [(ngModel)]="group.ratedFrequency.value"
-                    placeholder="Valor opcional"
-                  />
-                </div>
-                <div class="form-group">
-                  <label>Unit:</label>
-                  <input
-                    type="text"
-                    [(ngModel)]="group.ratedFrequency.unit"
-                    class="readonly-field"
-                    readonly
-                    title="Este campo no es editable"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Empty State -->
-      <div *ngIf="!objectIdentifications.length" class="empty-state">
-        <div class="empty-content">
-          <i class="material-icons">settings</i>
-          <h4>No hay grupos de identificación</h4>
-          <p>
-            Haga clic en "Editar" para agregar grupos de identificación de
-            objetos.
-          </p>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Sub Items -->
   <div class="data-block">
     <div class="block-header">
@@ -413,43 +184,20 @@
             </tr>
           </table>
 
-          <!-- Identifications -->
-          <div *ngIf="subItem.identifications?.length > 0">
-            <h7>Identifications</h7>
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Type</th>
-                  <th>Value</th>
-                  <th>Issuer</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let id of subItem.identifications">
-                  <td>{{ id.name }}</td>
-                  <td>{{ id.value }}</td>
-                  <td>{{ id.issuer }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Item Quantities -->
-          <div *ngIf="subItem.itemQuantities?.length > 0">
-            <h7>Item Quantities</h7>
+          <!-- Identifiers (nueva estructura dinámica) -->
+          <div *ngIf="subItem.identifiers?.length > 0">
+            <h7>Identifiers</h7>
             <table class="data-table">
               <thead>
                 <tr>
                   <th>Name</th>
                   <th>Value</th>
-                  <th>Unit</th>
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let qty of subItem.itemQuantities">
-                  <td>{{ qty.name }}</td>
-                  <td>{{ qty.value }}</td>
-                  <td>{{ qty.unit }}</td>
+                <tr *ngFor="let id of subItem.identifiers">
+                  <td>{{ id.name }}</td>
+                  <td>{{ id.value }}</td>
                 </tr>
               </tbody>
             </table>
@@ -514,13 +262,13 @@
               </div>
             </div>
 
-            <!-- Identifications and Quantities -->
+            <!-- Identifiers (nueva estructura dinámica) -->
             <div class="subitem-identifications">
               <div class="identifications-header">
-                <h6>Identifications & Quantities</h6>
+                <h6>Identifiers</h6>
                 <button
                   class="add-btn-small"
-                  (click)="addPredefinedIdentifier(i)"
+                  (click)="addIdentifier(i)"
                   type="button"
                   [disabled]="subItem._markedForDeletion"
                 >
@@ -531,88 +279,46 @@
 
               <!-- Current Identifiers -->
               <div class="current-identifiers">
-                <!-- Identifications -->
                 <div
                   *ngFor="
-                    let id of subItem.identifications;
+                    let identifier of subItem.identifiers;
                     let j = index;
                     trackBy: trackByIndex
                   "
                   class="identification-item-enhanced"
+                  [class.marked-for-deletion]="identifier._markedForDeletion"
                 >
-                  <div class="identification-row">
+                  <div
+                    class="identification-row"
+                    *ngIf="!identifier._markedForDeletion"
+                  >
                     <div class="identification-type">
-                      <div class="identifier-info">
-                        <strong>{{ id.name }}</strong>
-                      </div>
+                      <input
+                        type="text"
+                        [(ngModel)]="identifier.name"
+                        placeholder="Nombre del identificador"
+                        class="identification-input"
+                        [disabled]="subItem._markedForDeletion"
+                      />
                     </div>
 
                     <div class="identification-value">
                       <input
                         type="text"
-                        [(ngModel)]="id.value"
-                        [placeholder]="'Ingrese ' + id.name.toLowerCase()"
+                        [(ngModel)]="identifier.value"
+                        placeholder="Valor"
                         class="identification-input"
+                        [disabled]="subItem._markedForDeletion"
                       />
                     </div>
 
                     <div class="identification-actions">
                       <button
                         class="remove-btn-small"
-                        (click)="
-                          removeIdentifierFromSubItem(
-                            i,
-                            id.name,
-                            'identification'
-                          )
-                        "
+                        (click)="removeIdentifier(i, j)"
                         type="button"
                         title="Eliminar identificador"
-                      >
-                        <i class="material-icons">delete</i>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Item Quantities -->
-                <div
-                  *ngFor="
-                    let qty of subItem.itemQuantities;
-                    let j = index;
-                    trackBy: trackByIndex
-                  "
-                  class="identification-item-enhanced"
-                >
-                  <div class="identification-row">
-                    <div class="identification-type">
-                      <div class="identifier-info">
-                        <strong>{{ qty.name }}</strong>
-                        <div class="identifier-meta"></div>
-                      </div>
-                    </div>
-
-                    <div class="identification-value">
-                      <input
-                        type="text"
-                        [(ngModel)]="qty.value"
-                        [placeholder]="'Ingrese ' + qty.name.toLowerCase()"
-                        class="identification-input"
-                      />
-                    </div>
-
-                    <div class="identification-actions">
-                      <button
-                        class="remove-btn-small"
-                        (click)="
-                          removeIdentifierFromSubItem(
-                            i,
-                            qty.name,
-                            'itemQuantity'
-                          )
-                        "
-                        type="button"
-                        title="Eliminar cantidad"
+                        [disabled]="subItem._markedForDeletion"
                       >
                         <i class="material-icons">delete</i>
                       </button>
@@ -622,10 +328,7 @@
 
                 <!-- Estado vacío -->
                 <div
-                  *ngIf="
-                    !subItem.identifications?.length &&
-                    !subItem.itemQuantities?.length
-                  "
+                  *ngIf="!subItem.identifiers?.length"
                   class="empty-identifiers"
                 >
                   <p>
@@ -657,85 +360,6 @@
             Haga clic en "Editar" para agregar sub items al equipo principal.
           </p>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal de Selección de Identificadores -->
-  <div
-    *ngIf="showIdentifierModal"
-    class="modal-backdrop identifier-modal-backdrop"
-    (click)="closeIdentifierModal()"
-  >
-    <div
-      class="modal-content identifier-modal"
-      (click)="$event.stopPropagation()"
-    >
-      <div class="modal-header">
-        <h3>Seleccionar Identificador</h3>
-        <button
-          class="close-btn"
-          (click)="closeIdentifierModal()"
-          type="button"
-        >
-          <i class="material-icons">close</i>
-        </button>
-      </div>
-
-      <div class="modal-body">
-        <p class="modal-description">
-          Seleccione el tipo de identificador que desea agregar al subitem:
-        </p>
-
-        <div class="identifier-options">
-          <div
-            *ngFor="
-              let identifier of availableIdentifiers;
-              trackBy: trackByIdentifierName
-            "
-            class="identifier-option"
-            [class.selected]="selectedIdentifierName === identifier.name"
-            (click)="selectIdentifierOption(identifier.name)"
-          >
-            <div class="option-icon">
-              <i class="material-icons">{{ identifier.icon }}</i>
-            </div>
-            <div class="option-content">
-              <div class="option-title">{{ identifier.name }}</div>
-              <div class="option-description">{{ identifier.description }}</div>
-            </div>
-            <div class="option-selector">
-              <i
-                class="material-icons"
-                *ngIf="selectedIdentifierName === identifier.name"
-                >check_circle</i
-              >
-              <i
-                class="material-icons"
-                *ngIf="selectedIdentifierName !== identifier.name"
-                >radio_button_unchecked</i
-              >
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button
-          class="modal-btn cancel-btn"
-          (click)="closeIdentifierModal()"
-          type="button"
-        >
-          Cancelar
-        </button>
-        <button
-          class="modal-btn confirm-btn"
-          (click)="confirmAddIdentifier()"
-          [disabled]="!selectedIdentifierName"
-          type="button"
-        >
-          Agregar Identificador
-        </button>
       </div>
     </div>
   </div>

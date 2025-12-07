@@ -6,13 +6,23 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DccDataService } from '../../services/dcc-data.service';
 import { Subscription } from 'rxjs';
-// import already present above
+import {
+  NgMultiSelectDropDownModule,
+  IDropdownSettings,
+} from 'ng-multiselect-dropdown';
+import { ApiService } from '../../api/api.service';
+import { UrlClass } from '../../shared/models/url.model';
 import Swal from 'sweetalert2';
 
 @Component({
   selector: 'app-results',
   standalone: true,
-  imports: [CommonModule, FormsModule, Pt23ResultsComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    Pt23ResultsComponent,
+    NgMultiSelectDropDownModule,
+  ],
   templateUrl: './results.component.html',
   styleUrl: './results.component.css',
 })
@@ -188,9 +198,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
         'dcc:influenceConditions'
       ]?.['dcc:influenceCondition'];
 
-    console.log('influenceBlock extracted from XML:', influenceBlock);
     if (!influenceBlock) {
-      console.log('No influence conditions found in XML.');
       this.influenceConditions = [];
       return;
     }
@@ -220,7 +228,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
         },
       };
     });
-    console.log('Final influenceConditions:', this.influenceConditions);
   }
   // Recibe el modo de operación desde el componente padre
   // Recibe el modo de operación desde el componente padre
@@ -241,17 +248,37 @@ export class ResultsComponent implements OnInit, OnDestroy {
   availableInfluenceConditions: any[] = [];
 
   editingMeasurementUncertainty: boolean = false; // NUEVO: modo edición exclusivo
+  isEditingMeasurementResult: boolean = false; // Modo edición del nombre
+  measurementResultName: string = ''; // Nombre editable
+
+  // Propiedades para Measuring Equipments con multiselect
+  isEditingMeasuringEquipments: boolean = false;
+  availablePatrones: any[] = [];
+  selectedPatrones: any[] = [];
+  equipmentsFromPatrones: any[] = []; // Equipos cargados desde equipment_catalog
+  patronDropdownSettings: IDropdownSettings = {
+    singleSelection: false,
+    idField: 'id',
+    textField: 'name',
+    selectAllText: 'Seleccionar todos',
+    unSelectAllText: 'Deseleccionar todos',
+    itemsShowLimit: 5,
+    allowSearchFilter: true,
+    searchPlaceholderText: 'Buscar patrón...',
+    noDataAvailablePlaceholderText: 'No hay patrones disponibles',
+  };
 
   // Getter to expose the current DCC id (certificate number) for backward compatibility
   private get dccId(): string | undefined {
     return this.coreData?.certificate_number;
   }
 
-  constructor(private dccDataService: DccDataService) {}
+  constructor(
+    private dccDataService: DccDataService,
+    private apiService: ApiService
+  ) {}
 
   ngOnInit() {
-    console.log('ResultsComponent initialized');
-
     // Cargar coreData una sola vez del observable solo para obtener el certificate_number
     this.subscription.add(
       this.dccDataService.dccData$.subscribe((data) => {
@@ -285,7 +312,8 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
   // Método centralizado para cargar todos los datos desde BD
   private loadAllDataFromDB(dccId: string) {
-    console.log('Loading all data from DB for dccId:', dccId);
+    // Cargar measurement result name
+    this.loadMeasurementResultNameFromDB(dccId);
 
     // Cargar influence conditions
     this.loadInfluenceConditionsFromDB(dccId);
@@ -314,11 +342,37 @@ export class ResultsComponent implements OnInit, OnDestroy {
           }
           return method;
         });
-        console.log('Used methods loaded from DB:', this.usedMethods.length);
       },
       error: () => {
-        console.log('No used methods in DB, using defaults');
         this.usedMethods = this.getDefaultUsedMethods();
+      },
+    });
+  }
+
+  // Nuevo método para cargar measurement result name desde BD
+  private loadMeasurementResultNameFromDB(dccId: string) {
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_data',
+      opts: {
+        where: { id: dccId },
+        attributes: ['name_measurement'],
+      },
+    };
+
+    this.dccDataService.post(query).subscribe({
+      next: (response: any) => {
+        const dccData = response?.result?.[0];
+        if (dccData && dccData.name_measurement) {
+          this.measurementResultName = dccData.name_measurement;
+        } else {
+          // Valor por defecto si no existe
+          this.measurementResultName = `Calibration of ${dccId}.`;
+        }
+      },
+      error: () => {
+        this.measurementResultName = `Calibration of ${dccId}.`;
       },
     });
   }
@@ -340,11 +394,9 @@ export class ResultsComponent implements OnInit, OnDestroy {
           const measurementResultFromDB = response.result[0];
           if (measurementResultFromDB && measurementResultFromDB.data) {
             this.measurementResult = JSON.parse(measurementResultFromDB.data);
-            console.log('Measurement result loaded from DB');
           }
         } else {
           this.measurementResult = {};
-          console.log('No measurement result in DB');
         }
       },
       error: () => {
@@ -639,6 +691,93 @@ export class ResultsComponent implements OnInit, OnDestroy {
     this.editingMeasurementUncertainty = false;
   }
 
+  // Métodos para editar Measurement Result Name
+  toggleEditMeasurementResult() {
+    this.isEditingMeasurementResult = !this.isEditingMeasurementResult;
+    if (!this.isEditingMeasurementResult) {
+      // Si cancela, recargar el valor original
+      const dccId = this.coreData?.certificate_number;
+      if (dccId) {
+        this.loadMeasurementResultNameFromDB(dccId);
+      }
+    }
+  }
+
+  saveMeasurementResultName() {
+    const dccId = this.coreData?.certificate_number;
+    if (!dccId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'No hay un DCC cargado.',
+      });
+      return;
+    }
+
+    if (
+      !this.measurementResultName ||
+      this.measurementResultName.trim() === ''
+    ) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'El nombre no puede estar vacío.',
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'Guardando...',
+      text: 'Actualizando nombre del resultado',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    const updateQuery = {
+      action: 'update',
+      bd: this.database,
+      table: 'dcc_data',
+      opts: {
+        where: { id: dccId },
+        attributes: {
+          name_measurement: this.measurementResultName.trim(),
+        },
+      },
+    };
+
+    this.dccDataService.post(updateQuery).subscribe({
+      next: (response: any) => {
+        Swal.close();
+        if (response?.result) {
+          this.isEditingMeasurementResult = false;
+          Swal.fire({
+            icon: 'success',
+            title: '¡Guardado!',
+            text: 'El nombre del resultado se ha actualizado correctamente.',
+            timer: 2000,
+            showConfirmButton: false,
+            position: 'top-end',
+          });
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudo actualizar el nombre.',
+          });
+        }
+      },
+      error: (error) => {
+        Swal.close();
+        console.error('Error saving measurement result name:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Ocurrió un error al guardar.',
+        });
+      },
+    });
+  }
+
   // Guardar Measurement Uncertainty en la base de datos
   saveMeasurementUncertaintyEditor() {
     this.saveMeasurementUncertaintyToDB();
@@ -761,15 +900,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
         Promise.all(promises)
           .then(() => {
-            console.log(
-              '✅ All results saved to DB. Total:',
-              this.results.length
-            );
-            console.log('Saved results breakdown:');
-            this.results.forEach((r, i) => {
-              console.log(`  ${i + 1}. ${r.name} (${r.refType})`);
-            });
-
             // Actualiza el servicio para que Preview reciba los datos reales guardados
             this.dccDataService.updateResults(this.results);
             Swal.fire({
@@ -842,7 +972,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
                 });
               }
             });
-          console.log('Measurement uncertainties synced from DB');
         }
       },
       error: () => {
@@ -860,7 +989,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
   private loadResultsFromDB() {
     const dccId = this.coreData?.certificate_number;
     if (!dccId) {
-      console.log('No dccId available for loading results');
       return;
     }
 
@@ -877,23 +1005,17 @@ export class ResultsComponent implements OnInit, OnDestroy {
     this.dccDataService.post(query).subscribe({
       next: (response: any) => {
         if (response?.result && response.result.length > 0) {
-          console.log('📦 Raw DB response:', response.result.length, 'rows');
-
           // Cargar TODOS los resultados sin filtrar por ref_type
           this.results = response.result
             .filter((dbResult: any) => {
               const isMeasurementResult =
                 dbResult.ref_type === 'measurementResult';
               if (isMeasurementResult) {
-                console.log('  ⏭️  Skipping measurementResult');
               }
               return !isMeasurementResult;
             })
             .map((dbResult: any) => {
               const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
-              console.log(
-                `  ✅ Loading: ${dbResult.name} (${dbResult.ref_type})`
-              );
               return {
                 id: dbResult.id,
                 name: dbResult.name,
@@ -901,21 +1023,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
                 data: Array.isArray(dbData) ? dbData : [],
               };
             });
-          console.log(
-            '✅ Results loaded from DB:',
-            this.results.length,
-            'items'
-          );
-          console.log('Results breakdown:');
-          this.results.forEach((r, i) => {
-            console.log(
-              `  ${i + 1}. ${r.name} (${r.refType}) - ${
-                Array.isArray(r.data) ? r.data.length : 1
-              } quantities`
-            );
-          });
         } else {
-          console.log('⚠️  No results found in DB.');
           this.results = [];
         }
       },
@@ -967,10 +1075,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
         } else {
           // Si no hay datos en BD, inicializa con los valores por defecto
           this.influenceConditions = this.getDefaultInfluenceConditions();
-          console.log(
-            'No influence conditions found in DB, using default.',
-            this.influenceConditions
-          );
         }
       },
       error: () => {
@@ -995,7 +1099,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
           quantity_value: cond.subBlock.value,
           quantity_unit: cond.subBlock.unit,
         };
-        console.log('Saving condition attributes:', attributes);
 
         // Buscar existencia por claves naturales (id_dcc + name [+ ref_type])
         const existsQuery = {
@@ -1012,8 +1115,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
           },
         };
 
-        console.log('Checking existence with query:', existsQuery);
-
         return this.dccDataService
           .post(existsQuery)
           .toPromise()
@@ -1023,7 +1124,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
               : null;
 
             if (existing) {
-              console.log('Existing record found:', existing);
               // UPDATE por id encontrado
               const updateQuery = {
                 action: 'update',
@@ -1034,10 +1134,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
                   where: { id: existing.id },
                 },
               };
-              console.log(
-                'Upserting: existing found, updating ID:',
-                existing.id
-              );
               return this.dccDataService
                 .post(updateQuery)
                 .toPromise()
@@ -1054,7 +1150,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
                 table: 'dcc_influencecondition',
                 opts: { attributes },
               };
-              console.log('Upserting: no existing, creating new');
+
               return this.dccDataService
                 .post(createQuery)
                 .toPromise()
@@ -1066,7 +1162,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
                     null;
                   if (insertedId) {
                     cond.id = insertedId;
-                    console.log('Assigned insertId to condition:', insertedId);
+
                     return createResp;
                   }
                   // Si no viene insertId, hacer una consulta para obtenerlo por claves
@@ -1092,7 +1188,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
                         : null;
                       if (rec?.id) {
                         cond.id = rec.id;
-                        console.log('Fetched new record ID:', cond.id);
                       }
                       return createResp;
                     });
@@ -1140,6 +1235,309 @@ export class ResultsComponent implements OnInit, OnDestroy {
     return '';
   }
 
+  // Métodos para Measuring Equipments con multiselect
+  toggleEditMeasuringEquipments() {
+    this.isEditingMeasuringEquipments = !this.isEditingMeasuringEquipments;
+    if (this.isEditingMeasuringEquipments) {
+      this.loadAvailablePatrones();
+      this.loadSelectedPatronesFromDB();
+    }
+  }
+
+  cancelEditMeasuringEquipments() {
+    this.isEditingMeasuringEquipments = false;
+    this.selectedPatrones = [];
+    this.equipmentsFromPatrones = [];
+    // Recargar datos originales
+    const dccId = this.coreData?.certificate_number;
+    if (dccId) {
+      this.loadMeasuringEquipmentsFromDB(dccId);
+    }
+  }
+
+  // Cargar patrones disponibles desde calibraciones.patron filtrados por PT
+  private loadAvailablePatrones() {
+    const ptId = this.coreData?.pt_id; // Ej: "PT-23"
+    if (!ptId) {
+      console.warn('No PT ID available to filter patrones');
+      return;
+    }
+
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'patron',
+      opts: {
+        where: {
+          pt: ptId,
+        },
+      },
+    };
+
+    this.apiService.post(query, UrlClass.URLNuevo).subscribe({
+      next: (response: any) => {
+        if (response?.result && response.result.length > 0) {
+          this.availablePatrones = response.result.map((p: any) => ({
+            id: p.id,
+            name: p.name, // Este campo tiene formato "810-0000+620-0000"
+            months_calibration: p.months_calibration,
+          }));
+        } else {
+          this.availablePatrones = [];
+        }
+      },
+      error: (error) => {
+        console.error('Error loading patrones:', error);
+        this.availablePatrones = [];
+      },
+    });
+  }
+
+  // Cargar patrones ya seleccionados desde la BD
+  private loadSelectedPatronesFromDB() {
+    const dccId = this.coreData?.certificate_number;
+    if (!dccId) return;
+
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_measuringequipments',
+      opts: {
+        where: { id_dcc: dccId, deleted: 0 },
+        attributes: ['id_patron'],
+        group_by: ['id_patron'],
+      },
+    };
+
+    this.apiService.post(query, UrlClass.URLNuevo).subscribe({
+      next: (response: any) => {
+        if (response?.result && response.result.length > 0) {
+          const patronIds = response.result
+            .map((r: any) => r.id_patron)
+            .filter((id: any) => id);
+          // Seleccionar los patrones que ya están guardados
+          this.selectedPatrones = this.availablePatrones.filter((p) =>
+            patronIds.includes(p.id)
+          );
+          // Cargar equipos de los patrones seleccionados
+          if (this.selectedPatrones.length > 0) {
+            this.loadEquipmentsFromPatrones();
+          }
+        }
+      },
+      error: (error) => {
+        console.error('Error loading selected patrones:', error);
+      },
+    });
+  }
+
+  onPatronSelect(item: any) {
+    this.loadEquipmentsFromPatrones();
+  }
+
+  onPatronDeSelect(item: any) {
+    this.loadEquipmentsFromPatrones();
+  }
+
+  // Cargar equipos desde hvtest2.equipment_catalog basándose en los patrones seleccionados
+  private loadEquipmentsFromPatrones() {
+    this.equipmentsFromPatrones = [];
+
+    if (this.selectedPatrones.length === 0) {
+      return;
+    }
+
+    // Recopilar todos los asset_ids de los patrones seleccionados
+    const allAssetIds: {
+      assetId: string;
+      patronId: number;
+      patronName: string;
+      calibrationInterval: number;
+    }[] = [];
+
+    for (const patron of this.selectedPatrones) {
+      // El name del patrón tiene formato "810-0000+620-0000"
+      const fullPatron = this.availablePatrones.find((p) => p.id === patron.id);
+      if (fullPatron && fullPatron.name) {
+        // Separar por + para obtener los asset IDs individuales
+        const assetIds = fullPatron.name
+          .split('+')
+          .map((id: string) => id.trim());
+        for (const assetId of assetIds) {
+          if (assetId) {
+            allAssetIds.push({
+              assetId,
+              patronId: fullPatron.id,
+              patronName: fullPatron.name,
+              calibrationInterval: fullPatron.months_calibration || 0,
+            });
+          }
+        }
+      }
+    }
+
+    if (allAssetIds.length === 0) {
+      return;
+    }
+
+    // Buscar cada asset_id en hvtest2.equipment_catalog
+    const promises = allAssetIds.map((item) => {
+      const query = {
+        action: 'get',
+        bd: 'hvtest2',
+        table: 'equipment_catalog',
+        opts: {
+          where: {
+            idequipment: item.assetId,
+          },
+        },
+      };
+
+      return this.apiService
+        .post(query, UrlClass.URLNuevo)
+        .toPromise()
+        .then((response: any) => {
+          if (response?.result && response.result.length > 0) {
+            const eq = response.result[0];
+            return {
+              assetId: item.assetId,
+              patronId: item.patronId,
+              patronName: item.patronName,
+              calibrationInterval: item.calibrationInterval,
+              idEquipment: eq.idequipment,
+              name: eq.Description || eq.description || '',
+              manufacturer: eq.maker || eq.Maker || '',
+              model: eq.model || eq.Model || '',
+              serialNumber: eq.serial_number || eq.Serial_number || '',
+            };
+          }
+          return null;
+        })
+        .catch((error) => {
+          console.error(
+            `Error loading equipment for asset ${item.assetId}:`,
+            error
+          );
+          return null;
+        });
+    });
+
+    Promise.all(promises).then((results) => {
+      this.equipmentsFromPatrones = results.filter((r) => r !== null);
+    });
+  }
+
+  saveMeasuringEquipments() {
+    const dccId = this.coreData?.certificate_number;
+    if (!dccId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'No hay un DCC cargado.',
+      });
+      return;
+    }
+
+    if (this.equipmentsFromPatrones.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Sin equipos',
+        text: 'No hay equipos seleccionados para guardar.',
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'Guardando...',
+      text: 'Guardando equipos de medición',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    // Primero eliminar los registros anteriores (soft delete)
+    const deleteQuery = {
+      action: 'update',
+      bd: this.database,
+      table: 'dcc_measuringequipments',
+      opts: {
+        attributes: { deleted: 1 },
+        where: { id_dcc: dccId },
+      },
+    };
+
+    this.apiService.post(deleteQuery, UrlClass.URLNuevo).subscribe({
+      next: (deleteResponse) => {
+        // Insertar los nuevos equipos
+        const insertPromises = this.equipmentsFromPatrones.map((eq, index) => {
+          const attributes = {
+            id_dcc: dccId,
+            id_patron: eq.patronId,
+            id_equipment: null, // No usamos este campo, el asset_id es suficiente
+            asset_id: eq.assetId,
+            name: eq.name,
+            manufacturer: eq.manufacturer,
+            model: eq.model,
+            serial_number: eq.serialNumber,
+            calibration_interval: eq.calibrationInterval,
+            ref_type: 'basic_standardUsed',
+            orden: index + 1,
+            deleted: 0,
+          };
+
+          const insertQuery = {
+            action: 'create',
+            bd: this.database,
+            table: 'dcc_measuringequipments',
+            opts: {
+              attributes: attributes,
+            },
+          };
+
+          return this.apiService
+            .post(insertQuery, UrlClass.URLNuevo)
+            .toPromise();
+        });
+
+        Promise.all(insertPromises)
+          .then((insertResponses) => {
+            Swal.close();
+            this.isEditingMeasuringEquipments = false;
+            // Limpiar arrays de edición
+            this.selectedPatrones = [];
+            this.equipmentsFromPatrones = [];
+            // Recargar los datos guardados para actualizar la vista
+            this.loadMeasuringEquipmentsFromDB(dccId);
+            Swal.fire({
+              icon: 'success',
+              title: '¡Guardado!',
+              text: `Se guardaron ${insertResponses.length} equipos correctamente.`,
+              timer: 2000,
+              showConfirmButton: false,
+              position: 'top-end',
+            });
+          })
+          .catch((error) => {
+            Swal.close();
+            console.error('Error saving equipments:', error);
+            Swal.fire({
+              icon: 'error',
+              title: 'Error',
+              text: 'Ocurrió un error al guardar los equipos.',
+            });
+          });
+      },
+      error: (error) => {
+        Swal.close();
+        console.error('Error deleting old equipments:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Ocurrió un error al actualizar los equipos.',
+        });
+      },
+    });
+  }
+
   // Agrega el método faltante para cargar equipos de medición desde la BD
   private loadMeasuringEquipmentsFromDB(dccId: string) {
     if (!dccId) return;
@@ -1150,6 +1548,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
       table: 'dcc_measuringequipments',
       opts: {
         where: { id_dcc: dccId, deleted: 0 },
+        order_by: ['orden', 'ASC'],
       },
     };
 
@@ -1159,40 +1558,37 @@ export class ResultsComponent implements OnInit, OnDestroy {
           this.measuringEquipments = response.result.map((row: any) => ({
             id: row.id,
             name: row.name,
-            refType: row.ref_type,
+            refType: row.ref_type || 'basic_standardUsed',
             manufacturer: row.manufacturer,
             model: row.model,
-            // Adaptar identifications para incluir id_asset y serial_number
             identifications: [
-              ...(Array.isArray(row.identifications)
-                ? row.identifications
-                : []),
-              ...(row.id_asset
+              {
+                name: 'Asset ID',
+                value: row.asset_id,
+                issuer: 'calibrationLaboratory',
+              },
+              {
+                name: 'Serial Number',
+                value: row.serial_number,
+                issuer: 'manufacturer',
+              },
+              ...(row.calibration_interval
                 ? [
                     {
-                      name: 'Asset ID',
-                      value: row.id_asset,
-                      issuer: 'Laboratory',
-                    },
-                  ]
-                : []),
-              ...(row.serial_number
-                ? [
-                    {
-                      name: 'Serial Number',
-                      value: row.serial_number,
-                      issuer: 'Manufacturer',
+                      name: 'Calibration Interval',
+                      value: `${row.calibration_interval} months`,
+                      issuer: 'calibrationLaboratory',
                     },
                   ]
                 : []),
             ],
           }));
         } else {
-          this.measuringEquipments = this.getDefaultMeasuringEquipments();
+          this.measuringEquipments = [];
         }
       },
       error: () => {
-        this.measuringEquipments = this.getDefaultMeasuringEquipments();
+        this.measuringEquipments = [];
       },
     });
   }

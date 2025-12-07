@@ -10,6 +10,7 @@ import { LaboratoryService } from '../../services/laboratory.service';
 import { CustomerService } from '../../services/customer.service';
 import { ResponsiblePersonsService } from '../../services/responsible-persons.service';
 import { AdministrativeDataService } from '../../services/administrative-data.service';
+import { UrlClass } from '../../shared/models/url.model';
 import Swal from 'sweetalert2';
 
 @Component({
@@ -62,6 +63,20 @@ export class AdministrativeDataComponent implements OnInit {
   selectedCustomerId: string = '';
   customerAction: 'edit' | 'select' | 'create' | null = null;
   tempCustomerId: string = '';
+  loadingCustomers: boolean = false;
+  selectedCustomerDropdown: any[] = [];
+
+  // Dropdown settings para customer
+  dropdownCustomer: IDropdownSettings = {
+    idField: 'id',
+    textField: 'name',
+    allowSearchFilter: true,
+    searchPlaceholderText: 'Buscar cliente',
+    enableCheckAll: false,
+    singleSelection: true,
+    noDataAvailablePlaceholderText: 'Cliente no Disponible',
+    noFilteredDataAvailablePlaceholderText: 'No Existe el Cliente',
+  };
 
   constructor(
     private dccDataService: DccDataService,
@@ -224,19 +239,207 @@ export class AdministrativeDataComponent implements OnInit {
     }
   }
 
-  // Nuevo método para cargar clientes
+  // Nuevo método para cargar clientes (solo lista básica, rápido)
   loadCustomers() {
+    console.log('=== LOADING CUSTOMERS (basic list) ===');
     this.customerService.loadCustomers().subscribe({
       next: (customers) => {
+        console.log('Customers loaded:', customers.length, 'items');
         this.customerList = customers;
-        if (this.customerData.name) {
-          this.findCustomerId();
-        }
+        // Cargar el customer guardado para este DCC
+        this.loadSavedCustomerForDcc();
       },
       error: (error) => {
         console.error('Error loading customers:', error);
       },
     });
+  }
+
+  // Cargar el customer guardado para el DCC actual
+  private loadSavedCustomerForDcc() {
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    if (certificateNumber) {
+      this.customerService.loadSavedCustomer(certificateNumber).subscribe({
+        next: (relationData) => {
+          if (relationData && relationData.id_customer) {
+            this.selectedCustomerId = relationData.id_customer;
+
+            // Set the dropdown selection con datos básicos
+            const foundCustomer = this.customerList.find(
+              (c) => c.id === relationData.id_customer
+            );
+            if (foundCustomer) {
+              this.selectedCustomerDropdown = [foundCustomer];
+
+              // Cargar detalles completos del cliente
+              this.loadingCustomers = true;
+              this.customerService
+                .loadCustomerDetails(relationData.id_customer)
+                .subscribe({
+                  next: (fullCustomer) => {
+                    this.customerData =
+                      this.customerService.mapSelectedCustomerData(
+                        fullCustomer
+                      );
+                    this.dccDataService.updateAdministrativeData(
+                      'customer',
+                      this.customerData
+                    );
+                    this.loadingCustomers = false;
+                  },
+                  error: () => {
+                    this.customerData =
+                      this.customerService.mapSelectedCustomerData(
+                        foundCustomer
+                      );
+                    this.loadingCustomers = false;
+                  },
+                });
+            }
+          }
+        },
+        error: (error) => {
+          console.error('Error loading saved customer:', error);
+        },
+      });
+    }
+  }
+
+  // Método para manejar la selección de cliente
+  onCustomerSelect() {
+    if (!this.selectedCustomerId) {
+      this.customerData = {
+        name: '',
+        email: '',
+        phone: '',
+        fax: '',
+        postal_code: '',
+        city: '',
+        street: '',
+        street_number: '',
+        state: '',
+        country: '',
+      };
+      return;
+    }
+
+    const selectedCustomer = this.customerList.find(
+      (customer) => customer.id === this.selectedCustomerId
+    );
+
+    if (selectedCustomer) {
+      this.customerData =
+        this.customerService.mapSelectedCustomerData(selectedCustomer);
+    }
+  }
+
+  // Método para manejar selección desde ng-multiselect-dropdown
+  onCustomerDropdownSelect(item: any) {
+    console.log('=== CUSTOMER DROPDOWN SELECT ===');
+    console.log('Item received:', item);
+
+    if (item) {
+      this.selectedCustomerId = item.id;
+      this.selectedCustomerDropdown = [item];
+
+      // Mostrar loading mientras carga los detalles
+      this.loadingCustomers = true;
+
+      // Cargar detalles completos del cliente seleccionado (email, phone, etc.)
+      this.customerService.loadCustomerDetails(item.id).subscribe({
+        next: (fullCustomer) => {
+          console.log('Full customer details loaded:', fullCustomer);
+          this.customerData =
+            this.customerService.mapSelectedCustomerData(fullCustomer);
+          this.loadingCustomers = false;
+
+          // Actualizar el customer en la lista local también
+          const index = this.customerList.findIndex((c) => c.id === item.id);
+          if (index !== -1) {
+            this.customerList[index] = fullCustomer;
+          }
+        },
+        error: (error) => {
+          console.error('Error loading customer details:', error);
+          this.loadingCustomers = false;
+          // Usar datos básicos si falla
+          const basicCustomer = this.customerList.find((c) => c.id === item.id);
+          if (basicCustomer) {
+            this.customerData =
+              this.customerService.mapSelectedCustomerData(basicCustomer);
+          }
+        },
+      });
+    }
+  }
+
+  // Método para manejar deselección desde ng-multiselect-dropdown
+  onCustomerDropdownDeselect(item: any) {
+    this.selectedCustomerId = '';
+    this.selectedCustomerDropdown = [];
+    this.customerData = {
+      name: '',
+      email: '',
+      phone: '',
+      fax: '',
+      postal_code: '',
+      city: '',
+      street: '',
+      street_number: '',
+      state: '',
+      country: '',
+    };
+  }
+
+  // Método para guardar el customer seleccionado
+  saveCustomer() {
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    if (!certificateNumber) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'No hay un DCC cargado para guardar el cliente.',
+      });
+      return;
+    }
+
+    if (!this.selectedCustomerId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Por favor seleccione un cliente.',
+      });
+      return;
+    }
+
+    this.customerService
+      .saveCustomerRelation(certificateNumber, this.selectedCustomerId)
+      .subscribe({
+        next: (success) => {
+          if (success) {
+            // Actualizar el servicio de datos con el customer seleccionado
+            this.dccDataService.updateAdministrativeData('customer', {
+              ...this.customerData,
+              customer_id: this.selectedCustomerId,
+            });
+            this.editingBlocks['customer'] = false;
+          }
+        },
+        error: (error) => {
+          console.error('Error saving customer:', error);
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Ocurrió un error al guardar el cliente.',
+          });
+        },
+      });
   }
 
   // Nuevo método para establecer la acción del laboratorio
@@ -388,100 +591,7 @@ export class AdministrativeDataComponent implements OnInit {
             this.editingBlocks['laboratory'] = false;
           }
         },
-        error: (error) => {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: error.message,
-          });
-        },
-      });
-  }
-
-  // Customer methods
-  private createNewCustomer(certificateNumber: string): void {
-    this.customerService.createCustomer(this.customerData).subscribe({
-      next: (customerId) => {
-        this.selectedCustomerId = customerId;
-        this.linkCustomerToDcc(certificateNumber, true);
-        this.loadCustomers();
-      },
-      error: (error) => {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: error.message,
-        });
-      },
-    });
-  }
-
-  private updateCustomerInDatabase(certificateNumber: string): void {
-    if (!this.selectedCustomerId) {
-      this.selectedCustomerId =
-        this.dccDataService.getCurrentData().administrativeData.customer.customer_id;
-    }
-
-    this.customerService
-      .updateCustomer(this.selectedCustomerId, this.customerData)
-      .subscribe({
-        next: (success) => {
-          if (success) {
-            this.linkCustomerToDcc(certificateNumber, false);
-          } else {
-            Swal.fire({
-              icon: 'error',
-              title: 'Error',
-              text: 'No se pudo actualizar el cliente.',
-            });
-          }
-        },
-        error: (error) => {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: error.message,
-          });
-        },
-      });
-  }
-
-  private selectCustomer(certificateNumber: string): void {
-    this.linkCustomerToDcc(certificateNumber, false);
-  }
-
-  private linkCustomerToDcc(certificateNumber: string, isNew: boolean): void {
-    this.customerService
-      .linkCustomerToDcc(certificateNumber, this.selectedCustomerId)
-      .subscribe({
-        next: (success) => {
-          if (success) {
-            const finalCustomerData = {
-              ...this.customerData,
-              customer_id: this.selectedCustomerId,
-            };
-            this.dccDataService.updateAdministrativeData(
-              'customer',
-              finalCustomerData
-            );
-
-            const successMessage = isNew
-              ? 'Cliente creado y vinculado correctamente'
-              : 'Cliente guardado correctamente';
-
-            Swal.fire({
-              icon: 'success',
-              title: '¡Guardado!',
-              text: successMessage,
-              timer: 2000,
-              showConfirmButton: false,
-              position: 'top-end',
-            });
-
-            this.editingBlocks['customer'] = false;
-          }
-        },
-        error: (error) => {
+        error: (error: any) => {
           Swal.fire({
             icon: 'error',
             title: 'Error',
@@ -592,7 +702,7 @@ export class AdministrativeDataComponent implements OnInit {
         this.saveResponsibleBlock();
         break;
       case 'customer':
-        this.saveCustomerBlock();
+        this.saveCustomer();
         break;
     }
   }
@@ -719,37 +829,6 @@ export class AdministrativeDataComponent implements OnInit {
           });
         },
       });
-  }
-
-  private saveCustomerBlock() {
-    this.dccDataService.updateAdministrativeData('customer', this.customerData);
-
-    const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
-      currentData.administrativeData.core.certificate_number;
-
-    if (!certificateNumber) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
-      });
-      return;
-    }
-
-    if (this.customerAction === 'edit') {
-      this.updateCustomerInDatabase(certificateNumber);
-    } else if (this.customerAction === 'select' && this.selectedCustomerId) {
-      this.selectCustomer(certificateNumber);
-    } else if (this.customerAction === 'create') {
-      this.createNewCustomer(certificateNumber);
-    } else {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Acción requerida',
-        text: 'Seleccione una acción válida para el cliente.',
-      });
-    }
   }
 
   // Métodos para inicializar edición
@@ -1033,15 +1112,15 @@ export class AdministrativeDataComponent implements OnInit {
       this.selectedUsers[personIndex] = [selectedItem];
 
       if (personIndex < this.responsiblePersons.length) {
+        // Buscar el usuario completo en listauser para obtener email y phone
+        const fullUser = this.listauser.find(
+          (user) => user.no_nomina === selectedItem.no_nomina
+        );
+
         this.responsiblePersons[personIndex].no_nomina = selectedItem.no_nomina;
         this.responsiblePersons[personIndex].full_name = selectedItem.name;
-
-        if (selectedItem.email) {
-          this.responsiblePersons[personIndex].email = selectedItem.email;
-        }
-        if (selectedItem.phone) {
-          this.responsiblePersons[personIndex].phone = selectedItem.phone;
-        }
+        this.responsiblePersons[personIndex].email = fullUser?.email || '';
+        this.responsiblePersons[personIndex].phone = fullUser?.phone || '';
       }
     }
   }
@@ -1051,6 +1130,86 @@ export class AdministrativeDataComponent implements OnInit {
     this.selectedUsers[personIndex] = [];
     this.responsiblePersons[personIndex].no_nomina = '';
     this.responsiblePersons[personIndex].full_name = '';
+    this.responsiblePersons[personIndex].email = '';
+    this.responsiblePersons[personIndex].phone = '';
+  }
+
+  // Método para eliminar una persona responsable con confirmación
+  removeResponsiblePerson(index: number) {
+    const person = this.responsiblePersons[index];
+    const personName =
+      this.getResponsiblePersonDisplayName(person) || 'esta persona';
+
+    Swal.fire({
+      title: '¿Eliminar persona responsable?',
+      text: `¿Estás seguro de que deseas eliminar a ${personName}?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // Si tiene no_nomina, marcar como deleted en la BD
+        if (person.no_nomina) {
+          this.deleteResponsiblePersonFromDB(person.no_nomina);
+        }
+
+        // Eliminar del array local
+        this.responsiblePersons.splice(index, 1);
+        this.selectedUsers.splice(index, 1);
+
+        // Actualizar el servicio
+        this.dccDataService.updateAdministrativeData(
+          'responsiblePersons',
+          this.responsiblePersons
+        );
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Eliminado',
+          text: 'La persona responsable ha sido eliminada.',
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      }
+    });
+  }
+
+  // Método para eliminar persona responsable de la BD (soft delete)
+  private deleteResponsiblePersonFromDB(noNomina: string) {
+    const currentData = this.dccDataService.getCurrentData();
+    const certificateNumber =
+      currentData.administrativeData.core.certificate_number;
+
+    if (!certificateNumber) return;
+
+    const deleteRequest = {
+      action: 'update',
+      bd: 'calibraciones',
+      table: 'dcc_responsiblepersons',
+      opts: {
+        where: {
+          id_dcc: certificateNumber,
+          no_nomina: noNomina,
+          deleted: 0,
+        },
+        attributes: { deleted: 1 },
+      },
+    };
+
+    this.responsiblePersonsService
+      .getApiService()
+      .post(deleteRequest, UrlClass.URLNuevo)
+      .subscribe({
+        next: (response: any) => {
+          console.log('Persona eliminada de BD:', response);
+        },
+        error: (error: any) => {
+          console.error('Error al eliminar persona de BD:', error);
+        },
+      });
   }
 
   // Método para obtener el nombre de pantalla para una persona responsable

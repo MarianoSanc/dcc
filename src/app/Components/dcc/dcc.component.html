@@ -207,26 +207,75 @@
       <!-- Administrative Data Tab -->
       <div *ngIf="activeTab === 'administrative-data'" class="tab-panel">
         <app-administrative-data></app-administrative-data>
+        <!-- Navigation Buttons -->
+        <div class="step-navigation">
+          <div class="nav-spacer"></div>
+          <button class="next-step-btn" (click)="nextStep()">
+            <span>Next Step</span>
+            <i class="material-icons">arrow_forward</i>
+          </button>
+        </div>
       </div>
 
       <!-- Items Tab -->
       <div *ngIf="activeTab === 'items'" class="tab-panel">
         <app-items></app-items>
+        <!-- Navigation Buttons -->
+        <div class="step-navigation">
+          <button class="previous-step-btn" (click)="previousStep()">
+            <i class="material-icons">arrow_back</i>
+            <span>Previous Step</span>
+          </button>
+          <button class="next-step-btn" (click)="nextStep()">
+            <span>Next Step</span>
+            <i class="material-icons">arrow_forward</i>
+          </button>
+        </div>
       </div>
 
       <!-- Statements Tab -->
       <div *ngIf="activeTab === 'statements'" class="tab-panel">
         <app-statements></app-statements>
+        <!-- Navigation Buttons -->
+        <div class="step-navigation">
+          <button class="previous-step-btn" (click)="previousStep()">
+            <i class="material-icons">arrow_back</i>
+            <span>Previous Step</span>
+          </button>
+          <button class="next-step-btn" (click)="nextStep()">
+            <span>Next Step</span>
+            <i class="material-icons">arrow_forward</i>
+          </button>
+        </div>
       </div>
 
       <!-- Results Tab -->
       <div *ngIf="activeTab === 'results'" class="tab-panel">
         <app-results [operationMode]="operationMode"></app-results>
+        <!-- Navigation Buttons -->
+        <div class="step-navigation">
+          <button class="previous-step-btn" (click)="previousStep()">
+            <i class="material-icons">arrow_back</i>
+            <span>Previous Step</span>
+          </button>
+          <button class="next-step-btn" (click)="nextStep()">
+            <span>Next Step</span>
+            <i class="material-icons">arrow_forward</i>
+          </button>
+        </div>
       </div>
 
       <!-- Preview Tab -->
       <div *ngIf="activeTab === 'preview'" class="tab-panel">
         <app-preview></app-preview>
+        <!-- Navigation Buttons -->
+        <div class="step-navigation">
+          <button class="previous-step-btn" (click)="previousStep()">
+            <i class="material-icons">arrow_back</i>
+            <span>Previous Step</span>
+          </button>
+          <div class="nav-spacer"></div>
+        </div>
       </div>
     </div>
   </div>

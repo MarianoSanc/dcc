@@ -15,26 +15,39 @@ export class ResponsiblePersonsService {
     this.database = isTesting ? 'prueba' : 'calibraciones';
   }
 
+  // Método para exponer el apiService
+  getApiService(): ApiService {
+    return this.apiService;
+  }
+
   loadUsers(): Observable<any[]> {
     const info_usuarios = {
       action: 'get',
       bd: 'administracion',
       table: 'user',
       opts: {
-        customSelect:
-          'user.no_nomina, CONCAT(user.first_name, " ", user.last_name) AS name',
         where: {
           deleted: 0,
           organizacion: 0,
         },
-        order_by: ['user.first_name', 'ASC'],
+        order_by: ['first_name', 'ASC'],
       },
     };
 
     return new Observable((observer) => {
       this.apiService.post(info_usuarios, UrlClass.URLNuevo).subscribe({
         next: (response: any) => {
-          observer.next(response.result || []);
+          const rawUsers = Array.isArray(response?.result)
+            ? response.result
+            : [];
+          // Mapear usuarios para tener el formato esperado
+          const users = rawUsers.map((user: any) => ({
+            no_nomina: user.no_nomina,
+            name: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+            email: user.email || '',
+            phone: user.telefono || '',
+          }));
+          observer.next(users);
           observer.complete();
         },
         error: (error) => observer.error(error),
@@ -162,7 +175,8 @@ export class ResponsiblePersonsService {
       const personsToDelete = existingPersons.filter(
         (existingPerson) =>
           !preparedNewPersons.some(
-            (newPerson) => newPerson.no_nomina === existingPerson.no_nomina
+            (newPerson) =>
+              String(newPerson.no_nomina) === String(existingPerson.no_nomina)
           )
       );
 
@@ -171,7 +185,8 @@ export class ResponsiblePersonsService {
       // 3. Encontrar personas a actualizar (que están en ambas listas)
       const personsToUpdate = preparedNewPersons.filter((newPerson) =>
         existingPersons.some(
-          (existingPerson) => existingPerson.no_nomina === newPerson.no_nomina
+          (existingPerson) =>
+            String(existingPerson.no_nomina) === String(newPerson.no_nomina)
         )
       );
 
@@ -181,7 +196,8 @@ export class ResponsiblePersonsService {
       const personsToInsert = preparedNewPersons.filter(
         (newPerson) =>
           !existingPersons.some(
-            (existingPerson) => existingPerson.no_nomina === newPerson.no_nomina
+            (existingPerson) =>
+              String(existingPerson.no_nomina) === String(newPerson.no_nomina)
           )
       );
 
@@ -285,6 +301,7 @@ export class ResponsiblePersonsService {
     listauser: any[]
   ): any[] {
     return responsibleData.map((person) => {
+      // Buscar el usuario en listauser por no_nomina
       const foundUser = listauser.find(
         (user) => user.no_nomina === person.no_nomina
       );
@@ -293,19 +310,20 @@ export class ResponsiblePersonsService {
         return {
           role: person.role || '',
           no_nomina: person.no_nomina,
-          full_name: foundUser.name,
+          full_name: foundUser.name, // nombre completo del CONCAT
           email: foundUser.email || '',
           phone: foundUser.phone || '',
-          mainSigner: Boolean(person.main), // Mapear el campo 'main' de la BD
+          mainSigner: Boolean(person.main),
         };
       } else {
+        // Si no se encuentra el usuario, mostrar no_nomina como fallback
         return {
           role: person.role || '',
           no_nomina: person.no_nomina,
-          full_name: person.no_nomina,
+          full_name: `Usuario ${person.no_nomina}`,
           email: '',
           phone: '',
-          mainSigner: Boolean(person.main), // Mapear el campo 'main' de la BD
+          mainSigner: Boolean(person.main),
         };
       }
     });

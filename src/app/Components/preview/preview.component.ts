@@ -294,7 +294,17 @@ export class PreviewComponent implements OnInit, OnDestroy {
             <dcc:content>${this.escapeXml(
               this.getPersonDisplayName(person)
             )}</dcc:content>
-          </dcc:name>
+          </dcc:name>${
+            person.email
+              ? `
+          <dcc:eMail>${this.escapeXml(person.email)}</dcc:eMail>`
+              : ''
+          }${
+            person.phone
+              ? `
+          <dcc:phone>${this.escapeXml(person.phone)}</dcc:phone>`
+              : ''
+          }
         </dcc:person>
         <dcc:role>${this.escapeXml(person.role)}</dcc:role>
         ${person.mainSigner ? '<dcc:mainSigner>true</dcc:mainSigner>' : ''}
