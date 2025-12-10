@@ -6,75 +6,45 @@
 
   <!-- Controls Bar -->
   <div class="controls-bar">
-    <div class="view-options">
-      <h4>Vista:</h4>
-      <div class="view-buttons">
-        <button
-          class="view-btn"
-          [class.active]="currentView === 'xml'"
-          (click)="switchView('xml')"
-        >
-          <i class="material-icons">code</i>
-          <span>XML</span>
-        </button>
-        <button
-          class="view-btn"
-          [class.active]="currentView === 'pdf'"
-          (click)="switchView('pdf')"
-        >
-          <i class="material-icons">picture_as_pdf</i>
-          <span>PDF</span>
-        </button>
-      </div>
+    <div class="file-info-section">
+      <i class="material-icons">code</i>
+      <span class="file-name"
+        >{{
+          dccData?.administrativeData?.core?.certificate_number || "DCC"
+        }}.xml</span
+      >
     </div>
 
-    <button
-      class="download-btn"
-      (click)="downloadXML()"
-      [disabled]="!xmlContent"
-    >
-      <i class="material-icons">download</i>
-      <span>Descargar XML</span>
-    </button>
+    <div class="action-buttons">
+      <button
+        class="download-btn"
+        (click)="downloadXML()"
+        [disabled]="!xmlContent"
+      >
+        <i class="material-icons">download</i>
+        <span>Descargar XML</span>
+      </button>
+      <button
+        class="generate-pdf-btn"
+        (click)="generatePdf()"
+        [disabled]="isGeneratingPdf || !dccData"
+      >
+        <i class="material-icons">{{
+          isGeneratingPdf ? "hourglass_empty" : "picture_as_pdf"
+        }}</i>
+        <span>{{ isGeneratingPdf ? "Generando..." : "Generar PDF" }}</span>
+      </button>
+    </div>
   </div>
 
-  <!-- Preview Content -->
+  <!-- XML Preview Content -->
   <div class="preview-content">
-    <!-- XML Preview -->
-    <div *ngIf="currentView === 'xml'" class="xml-preview">
+    <div class="xml-preview">
       <div class="xml-header">
         <h4>Vista XML</h4>
-        <div class="file-info">
-          {{
-            dccData?.administrativeData?.core?.certificate_number || "DCC"
-          }}.xml
-        </div>
       </div>
       <div class="xml-content">
         <pre><code>{{ xmlContent }}</code></pre>
-      </div>
-    </div>
-
-    <!-- PDF Preview -->
-    <div *ngIf="currentView === 'pdf'" class="pdf-preview">
-      <div class="pdf-header">
-        <h4>Vista PDF</h4>
-        <div class="file-info">
-          {{
-            dccData?.administrativeData?.core?.certificate_number || "DCC"
-          }}.pdf
-        </div>
-      </div>
-      <div class="pdf-content">
-        <div class="pdf-placeholder">
-          <i class="material-icons">picture_as_pdf</i>
-          <h4>Vista PDF</h4>
-          <p>La generación de PDF estará disponible próximamente.</p>
-          <p>
-            Por ahora, puedes descargar el archivo XML y convertirlo usando
-            herramientas externas.
-          </p>
-        </div>
       </div>
     </div>
   </div>

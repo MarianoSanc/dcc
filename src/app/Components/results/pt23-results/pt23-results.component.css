@@ -1116,7 +1116,7 @@
 }
 
 .option-box.selected .option-number {
-  color: white;
+  color: black;
   font-weight: 900;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }

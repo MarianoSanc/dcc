@@ -1072,13 +1072,21 @@ export class ResultsComponent implements OnInit, OnDestroy {
               unit: row.quantity_unit,
             },
           }));
+          // Actualizar el observable global para que Preview reciba los datos reales
+          this.dccDataService.updateInfluenceConditions(
+            this.influenceConditions
+          );
         } else {
           // Si no hay datos en BD, inicializa con los valores por defecto
           this.influenceConditions = this.getDefaultInfluenceConditions();
+          this.dccDataService.updateInfluenceConditions(
+            this.influenceConditions
+          );
         }
       },
       error: () => {
         this.influenceConditions = this.getDefaultInfluenceConditions();
+        this.dccDataService.updateInfluenceConditions(this.influenceConditions);
       },
     });
   }
@@ -1257,7 +1265,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
   // Cargar patrones disponibles desde calibraciones.patron filtrados por PT
   private loadAvailablePatrones() {
-    const ptId = this.coreData?.pt_id; // Ej: "PT-23"
+    const ptId = this.coreData?.pt_id;
     if (!ptId) {
       console.warn('No PT ID available to filter patrones');
       return;
@@ -1538,7 +1546,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  // Agrega el método faltante para cargar equipos de medición desde la BD
   private loadMeasuringEquipmentsFromDB(dccId: string) {
     if (!dccId) return;
 
@@ -1583,12 +1590,18 @@ export class ResultsComponent implements OnInit, OnDestroy {
                 : []),
             ],
           }));
+          // Actualizar el observable global para que Preview reciba los datos reales
+          this.dccDataService.updateMeasuringEquipments(
+            this.measuringEquipments
+          );
         } else {
           this.measuringEquipments = [];
+          this.dccDataService.updateMeasuringEquipments([]);
         }
       },
       error: () => {
         this.measuringEquipments = [];
+        this.dccDataService.updateMeasuringEquipments([]);
       },
     });
   }

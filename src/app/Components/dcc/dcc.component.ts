@@ -666,10 +666,9 @@ export class DccComponent implements OnInit {
     // Cargar todos los datos de items en paralelo
     Promise.all([
       this.loadMainItemData(dccData.id),
-      this.loadObjectIdentificationGroups(dccData.id),
       this.loadSubItems(dccData.id),
     ])
-      .then(([mainItemData, objectGroups, subItems]) => {
+      .then(([mainItemData, subItems]) => {
         // Procesar Main Item Data
         if (mainItemData) {
           // Asegurar que el array de items existe
@@ -718,66 +717,25 @@ export class DccComponent implements OnInit {
         }
 
         // Procesar Object Identifications Groups
-        if (objectGroups && objectGroups.length > 0) {
-          mergedData.objectIdentifications = objectGroups.map(
-            (group: any, index: number) => ({
-              id: `group_${group.id}`,
-              groupId: `group_${index + 1}`,
-              groupName: group.name || `Grupo ${index + 1}`,
-              groupIndex: index,
-              assignedMeasurementRange: {
-                label: 'Rated voltage',
-                value: group.range_voltage || '',
-                unit: '\\volt',
-              },
-              assignedScaleFactor: {
-                label: 'Scale factor',
-                value: group.scale_factor || '',
-                unit: '\\one',
-              },
-              ratedFrequency: {
-                label: 'Rated Frequency',
-                value: group.rated_frequency || '',
-                unit: '\\one',
-              },
-            })
-          );
-        } else {
-        }
+        // Eliminado: objectGroups y mergedData.objectIdentifications
 
         // Procesar SubItems
         if (subItems && subItems.length > 0) {
-          // Mapear SubItems desde la BD
-          const subItemPromises = subItems.map((subItem: any) => {
-            return this.loadSubItemIdentifiers(subItem.id).then(
-              (identifiers: any[]) => {
-                return {
-                  id: `subitem_${subItem.id}`,
-                  dbId: subItem.id,
-                  name: subItem.description || '',
-                  manufacturer: subItem.manufacturer || '',
-                  model: subItem.model || '',
-                  identifiers: identifiers,
-                };
-              }
-            );
-          });
-
-          Promise.all(subItemPromises).then((subItemsWithIdentifiers) => {
-            mergedData.items[0].subItems = subItemsWithIdentifiers;
-            // Cargar los datos con los identificadores
-            this.dccDataService.loadFromObject(mergedData);
-            this.showInitialOptions = false;
-            this.showMainInterface = true;
-            this.showDccSelect = false;
-          });
-        } else {
-          // Sin subItems, cargar datos directamente
-          this.dccDataService.loadFromObject(mergedData);
-          this.showInitialOptions = false;
-          this.showMainInterface = true;
-          this.showDccSelect = false;
+          // Mapear SubItems desde la BD (sin identificadores)
+          mergedData.items[0].subItems = subItems.map((subItem: any) => ({
+            id: `subitem_${subItem.id}`,
+            dbId: subItem.id,
+            name: subItem.description || '',
+            manufacturer: subItem.manufacturer || '',
+            model: subItem.model || '',
+            identifiers: [],
+          }));
         }
+        // Cargar los datos (con o sin subitems)
+        this.dccDataService.loadFromObject(mergedData);
+        this.showInitialOptions = false;
+        this.showMainInterface = true;
+        this.showDccSelect = false;
       })
       .catch((error) => {
         console.error('❌ Error loading item data:', error);
@@ -813,30 +771,6 @@ export class DccComponent implements OnInit {
       });
   }
 
-  // Nuevo método para cargar Object Identification Groups
-  private loadObjectIdentificationGroups(dccId: string): Promise<any[]> {
-    const getObjectGroups = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_item_config',
-      opts: {
-        where: { id_dcc: dccId },
-        order_by: ['id_item', 'ASC'],
-      },
-    };
-
-    return this.apiService
-      .post(getObjectGroups, UrlClass.URLNuevo)
-      .toPromise()
-      .then((response: any) => {
-        return response?.result || [];
-      })
-      .catch((error) => {
-        console.error('❌ Error loading object groups:', error);
-        return [];
-      });
-  }
-
   // Nuevo método para cargar SubItems
   private loadSubItems(dccId: string): Promise<any[]> {
     const getSubItems = {
@@ -859,116 +793,6 @@ export class DccComponent implements OnInit {
         console.error('❌ Error loading subitems:', error);
         return [];
       });
-  }
-
-  // Nuevo método para cargar identificadores de un subitem desde dcc_subitem_identificador
-  private loadSubItemIdentifiers(subItemId: number): Promise<any[]> {
-    const getIdentifiers = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_subitem_identificador',
-      opts: {
-        where: {
-          id_subitem: subItemId,
-          deleted: 0,
-        },
-        order_by: ['id', 'ASC'],
-      },
-    };
-
-    return this.apiService
-      .post(getIdentifiers, UrlClass.URLNuevo)
-      .toPromise()
-      .then((response: any) => {
-        const identifiers = response?.result || [];
-        return identifiers.map((id: any) => ({
-          id: id.id,
-          name: id.name || '',
-          value: id.value || '',
-        }));
-      })
-      .catch((error) => {
-        console.error('Error loading subitem identifiers:', error);
-        return [];
-      });
-  }
-
-  // Método auxiliar para crear identifications desde subitem de BD
-  private createIdentificationsFromSubItem(subItem: any): any[] {
-    const identifications: any[] = [];
-
-    // Serial Number
-    if (subItem.serial_number && subItem.serial_number.trim() !== '') {
-      identifications.push({
-        issuer: 'Manufacturer',
-        name: 'Serial Number',
-        value: subItem.serial_number,
-        selectedOption: {
-          issuer: 'Manufacturer',
-          name: 'Serial Number',
-          saveAs: 'identification',
-        },
-      });
-    }
-
-    // Customer Asset
-    if (subItem.costumer_asset && subItem.costumer_asset.trim() !== '') {
-      identifications.push({
-        issuer: 'Customer',
-        name: "Customer's asset ID",
-        value: subItem.costumer_asset,
-        selectedOption: {
-          issuer: 'Customer',
-          name: "Customer's asset ID",
-          saveAs: 'identification',
-        },
-      });
-    }
-
-    return identifications;
-  }
-
-  // Método auxiliar para crear quantities desde subitem de BD
-  private createQuantitiesFromSubItem(subItem: any): any[] {
-    const quantities: any[] = [];
-
-    // Rated Voltage
-    if (subItem.rated_voltage && subItem.rated_voltage.trim() !== '') {
-      quantities.push({
-        refType: 'hv_ratedVoltage',
-        name: 'Rated voltage',
-        value: subItem.rated_voltage,
-        unit: '\\volt',
-        selectedOption: {
-          issuer: 'Manufacturer',
-          name: 'Rated voltage',
-          saveAs: 'itemQuantity',
-          unit: '\\volt',
-        },
-        originalIssuer: 'Manufacturer',
-        saveAs: 'itemQuantity',
-      });
-    }
-
-    // Length
-    if (subItem.length && subItem.length.trim() !== '') {
-      quantities.push({
-        refType: 'basic_length',
-        name: 'Length',
-        value: subItem.length,
-        unit: '\\meter',
-        selectedOption: {
-          issuer: 'Manufacturer',
-          name: 'Length',
-          saveAs: 'itemQuantity',
-          unit: '\\meter',
-        },
-        originalIssuer: 'Manufacturer',
-        saveAs: 'itemQuantity',
-      });
-    }
-
-    return quantities;
   }
 
   // Cambia la tab activa

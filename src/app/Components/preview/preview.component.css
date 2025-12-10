@@ -36,46 +36,22 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.view-options {
+.file-info-section {
   display: flex;
   align-items: center;
-  gap: 15px;
-}
-
-.view-options h4 {
-  margin: 0;
-  color: #333;
-  font-size: 1.1em;
-}
-
-.view-buttons {
-  display: flex;
   gap: 10px;
-}
-
-.view-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 1em;
   color: #666;
 }
 
-.view-btn:hover {
-  border-color: #2196f3;
+.file-info-section i {
+  font-size: 1.5em;
   color: #2196f3;
 }
 
-.view-btn.active {
-  border-color: #2196f3;
-  background: #2196f3;
-  color: white;
+.file-name {
+  font-family: "Courier New", monospace;
+  font-size: 1.1em;
+  color: #333;
 }
 
 .download-btn {
@@ -97,6 +73,48 @@
   background: #45a049;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+.download-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Action Buttons Group */
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+/* Generate PDF Button */
+.generate-pdf-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: #e53935;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.generate-pdf-btn:hover {
+  background: #c62828;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(229, 57, 53, 0.3);
+}
+
+.generate-pdf-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* Preview Content */
@@ -216,6 +234,56 @@
   line-height: 1.5;
 }
 
+.pdf-placeholder .hint {
+  font-size: 0.9em;
+  color: #999;
+  font-style: italic;
+}
+
+/* Generated Links */
+.generated-links {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.generated-links h5 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 1.1em;
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  margin: 5px;
+  background: #e53935;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95em;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.link-btn:hover {
+  background: #c62828;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(229, 57, 53, 0.3);
+}
+
+.link-btn.docx {
+  background: #2196f3;
+}
+
+.link-btn.docx:hover {
+  background: #1976d2;
+  box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+}
+
 @media (max-width: 768px) {
   .preview-container {
     padding: 20px;
@@ -242,7 +310,13 @@
     justify-content: center;
   }
 
-  .download-btn {
+  .action-buttons {
+    flex-direction: column;
+    align-self: stretch;
+  }
+
+  .download-btn,
+  .generate-pdf-btn {
     align-self: stretch;
     justify-content: center;
   }
