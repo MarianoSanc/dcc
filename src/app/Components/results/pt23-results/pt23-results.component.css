@@ -100,14 +100,14 @@
 }
 
 .generate-btn {
-  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
   color: white;
 }
 
 .generate-btn:hover {
-  background: linear-gradient(135deg, #f57c00 0%, #ef6c00 100%);
+  background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
 }
 
 .edit-btn:active,

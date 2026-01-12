@@ -45,7 +45,7 @@ export class ResponsiblePersonsService {
             no_nomina: user.no_nomina,
             name: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
             email: user.email || '',
-            phone: user.telefono || '',
+            phone: user.telefono2 || '',
           }));
           observer.next(users);
           observer.complete();

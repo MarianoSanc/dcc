@@ -368,11 +368,18 @@ export class ResultsComponent implements OnInit, OnDestroy {
           this.measurementResultName = dccData.name_measurement;
         } else {
           // Valor por defecto si no existe
-          this.measurementResultName = `Calibration of ${dccId}.`;
+          this.measurementResultName = `Calibration of`;
         }
+        // Enviar el nombre actualizado al servicio global para preview
+        this.dccDataService.updateMeasurementResultName(
+          this.measurementResultName
+        );
       },
       error: () => {
-        this.measurementResultName = `Calibration of ${dccId}.`;
+        this.measurementResultName = `Calibration of`;
+        this.dccDataService.updateMeasurementResultName(
+          this.measurementResultName
+        );
       },
     });
   }

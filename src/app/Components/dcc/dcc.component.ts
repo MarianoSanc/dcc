@@ -68,6 +68,24 @@ export class DccComponent implements OnInit {
   newDccPtId: string = '';
   newDccDutNumber: number | null = null;
   generatedCertificateNumber: string = '';
+  ptOptions: string[] = [
+    'PT-05',
+    'PT-08',
+    'PT-14',
+    'PT-23',
+    'PT-24',
+    'PT-25',
+    'PT-33',
+    'PT-36',
+    'PT-37',
+    'PT-38',
+    'PT-39',
+    'PT-40',
+    'PT-41',
+    'PT-42',
+    'PT-43',
+    'PT-45',
+  ];
 
   // Configuración para el multiselect de proyectos
   projectDropdownSettings = {

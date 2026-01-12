@@ -227,17 +227,28 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
     private pt23XmlGenerator: Pt23XmlGeneratorService
   ) {}
 
-  ngOnInit() {
+  async ngOnInit() {
     this.subscription.add(
-      this.dccDataService.dccData$.subscribe((data) => {
+      this.dccDataService.dccData$.subscribe(async (data) => {
         const newDccId = data.administrativeData.core.certificate_number;
-
-        // OPTIMIZACIÓN: Solo recargar si el DCC ID cambió
         if (this.dccId !== newDccId) {
           this.dccId = newDccId;
-
           if (this.dccId) {
-            // CORRECCIÓN: Cargar primero config y datos de BD ANTES de inicializar
+            const patronName = await this.getPatronNameFromDB();
+            if (patronName) {
+              await this.loadCmcUCombData(patronName, 'PT-23');
+              console.log(
+                '[cmc_u_comb] Patron:',
+                patronName,
+                'Datos cargados:',
+                this.cmcUCombData
+              );
+            } else {
+              console.warn(
+                '[cmc_u_comb] No se encontró nombre de patrón para dccId',
+                this.dccId
+              );
+            }
             this.loadConfigAndData();
           } else {
             if (this.scaleFactorData.length === 0) {
@@ -4394,5 +4405,389 @@ export class Pt23ResultsComponent implements OnInit, OnDestroy {
     this.stabilityTestData = this.stabilityTestDataBackup;
 
     this.isEditingLevelsSection = false;
+  }
+
+  // =============================
+  // CÁLCULOS PARA UNCERTAINTY BUDGET - DISPERSION (TYPE A)
+  // =============================
+  getDispersionTypeAData(): Array<{
+    meas: string;
+    stdDev: number;
+    divisor: number;
+    dof: number;
+    sensitivity: number;
+    contribution: number;
+  }> {
+    // Usar el primer Linearity Test (puedes ajustar si quieres otro test)
+    if (!this.linearityTestData.length) return [];
+    const tablas = this.linearityTestData[0].tablas;
+    if (!tablas || tablas.length === 0) return [];
+    return tablas.map((nivel, idx) => {
+      // Calcular errores para cada fila de este nivel
+      const n = nivel.dut.length;
+      const errores: number[] = [];
+      for (let i = 0; i < n; i++) {
+        const dut = nivel.dut[i];
+        const patron = nivel.patron[i];
+        if (dut !== null && patron !== null && patron !== 0) {
+          errores.push(((dut - patron) / patron) * 100);
+        }
+      }
+      const m = errores.length;
+      const nivelLabel =
+        nivel.nivel !== null && nivel.nivel !== undefined ? nivel.nivel : '-';
+      if (m < 2) {
+        // No se puede calcular desviación estándar con menos de 2 datos
+        return {
+          meas: `${idx + 1} (${nivelLabel})`,
+          stdDev: 0,
+          divisor: 1,
+          dof: 0,
+          sensitivity: 1,
+          contribution: 0,
+        };
+      }
+      // Calcular stdDev
+      const mean = errores.reduce((a, b) => a + b, 0) / m;
+      const variance =
+        errores.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+        (m - 1);
+      const stdDev = Math.sqrt(variance);
+      const divisor = Math.sqrt(m);
+      const dof = m - 1;
+      const sensitivity = 1;
+      const contribution = (stdDev / divisor) * sensitivity;
+      return {
+        meas: `${idx + 1} (${nivelLabel})`,
+        stdDev,
+        divisor,
+        dof,
+        sensitivity,
+        contribution,
+      };
+    });
+  }
+
+  // =============================
+  // CÁLCULOS PARA UNCERTAINTY BUDGET - RESOLUTION DUT
+  // =============================
+  getResolutionDUTData(): Array<{
+    meas: string;
+    stdDev: number;
+    divisor: number;
+    dof: number;
+    sensitivity: number;
+    contribution: number;
+  }> {
+    if (!this.linearityTestData.length) return [];
+    const tablas = this.linearityTestData[0].tablas;
+    if (!tablas || tablas.length === 0) return [];
+    return tablas.map((nivel, idx) => {
+      // Obtener todos los valores DUT válidos como number[]
+      const dutVals = (nivel.dut || [])
+        .filter(
+          (v): v is number => v !== null && v !== undefined && !isNaN(Number(v))
+        )
+        .map(Number);
+      const n = dutVals.length;
+      const nivelLabel =
+        nivel.nivel !== null && nivel.nivel !== undefined ? nivel.nivel : '-';
+      if (n === 0) {
+        return {
+          meas: `${idx + 1} (${nivelLabel})`,
+          stdDev: 0,
+          divisor: Math.sqrt(3),
+          dof: 1000000,
+          sensitivity: 1,
+          contribution: 0,
+        };
+      }
+      // Calcular decimales mínimos presentes en los DUT
+      const getDecimals = (num: number) => {
+        const s = num.toString();
+        if (s.indexOf('.') === -1) return 0;
+        return s.split('.')[1].length;
+      };
+      let minDecimals = Number.POSITIVE_INFINITY;
+      for (const val of dutVals) {
+        const dec = getDecimals(val);
+        if (dec < minDecimals) minDecimals = dec;
+      }
+      if (!isFinite(minDecimals)) minDecimals = 0;
+      // Calcular promedio DUT
+      const meanDUT = dutVals.reduce((a, b) => a + b, 0) / n;
+      // Calcular stdDev según nueva fórmula
+      const stdDev = (0.1 * 100) / meanDUT;
+      const divisor = Math.sqrt(3);
+      const dof = 1000000;
+      const sensitivity = 1;
+      const contribution = (stdDev / divisor) * sensitivity;
+      return {
+        meas: `${idx + 1} (${nivelLabel})`,
+        stdDev,
+        divisor,
+        dof,
+        sensitivity,
+        contribution,
+      };
+    });
+  }
+
+  // =============================
+  // CÁLCULOS PARA UNCERTAINTY BUDGET - COMBINED UNCERTAINTY FROM STD
+  // =============================
+  // Nuevo: Cargar datos de cmc_u_comb y usar el rango adecuado para stdDev
+  private cmcUCombData: Array<{
+    patron: string;
+    pt: string;
+    u_scope: number;
+    min: number;
+    max: number;
+  }> = [];
+
+  // Método para cargar cmc_u_comb desde la BD (debe llamarse antes de mostrar la tabla)
+  async loadCmcUCombData(patron: string, pt: string): Promise<void> {
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'cmc_u_comb',
+      opts: {
+        where: { patron, pt },
+      },
+    };
+    console.log('Cargando cmc_u_comb con:', query);
+    try {
+      const response: any = await lastValueFrom(
+        this.dccDataService.post(query)
+      );
+      console.log('CMC U Comb Data:', response);
+      this.cmcUCombData = response?.result || [];
+    } catch (error) {
+      this.cmcUCombData = [];
+    }
+  }
+
+  // Busca el u_scope correcto para un nivel dado
+  private getUScopeForNivel(nivel: number): number {
+    if (!this.cmcUCombData.length || nivel == null) {
+      console.log(
+        '[cmc_u_comb] Sin datos, usando fallback 0.18 para nivel',
+        nivel
+      );
+      return 0.18; // fallback
+    }
+    // Ordenar por min ascendente para asegurar el comportamiento de "igual a min va al grupo más bajo"
+    const sorted = this.cmcUCombData.slice().sort((a, b) => a.min - b.min);
+    for (const row of sorted) {
+      if (nivel >= row.min && nivel < row.max) {
+        return row.u_scope;
+      }
+    }
+    // Si el nivel es igual a algún min, tomar ese grupo (más bajo)
+    for (const row of sorted) {
+      if (nivel === row.min) {
+        return row.u_scope;
+      }
+    }
+    // Si no encontró, usar el primero o fallback
+    console.log(
+      '[cmc_u_comb] Nivel',
+      nivel,
+      'fuera de rango, usando',
+      sorted.length ? sorted[0].u_scope : 0.18
+    );
+    return sorted.length ? sorted[0].u_scope : 0.18;
+  }
+
+  getCombinedUncertaintySTDData(): Array<{
+    meas: string;
+    stdDev: number;
+    divisor: number;
+    dof: string;
+    sensitivity: number;
+    contribution: number;
+  }> {
+    if (!this.linearityTestData.length) return [];
+    const tablas = this.linearityTestData[0].tablas;
+    if (!tablas || tablas.length === 0) return [];
+    return tablas.map((nivel, idx) => {
+      const nivelLabel =
+        nivel.nivel !== null && nivel.nivel !== undefined ? nivel.nivel : '-';
+      // Buscar el stdDev adecuado según el nivel
+      const nivelValue =
+        nivel.nivel !== null && nivel.nivel !== undefined
+          ? Number(nivel.nivel)
+          : null;
+      const stdDev =
+        nivelValue != null ? this.getUScopeForNivel(nivelValue) : 0.18;
+      console.log(
+        `[Uncertainty STD] Nivel: ${nivelLabel}, stdDev usado: ${stdDev}`
+      );
+      const divisor = 1;
+      const dof = '-';
+      const sensitivity = 1;
+      const contribution = (stdDev / divisor) * sensitivity;
+      return {
+        meas: `${idx + 1} (${nivelLabel})`,
+        stdDev,
+        divisor,
+        dof,
+        sensitivity,
+        contribution,
+      };
+    });
+  }
+
+  // =============================
+  // CÁLCULOS PARA UNCERTAINTY BUDGET - NON-LINEARITY EFFECT SF
+  // =============================
+  async getNonLinearityEffectSFData(): Promise<
+    Array<{
+      meas: string;
+      stdDev: number;
+      divisor: number;
+      dof: number;
+      sensitivity: number;
+      contribution: number;
+    }>
+  > {
+    const patronName = this.getPatronNameFromDB();
+    let stdDev = 0;
+
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'cmc_uncertaintycomponents',
+      opts: {
+        where: {
+          id_equipment: patronName,
+          pt: 'PT-23',
+        },
+      },
+    };
+
+    try {
+      const response: any = await lastValueFrom(
+        this.dccDataService.post(query)
+      );
+
+      const result = response?.result?.[0] || response?.[0];
+      stdDev = Number(result?.non_linearity) || 0;
+    } catch (error) {
+      console.error('Error obteniendo non_linearity', error);
+      stdDev = 0;
+    }
+
+    // Solo una fila
+    const divisor = Math.sqrt(3);
+    const dof = 1_000_000;
+    const sensitivity = 1;
+    const contribution = (stdDev / divisor) * sensitivity;
+
+    return [
+      {
+        meas: '-',
+        stdDev,
+        divisor,
+        dof,
+        sensitivity,
+        contribution,
+      },
+    ];
+  }
+
+  // =============================
+  // CÁLCULO PARA TABLA: Combined Standard Uncertainty [%]
+  // =============================
+  // getCombinedStandardUncertaintyTable(): Array<{
+  //   measurement: string;
+  //   nuef: number;
+  // }> {
+  //   // Obtener datos de los 3 grupos por nivel
+  //   const disp = this.getDispersionTypeAData();
+  //   const res = this.getResolutionDUTData();
+  //   const cu = this.getCombinedUncertaintySTDData();
+  //   //const nl = await this.getNonLinearityEffectSFData();
+  //   const n = Math.max(disp.length, res.length, cu.length);
+  //   if (n === 0) return [];
+  //   // El cuarto grupo (Non-linearity) es solo uno, su contribución es la misma para todos los niveles
+  //   const nlContribution = nl[0]?.contribution ?? 0;
+  //   const rows = [];
+  //   for (let i = 0; i < n; i++) {
+  //     const d = disp[i]?.contribution ?? 0;
+  //     const r = res[i]?.contribution ?? 0;
+  //     const c = cu[i]?.contribution ?? 0;
+  //     // Obtener valor de nivel (preferir de disp, luego res, luego cu)
+  //     const nivelLabel =
+  //       disp[i]?.meas?.toString().match(/\(([^)]+)\)/)?.[1] ||
+  //       res[i]?.meas?.toString().match(/\(([^)]+)\)/)?.[1] ||
+  //       cu[i]?.meas?.toString().match(/\(([^)]+)\)/)?.[1] ||
+  //       '-';
+  //     const nuef = Math.sqrt(
+  //       d * d + r * r + c * c + nlContribution * nlContribution
+  //     );
+  //     rows.push({ measurement: `${i + 1} (${nivelLabel})`, nuef });
+  //   }
+  //   return rows;
+  // }
+
+  // =============================
+  // CÁLCULO PARA TABLA: Expanded Uncertainty k = 2
+  // =============================
+  // async getExpandedUncertaintyTable(): Promise<
+  //   Array<{
+  //     measurement: string;
+  //     percent: number;
+  //   }>
+  // > {
+  //   const k = 2;
+  //   const combined = await this.getCombinedStandardUncertaintyTable();
+  //   return combined.map((row) => ({
+  //     measurement: row.measurement,
+  //     percent: row.nuef * k,
+  //   }));
+  // }
+
+  // Obtiene el nombre del patrón desde la BD
+  private async getPatronNameFromDB(): Promise<string | null> {
+    // 1. Buscar todos los id_patron únicos de dcc_measuringequipments para este dccId
+    const queryEquip = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_measuringequipments',
+      opts: {
+        where: { id_dcc: this.dccId },
+      },
+    };
+    try {
+      const responseEquip: any = await lastValueFrom(
+        this.dccDataService.post(queryEquip)
+      );
+      const idPatronArr = (responseEquip?.result || [])
+        .map((row: any) => row.id_patron)
+        .filter((id: any) => id != null);
+      // Quitar repetidos
+      const uniqueIdPatron = Array.from(new Set(idPatronArr));
+      if (uniqueIdPatron.length === 0) return null;
+      // 2. Buscar en patron los nombres
+      const queryPatron = {
+        action: 'get',
+        bd: this.database,
+        table: 'patron',
+        opts: {
+          where: { id: uniqueIdPatron },
+        },
+      };
+      const responsePatron: any = await lastValueFrom(
+        this.dccDataService.post(queryPatron)
+      );
+      const names = (responsePatron?.result || [])
+        .map((row: any) => row.name)
+        .filter((n: any) => !!n);
+      // Si hay varios, devolver el primero (o podrías devolver todos si lo necesitas)
+      return names.length > 0 ? names[0] : null;
+    } catch (error) {
+      return null;
+    }
   }
 }

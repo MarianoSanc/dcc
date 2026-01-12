@@ -48,33 +48,98 @@ export class PreviewComponent implements OnInit, OnDestroy {
       this.loadPT23DataAndGenerateXML();
       return;
     }
-    const query = {
+    // Primero recargar el nombre de measurementResult desde la BD
+    const nameQuery = {
       action: 'get',
       bd: this.database,
-      table: 'dcc_results',
+      table: 'dcc_data',
       opts: {
-        where: { id_dcc: certificateNumber, deleted: 0 },
+        where: { id: certificateNumber },
+        attributes: ['name_measurement'],
       },
     };
-    this.dccDataService.post(query).subscribe({
-      next: (response: any) => {
-        if (response?.result && response.result.length > 0 && this.dccData) {
-          console.log('Resultados recargados desde BD:', response.result);
-          // Mapear los resultados finales y actualizar dccData
-          this.dccData.results = response.result.map((dbResult: any) => {
-            const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
-            return {
-              id: dbResult.id,
-              name: dbResult.name,
-              refType: dbResult.ref_type,
-              data: dbData,
-            };
-          });
+    this.dccDataService.post(nameQuery).subscribe({
+      next: (nameResp: any) => {
+        console.log('Name response:', nameResp);
+        if (nameResp?.result?.[0]?.name_measurement && this.dccData) {
+          console.log(
+            'Updating measurementResult name to:',
+            nameResp.result[0].name_measurement
+          );
+          if (!this.dccData.measurementResult) {
+            this.dccData.measurementResult = { name: '', description: '' };
+          }
+          this.dccData.measurementResult.name =
+            nameResp.result[0].name_measurement;
         }
-        this.loadPT23DataAndGenerateXML();
+
+        // Ahora recargar los resultados
+        const query = {
+          action: 'get',
+          bd: this.database,
+          table: 'dcc_results',
+          opts: {
+            where: { id_dcc: certificateNumber, deleted: 0 },
+          },
+        };
+        this.dccDataService.post(query).subscribe({
+          next: (response: any) => {
+            if (
+              response?.result &&
+              response.result.length > 0 &&
+              this.dccData
+            ) {
+              // Mapear los resultados finales y actualizar dccData
+              this.dccData.results = response.result.map((dbResult: any) => {
+                const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
+                return {
+                  id: dbResult.id,
+                  name: dbResult.name,
+                  refType: dbResult.ref_type,
+                  data: dbData,
+                };
+              });
+            }
+            this.loadPT23DataAndGenerateXML();
+          },
+          error: () => {
+            this.loadPT23DataAndGenerateXML();
+          },
+        });
       },
       error: () => {
-        this.loadPT23DataAndGenerateXML();
+        // Si falla la consulta del nombre, continuar con los resultados
+        const query = {
+          action: 'get',
+          bd: this.database,
+          table: 'dcc_results',
+          opts: {
+            where: { id_dcc: certificateNumber, deleted: 0 },
+          },
+        };
+        this.dccDataService.post(query).subscribe({
+          next: (response: any) => {
+            if (
+              response?.result &&
+              response.result.length > 0 &&
+              this.dccData
+            ) {
+              this.dccData.results = response.result.map((dbResult: any) => {
+                const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
+                return {
+                  id: dbResult.id,
+                  name: dbResult.name,
+                  refType: dbResult.ref_type,
+                  data: dbData,
+                };
+              });
+            }
+            this.loadPT23DataAndGenerateXML();
+          },
+          error: () => {
+            this.loadPT23DataAndGenerateXML();
+          },
+        });
       },
     });
   }
@@ -187,6 +252,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
   private generateXMLContent() {
     if (!this.dccData) return;
     const data = this.dccData;
+    const pdfData = this.preparePdfData();
 
     this.xmlContent = `<?xml version="1.0" encoding="utf-8"?>
 <?xml-stylesheet type="text/xsl" href="book.xsl"?>
@@ -237,9 +303,34 @@ export class PreviewComponent implements OnInit, OnDestroy {
         data.administrativeData.core.language
       )}</dcc:mandatoryLangCodeISO639_1>
       <dcc:uniqueIdentifier>${this.escapeXml(
-        data.administrativeData.core.certificate_number
+        pdfData.certificate_number
       )}</dcc:uniqueIdentifier>
-      ${this.generateCorePerformanceDataXML(data)}
+      ${
+        pdfData.beginPerformanceDate
+          ? `<dcc:beginPerformanceDate>${this.escapeXml(
+              pdfData.beginPerformanceDate
+            )}</dcc:beginPerformanceDate>`
+          : ''
+      }
+      ${
+        pdfData.endPerformanceDate
+          ? `<dcc:endPerformanceDate>${this.escapeXml(
+              pdfData.endPerformanceDate
+            )}</dcc:endPerformanceDate>`
+          : `<dcc:endPerformanceDate>${this.escapeXml(
+              pdfData.beginPerformanceDate
+            )}</dcc:endPerformanceDate>`
+      }
+      <dcc:performanceLocation>${this.escapeXml(
+        pdfData.performanceLocation
+      )}</dcc:performanceLocation>
+      ${
+        pdfData.issue_date
+          ? `<dcc:issueDate>${this.escapeXml(
+              pdfData.issue_date
+            )}</dcc:issueDate>`
+          : ''
+      }
     </dcc:coreData>
 
     <!-- Equipos y objetos calibrados -->
@@ -364,42 +455,6 @@ export class PreviewComponent implements OnInit, OnDestroy {
   </dcc:measurementResults>
 
 </dcc:digitalCalibrationCertificate>`;
-  }
-
-  // =======================
-  // Métodos específicos actualizados
-  // =======================
-  private generateCorePerformanceDataXML(data: DCCData): string {
-    return `
-      ${
-        data.administrativeData.core.performance_date
-          ? `<dcc:beginPerformanceDate>${this.formatDate(
-              data.administrativeData.core.performance_date
-            )}</dcc:beginPerformanceDate>`
-          : ''
-      }
-      ${
-        data.administrativeData.core.is_range_date &&
-        data.administrativeData.core.end_performance_date
-          ? `<dcc:endPerformanceDate>${this.formatDate(
-              data.administrativeData.core.end_performance_date
-            )}</dcc:endPerformanceDate>`
-          : data.administrativeData.core.performance_date
-          ? `<dcc:endPerformanceDate>${this.formatDate(
-              data.administrativeData.core.performance_date
-            )}</dcc:endPerformanceDate>`
-          : ''
-      }
-      <dcc:performanceLocation>${this.escapeXml(
-        data.administrativeData.core.performance_localition
-      )}</dcc:performanceLocation>
-      ${
-        data.administrativeData.core.issue_date
-          ? `<dcc:issueDate>${this.formatDate(
-              data.administrativeData.core.issue_date
-            )}</dcc:issueDate>`
-          : ''
-      }`;
   }
 
   private generateItemsXML(data: DCCData): string {
@@ -613,13 +668,21 @@ export class PreviewComponent implements OnInit, OnDestroy {
   }
 
   private generateMeasurementResultNameXML(data: DCCData): string {
+    // Priorizar el nombre editable measurementResult.name sobre item_name
     let name = '';
-
-    if (data.measurementResult?.name) {
+    const pdfData = this.preparePdfData();
+    if (
+      data.measurementResult?.name &&
+      data.measurementResult.name.trim() !== ''
+    ) {
       name = data.measurementResult.name;
+    } else if (pdfData.item_name) {
+      name = pdfData.item_name;
     } else {
       name = `Calibration ${
-        data.administrativeData.core.certificate_number || ''
+        pdfData.certificate_number ||
+        data.administrativeData.core.certificate_number ||
+        ''
       }`;
     }
 

@@ -260,7 +260,6 @@
 /* Highlight main signer row in table */
 .data-table tbody tr.main-signer-row {
   background-color: #fff8e1;
-  border-left: 3px solid #ff9800;
 }
 
 /* Non-editable block styles */

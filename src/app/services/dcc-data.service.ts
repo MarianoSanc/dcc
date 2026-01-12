@@ -222,6 +222,18 @@ export interface QuantityData {
   providedIn: 'root',
 })
 export class DccDataService {
+  /**
+   * Actualiza solo el nombre de measurementResult y emite el cambio
+   */
+  updateMeasurementResultName(name: string): void {
+    const currentData = this.getCurrentData();
+    if (!currentData.measurementResult) {
+      currentData.measurementResult = { name: name, description: '' };
+    } else {
+      currentData.measurementResult.name = name;
+    }
+    this.dccDataSubject.next(currentData);
+  }
   private dccDataSubject = new BehaviorSubject<DCCData>(this.getInitialData());
   public dccData$ = this.dccDataSubject.asObservable();
 

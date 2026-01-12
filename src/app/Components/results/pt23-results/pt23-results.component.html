@@ -14,7 +14,6 @@
           (click)="generarYActualizarResultados()"
           title="Regenerar resultados manualmente con los datos actuales"
         >
-          <i class="material-icons">refresh</i>
           Regenerar Resultados
         </button>
       </div>
@@ -231,7 +230,6 @@
         (click)="generarResultadosManuales()"
         title="Generar resultados en dcc_results con los datos actuales"
       >
-        <i class="material-icons">auto_awesome</i>
         Generar Resultados
       </button>
       <ng-container *ngIf="isEditingLevelsSection">
@@ -996,4 +994,266 @@
       </div>
     </div>
   </ng-container>
+
+  <!-- SECCIÓN: Uncertainty Budget -->
+  <div class="uncertainty-budget-section" style="margin-top: 2rem">
+    <h4 style="margin-bottom: 1rem">Uncertainty Budget</h4>
+    <table
+      class="uncertainty-budget-table"
+      style="width: 100%; border-collapse: collapse; background: #f8f9fa"
+    >
+      <thead>
+        <tr style="background: #e5e7eb; color: #333">
+          <th style="border: 1px solid #ccc">i</th>
+          <th style="border: 1px solid #ccc">Component of Uncertainty</th>
+          <th style="border: 1px solid #ccc">Meas.</th>
+          <th style="border: 1px solid #ccc">
+            Std. deviation a<sub>i</sub> [%]
+          </th>
+          <th style="border: 1px solid #ccc">Divisor</th>
+          <th style="border: 1px solid #ccc">
+            Degrees of freedom, ν<sub>i</sub>
+          </th>
+          <th style="border: 1px solid #ccc">Sensitivity coefficient</th>
+          <th style="border: 1px solid #ccc">
+            Contribution to combined standard uncertainty [%]
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Grupo 1: Dispersion (Type A) dinámico -->
+        <ng-container *ngIf="getDispersionTypeAData().length > 0">
+          <tr
+            *ngFor="let disp of getDispersionTypeAData(); let i = index"
+            style="background: #f8f9fa"
+          >
+            <td
+              *ngIf="i === 0"
+              [attr.rowspan]="getDispersionTypeAData().length"
+              style="
+                border: 1px solid #ccc;
+                text-align: center;
+                vertical-align: middle;
+              "
+            >
+              1
+            </td>
+            <td
+              *ngIf="i === 0"
+              [attr.rowspan]="getDispersionTypeAData().length"
+              style="
+                border: 1px solid #ccc;
+                text-align: center;
+                vertical-align: middle;
+              "
+            >
+              Dispersion (Type A)
+            </td>
+            <td style="border: 1px solid #ccc">{{ disp.meas }}</td>
+            <td style="border: 1px solid #ccc; color: #b45309">
+              {{ disp.stdDev | number : "1.6-6" }}
+            </td>
+            <td style="border: 1px solid #ccc">
+              {{ disp.divisor | number : "1.4-4" }}
+            </td>
+            <td style="border: 1px solid #ccc">{{ disp.dof }}</td>
+            <td style="border: 1px solid #ccc">{{ disp.sensitivity }}</td>
+            <td style="border: 1px solid #ccc; color: #b45309">
+              {{ disp.contribution | number : "1.9-9" }}
+            </td>
+          </tr>
+        </ng-container>
+        <!-- Grupo 2: Resolution measuring instrument of DUT dinámico -->
+        <ng-container *ngIf="getResolutionDUTData().length > 0">
+          <tr
+            *ngFor="let res of getResolutionDUTData(); let i = index"
+            style="background: #f3f4f6"
+          >
+            <td
+              *ngIf="i === 0"
+              [attr.rowspan]="getResolutionDUTData().length"
+              style="
+                border: 1px solid #ccc;
+                text-align: center;
+                vertical-align: middle;
+              "
+            >
+              2
+            </td>
+            <td
+              *ngIf="i === 0"
+              [attr.rowspan]="getResolutionDUTData().length"
+              style="
+                border: 1px solid #ccc;
+                text-align: center;
+                vertical-align: middle;
+              "
+            >
+              Resolution measuring instrument of DUT
+            </td>
+            <td style="border: 1px solid #ccc">{{ res.meas }}</td>
+            <td style="border: 1px solid #ccc; color: #b45309">
+              {{ res.stdDev | number : "1.6-6" }}
+            </td>
+            <td style="border: 1px solid #ccc">
+              {{ res.divisor | number : "1.4-4" }}
+            </td>
+            <td style="border: 1px solid #ccc">{{ res.dof }}</td>
+            <td style="border: 1px solid #ccc">{{ res.sensitivity }}</td>
+            <td style="border: 1px solid #ccc; color: #b45309">
+              {{ res.contribution | number : "1.9-9" }}
+            </td>
+          </tr>
+        </ng-container>
+        <!-- Grupo 3: Combined Uncertainty from STD dinámico -->
+        <ng-container *ngIf="getCombinedUncertaintySTDData().length > 0">
+          <tr
+            *ngFor="let cu of getCombinedUncertaintySTDData(); let i = index"
+            style="background: #f3f4f6"
+          >
+            <td
+              *ngIf="i === 0"
+              [attr.rowspan]="getCombinedUncertaintySTDData().length"
+              style="
+                border: 1px solid #ccc;
+                text-align: center;
+                vertical-align: middle;
+              "
+            >
+              3
+            </td>
+            <td
+              *ngIf="i === 0"
+              [attr.rowspan]="getCombinedUncertaintySTDData().length"
+              style="
+                border: 1px solid #ccc;
+                text-align: center;
+                vertical-align: middle;
+              "
+            >
+              Combined Uncertainty from STD
+            </td>
+            <td style="border: 1px solid #ccc">{{ cu.meas }}</td>
+            <td style="border: 1px solid #ccc; color: #b45309">
+              {{ cu.stdDev | number : "1.2-2" }}
+            </td>
+            <td style="border: 1px solid #ccc">{{ cu.divisor }}</td>
+            <td style="border: 1px solid #ccc">{{ cu.dof }}</td>
+            <td style="border: 1px solid #ccc">{{ cu.sensitivity }}</td>
+            <td style="border: 1px solid #ccc; color: #b45309">
+              {{ cu.contribution | number : "1.2-9" }}
+            </td>
+          </tr>
+        </ng-container>
+        <!-- Grupo 4: Non-linearity effect SF of standard measuring system dinámico -->
+        <ng-container
+          *ngIf="
+            (getNonLinearityEffectSFData() | async)?.length >
+            0 as nonLinearityData
+          "
+        >
+          <tr
+            *ngFor="let nl of nonLinearityData; let i = index"
+            style="background: #f3f4f6"
+          >
+            <td
+              *ngIf="i === 0"
+              [attr.rowspan]="nonLinearityData.length"
+              style="
+                border: 1px solid #ccc;
+                text-align: center;
+                vertical-align: middle;
+              "
+            >
+              4
+            </td>
+            <td
+              *ngIf="i === 0"
+              [attr.rowspan]="nonLinearityData.length"
+              style="
+                border: 1px solid #ccc;
+                text-align: center;
+                vertical-align: middle;
+              "
+            >
+              Non-linearity effect SF of standard measuring system
+            </td>
+            <td style="border: 1px solid #ccc">{{ nl.meas }}</td>
+            <td style="border: 1px solid #ccc; color: #b45309">
+              {{ nl.stdDev | number : "1.9-9" }}
+            </td>
+            <td style="border: 1px solid #ccc">
+              {{ nl.divisor | number : "1.4-4" }}
+            </td>
+            <td style="border: 1px solid #ccc">{{ nl.dof }}</td>
+            <td style="border: 1px solid #ccc">{{ nl.sensitivity }}</td>
+            <td style="border: 1px solid #ccc; color: #b45309">
+              {{ nl.contribution | number : "1.9-9" }}
+            </td>
+          </tr>
+        </ng-container>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- TABLA: Combined Standard Uncertainty [%] -->
+  <div class="uncertainty-budget-section" style="margin-top: 2rem">
+    <h4 style="margin-bottom: 1rem">Combined Standard Uncertainty</h4>
+    <table
+      class="uncertainty-budget-table"
+      style="width: 100%; border-collapse: collapse; background: #f8f9fa"
+    >
+      <thead>
+        <tr style="background: #e5e7eb; color: #333">
+          <th style="border: 1px solid #ccc">Measurement</th>
+          <th style="border: 1px solid #ccc">[%]</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- <tr
+          *ngFor="let row of getCombinedStandardUncertaintyTable()"
+          style="background: #f8f9fa"
+        >
+          <td style="border: 1px solid #ccc">{{ row.measurement }}</td>
+          <td style="border: 1px solid #ccc; color: #b45309">
+            {{ row.nuef | number : "1.9-9" }}
+          </td>
+        </tr> -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- TABLA: Expanded Uncertainty k = 2 -->
+  <div class="uncertainty-budget-section" style="margin-top: 2rem">
+    <h4 style="margin-bottom: 1rem">
+      Expanded Uncertainty<br /><span
+        style="font-weight: normal; font-size: 0.95em"
+        >k = 2</span
+      >
+    </h4>
+    <table
+      class="uncertainty-budget-table"
+      style="width: 100%; border-collapse: collapse; background: #f8f9fa"
+    >
+      <thead>
+        <tr style="background: #e5e7eb; color: #333">
+          <th style="border: 1px solid #ccc">Measurement</th>
+          <th style="border: 1px solid #ccc">U SCOPE</th>
+          <th style="border: 1px solid #ccc">[%]</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- <tr
+          *ngFor="let row of getExpandedUncertaintyTable()"
+          style="background: #f8f9fa"
+        >
+          <td style="border: 1px solid #ccc">{{ row.measurement }}</td>
+          <td style="border: 1px solid #ccc">{{ row.uScope }}</td>
+          <td style="border: 1px solid #ccc; color: #b45309">
+            {{ row.percent | number : "1.9-9" }}
+          </td>
+        </tr> -->
+      </tbody>
+    </table>
+  </div>
 </div>
