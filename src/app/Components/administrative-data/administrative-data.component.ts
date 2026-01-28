@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -10,6 +10,8 @@ import { LaboratoryService } from '../../services/laboratory.service';
 import { CustomerService } from '../../services/customer.service';
 import { ResponsiblePersonsService } from '../../services/responsible-persons.service';
 import { AdministrativeDataService } from '../../services/administrative-data.service';
+import { OrderService } from '../../services/order.service';
+import { ApiService } from '../../api/api.service';
 import { UrlClass } from '../../shared/models/url.model';
 import Swal from 'sweetalert2';
 
@@ -21,6 +23,9 @@ import Swal from 'sweetalert2';
   styleUrl: './administrative-data.component.css',
 })
 export class AdministrativeDataComponent implements OnInit {
+  // Tipo de documento: 'DCC' o 'IE' recibido desde el componente padre
+  @Input() documentType: 'DCC' | 'IE' = 'DCC';
+
   editingBlocks: { [key: string]: boolean } = {};
 
   editableBlocks = {
@@ -37,6 +42,10 @@ export class AdministrativeDataComponent implements OnInit {
   laboratoryData: any = {};
   responsiblePersons: any[] = [];
   customerData: any = {};
+
+  // Flags para N/A
+  receiptDateNA: boolean = false;
+  nextCalibrationDateNA: boolean = false;
 
   // Datos de usuario para el dropdown
   listauser: any[] = [];
@@ -65,6 +74,10 @@ export class AdministrativeDataComponent implements OnInit {
   tempCustomerId: string = '';
   loadingCustomers: boolean = false;
   selectedCustomerDropdown: any[] = [];
+  projectContactId: string | null = null;
+
+  // Variable para almacenar la dirección del Performance Location cuando es "Other"
+  performanceLocationAddress: string = '';
 
   // Dropdown settings para customer
   dropdownCustomer: IDropdownSettings = {
@@ -83,21 +96,40 @@ export class AdministrativeDataComponent implements OnInit {
     private laboratoryService: LaboratoryService,
     private customerService: CustomerService,
     private responsiblePersonsService: ResponsiblePersonsService,
-    private administrativeDataService: AdministrativeDataService
+    private administrativeDataService: AdministrativeDataService,
+    private orderService: OrderService,
+    private apiService: ApiService,
   ) {}
 
   ngOnInit() {
     this.dccDataService.dccData$.subscribe((data) => {
       this.softwareData = { ...data.administrativeData.software };
       this.coreData = this.administrativeDataService.formatCoreDates(
-        data.administrativeData.core
+        data.administrativeData.core,
       );
       this.laboratoryData = { ...data.administrativeData.laboratory };
       this.responsiblePersons = [...data.administrativeData.responsiblePersons];
       this.selectedUsers = [];
       this.customerData = { ...data.administrativeData.customer };
+
+      // Detectar si las fechas son null, undefined o inválidas (00/00/0000) y marcar N/A
+      this.receiptDateNA =
+        this.isDateNA(this.coreData.receipt_date) ||
+        this.coreData.receipt_date_na ||
+        false;
+      this.nextCalibrationDateNA =
+        this.isDateNA(this.coreData.next_calibration) ||
+        this.coreData.next_calibration_na ||
+        false;
+
       this.initializeSelectedUsers();
       this.initializeIds(data);
+      this.loadProjectContactId();
+
+      // Cargar dirección de performance location si es "Other"
+      if (this.coreData.performance_localition === 'Other') {
+        this.loadPerformanceLocationAddress();
+      }
     });
 
     this.loadInitialData();
@@ -112,7 +144,7 @@ export class AdministrativeDataComponent implements OnInit {
 
       if (person.no_nomina && this.listauser.length > 0) {
         const foundUser = this.listauser.find(
-          (user) => user.no_nomina === person.no_nomina
+          (user) => user.no_nomina === person.no_nomina,
         );
         if (foundUser) {
           this.selectedUsers[i] = [foundUser];
@@ -210,7 +242,7 @@ export class AdministrativeDataComponent implements OnInit {
   private findLaboratoryId(): void {
     const foundId = this.laboratoryService.findLaboratoryByData(
       this.laboratoryData,
-      this.laboratoryList
+      this.laboratoryList,
     );
     if (foundId) {
       this.selectedLaboratoryId = foundId;
@@ -226,7 +258,7 @@ export class AdministrativeDataComponent implements OnInit {
         (customer) =>
           customer.name === this.customerData.name &&
           (customer.email === this.customerData.email ||
-            (!customer.email && !this.customerData.email))
+            (!customer.email && !this.customerData.email)),
       );
 
       if (existingCustomer) {
@@ -241,10 +273,8 @@ export class AdministrativeDataComponent implements OnInit {
 
   // Nuevo método para cargar clientes (solo lista básica, rápido)
   loadCustomers() {
-    console.log('=== LOADING CUSTOMERS (basic list) ===');
     this.customerService.loadCustomers().subscribe({
       next: (customers) => {
-        console.log('Customers loaded:', customers.length, 'items');
         this.customerList = customers;
         // Cargar el customer guardado para este DCC
         this.loadSavedCustomerForDcc();
@@ -269,7 +299,7 @@ export class AdministrativeDataComponent implements OnInit {
 
             // Set the dropdown selection con datos básicos
             const foundCustomer = this.customerList.find(
-              (c) => c.id === relationData.id_customer
+              (c) => c.id === relationData.id_customer,
             );
             if (foundCustomer) {
               this.selectedCustomerDropdown = [foundCustomer];
@@ -277,23 +307,26 @@ export class AdministrativeDataComponent implements OnInit {
               // Cargar detalles completos del cliente
               this.loadingCustomers = true;
               this.customerService
-                .loadCustomerDetails(relationData.id_customer)
+                .loadCustomerDetails(
+                  relationData.id_customer,
+                  this.projectContactId ?? undefined,
+                )
                 .subscribe({
                   next: (fullCustomer) => {
                     this.customerData =
                       this.customerService.mapSelectedCustomerData(
-                        fullCustomer
+                        fullCustomer,
                       );
                     this.dccDataService.updateAdministrativeData(
                       'customer',
-                      this.customerData
+                      this.customerData,
                     );
                     this.loadingCustomers = false;
                   },
                   error: () => {
                     this.customerData =
                       this.customerService.mapSelectedCustomerData(
-                        foundCustomer
+                        foundCustomer,
                       );
                     this.loadingCustomers = false;
                   },
@@ -327,7 +360,7 @@ export class AdministrativeDataComponent implements OnInit {
     }
 
     const selectedCustomer = this.customerList.find(
-      (customer) => customer.id === this.selectedCustomerId
+      (customer) => customer.id === this.selectedCustomerId,
     );
 
     if (selectedCustomer) {
@@ -349,30 +382,33 @@ export class AdministrativeDataComponent implements OnInit {
       this.loadingCustomers = true;
 
       // Cargar detalles completos del cliente seleccionado (email, phone, etc.)
-      this.customerService.loadCustomerDetails(item.id).subscribe({
-        next: (fullCustomer) => {
-          console.log('Full customer details loaded:', fullCustomer);
-          this.customerData =
-            this.customerService.mapSelectedCustomerData(fullCustomer);
-          this.loadingCustomers = false;
-
-          // Actualizar el customer en la lista local también
-          const index = this.customerList.findIndex((c) => c.id === item.id);
-          if (index !== -1) {
-            this.customerList[index] = fullCustomer;
-          }
-        },
-        error: (error) => {
-          console.error('Error loading customer details:', error);
-          this.loadingCustomers = false;
-          // Usar datos básicos si falla
-          const basicCustomer = this.customerList.find((c) => c.id === item.id);
-          if (basicCustomer) {
+      this.customerService
+        .loadCustomerDetails(item.id, this.projectContactId ?? undefined)
+        .subscribe({
+          next: (fullCustomer) => {
             this.customerData =
-              this.customerService.mapSelectedCustomerData(basicCustomer);
-          }
-        },
-      });
+              this.customerService.mapSelectedCustomerData(fullCustomer);
+            this.loadingCustomers = false;
+
+            // Actualizar el customer en la lista local también
+            const index = this.customerList.findIndex((c) => c.id === item.id);
+            if (index !== -1) {
+              this.customerList[index] = fullCustomer;
+            }
+          },
+          error: (error) => {
+            console.error('Error loading customer details:', error);
+            this.loadingCustomers = false;
+            // Usar datos básicos si falla
+            const basicCustomer = this.customerList.find(
+              (c) => c.id === item.id,
+            );
+            if (basicCustomer) {
+              this.customerData =
+                this.customerService.mapSelectedCustomerData(basicCustomer);
+            }
+          },
+        });
     }
   }
 
@@ -476,7 +512,7 @@ export class AdministrativeDataComponent implements OnInit {
     }
 
     const selectedLab = this.laboratoryList.find(
-      (lab) => lab.id == this.tempLaboratoryId
+      (lab) => lab.id == this.tempLaboratoryId,
     );
 
     if (selectedLab) {
@@ -490,7 +526,7 @@ export class AdministrativeDataComponent implements OnInit {
       };
       this.dccDataService.updateAdministrativeData(
         'laboratory',
-        updatedLaboratoryData
+        updatedLaboratoryData,
       );
     }
   }
@@ -572,7 +608,7 @@ export class AdministrativeDataComponent implements OnInit {
             };
             this.dccDataService.updateAdministrativeData(
               'laboratory',
-              finalLaboratoryData
+              finalLaboratoryData,
             );
 
             const successMessage = isNew
@@ -620,7 +656,7 @@ export class AdministrativeDataComponent implements OnInit {
         break;
       case 'core':
         this.coreData = this.administrativeDataService.formatCoreDates(
-          currentData.administrativeData.core
+          currentData.administrativeData.core,
         );
         break;
       case 'laboratory':
@@ -711,7 +747,7 @@ export class AdministrativeDataComponent implements OnInit {
     this.dccDataService.updateAdministrativeData('software', this.softwareData);
     const dataToSave =
       this.administrativeDataService.prepareSoftwareDataForSave(
-        this.softwareData
+        this.softwareData,
       );
 
     this.administrativeDataService
@@ -724,9 +760,21 @@ export class AdministrativeDataComponent implements OnInit {
   }
 
   private saveCoreBlock(certificateNumber: string) {
+    // Guardar los flags de N/A en coreData antes de actualizar
+    this.coreData.receipt_date_na = this.receiptDateNA;
+    this.coreData.next_calibration_na = this.nextCalibrationDateNA;
+
+    // Si N/A está marcado, establecer la fecha a '0000-00-00' para BD
+    if (this.receiptDateNA) {
+      this.coreData.receipt_date = '0000-00-00';
+    }
+    if (this.nextCalibrationDateNA) {
+      this.coreData.next_calibration = '0000-00-00';
+    }
+
     this.dccDataService.updateAdministrativeData('core', this.coreData);
     const dataToSave = this.administrativeDataService.prepareCoreDataForSave(
-      this.coreData
+      this.coreData,
     );
 
     this.administrativeDataService
@@ -741,7 +789,7 @@ export class AdministrativeDataComponent implements OnInit {
   private saveLaboratoryBlock() {
     this.dccDataService.updateAdministrativeData(
       'laboratory',
-      this.laboratoryData
+      this.laboratoryData,
     );
 
     const currentData = this.dccDataService.getCurrentData();
@@ -778,18 +826,18 @@ export class AdministrativeDataComponent implements OnInit {
   private saveResponsibleBlock() {
     this.dccDataService.updateAdministrativeData(
       'responsiblePersons',
-      this.responsiblePersons
+      this.responsiblePersons,
     );
 
     const currentData = this.dccDataService.getCurrentData();
-    const certificateNumber =
+    let certificateNumber =
       currentData.administrativeData.core.certificate_number;
 
     if (!certificateNumber) {
       Swal.fire({
         icon: 'warning',
         title: 'Advertencia',
-        text: 'No se puede guardar: Certificate Number no está definido.',
+        text: 'No se puede guardar: Certificate Number no está definido. Por favor, asigna un certificado primero.',
       });
       return;
     }
@@ -798,7 +846,7 @@ export class AdministrativeDataComponent implements OnInit {
       .saveResponsiblePersons(
         certificateNumber,
         this.responsiblePersons,
-        this.listauser
+        this.listauser,
       )
       .subscribe({
         next: (success) => {
@@ -846,7 +894,7 @@ export class AdministrativeDataComponent implements OnInit {
         const existingLab = this.laboratoryList.find(
           (lab) =>
             lab.name === this.laboratoryData.name &&
-            lab.email === this.laboratoryData.email
+            lab.email === this.laboratoryData.email,
         );
         if (existingLab) {
           this.selectedLaboratoryId = existingLab.id;
@@ -877,7 +925,7 @@ export class AdministrativeDataComponent implements OnInit {
           (customer) =>
             customer.name === this.customerData.name &&
             (customer.email === this.customerData.email ||
-              (!customer.email && !this.customerData.email))
+              (!customer.email && !this.customerData.email)),
         );
         if (existingCustomer) {
           this.selectedCustomerId = existingCustomer.id;
@@ -932,7 +980,7 @@ export class AdministrativeDataComponent implements OnInit {
     }
 
     const selectedCustomer = this.customerList.find(
-      (customer) => customer.id == this.tempCustomerId
+      (customer) => customer.id == this.tempCustomerId,
     );
 
     if (selectedCustomer) {
@@ -946,7 +994,7 @@ export class AdministrativeDataComponent implements OnInit {
       };
       this.dccDataService.updateAdministrativeData(
         'customer',
-        updatedCustomerData
+        updatedCustomerData,
       );
     }
   }
@@ -980,7 +1028,7 @@ export class AdministrativeDataComponent implements OnInit {
         person.full_name ||
         person.name ||
         person.email ||
-        person.phone
+        person.phone,
     );
 
     if (!hasValidData) {
@@ -1026,6 +1074,36 @@ export class AdministrativeDataComponent implements OnInit {
     this.selectedUsers[newIndex] = [];
   }
 
+  // Método para manejar el cambio de Head of Service
+  onHeadChange(personIndex: number) {
+    if (this.responsiblePersons[personIndex].head) {
+      // Si se marca como Head, deseleccionar Coordinator
+      this.responsiblePersons[personIndex].coordinator = false;
+
+      // Deseleccionar todos los otros Head
+      this.responsiblePersons.forEach((person, index) => {
+        if (index !== personIndex) {
+          person.head = false;
+        }
+      });
+    }
+  }
+
+  // Método para manejar el cambio de Coordinator
+  onCoordinatorChange(personIndex: number) {
+    if (this.responsiblePersons[personIndex].coordinator) {
+      // Si se marca como Coordinator, deseleccionar Head
+      this.responsiblePersons[personIndex].head = false;
+
+      // Deseleccionar todos los otros Coordinators
+      this.responsiblePersons.forEach((person, index) => {
+        if (index !== personIndex) {
+          person.coordinator = false;
+        }
+      });
+    }
+  }
+
   // Método para verificar si una persona es el responsable principal
   isMainSigner(person: any): boolean {
     return person.mainSigner === true;
@@ -1066,7 +1144,7 @@ export class AdministrativeDataComponent implements OnInit {
 
     this.dccDataService.updateAdministrativeData(
       'responsiblePersons',
-      this.responsiblePersons
+      this.responsiblePersons,
     );
   }
 
@@ -1084,7 +1162,7 @@ export class AdministrativeDataComponent implements OnInit {
           const mappedResponsiblePersons =
             this.responsiblePersonsService.mapResponsiblePersonsWithUsers(
               responsibleData,
-              this.listauser
+              this.listauser,
             );
 
           this.responsiblePersons = mappedResponsiblePersons;
@@ -1092,7 +1170,7 @@ export class AdministrativeDataComponent implements OnInit {
 
           this.dccDataService.updateAdministrativeData(
             'responsiblePersons',
-            mappedResponsiblePersons
+            mappedResponsiblePersons,
           );
         },
         error: (error) => {
@@ -1114,7 +1192,7 @@ export class AdministrativeDataComponent implements OnInit {
       if (personIndex < this.responsiblePersons.length) {
         // Buscar el usuario completo en listauser para obtener email y phone
         const fullUser = this.listauser.find(
-          (user) => user.no_nomina === selectedItem.no_nomina
+          (user) => user.no_nomina === selectedItem.no_nomina,
         );
 
         this.responsiblePersons[personIndex].no_nomina = selectedItem.no_nomina;
@@ -1163,7 +1241,7 @@ export class AdministrativeDataComponent implements OnInit {
         // Actualizar el servicio
         this.dccDataService.updateAdministrativeData(
           'responsiblePersons',
-          this.responsiblePersons
+          this.responsiblePersons,
         );
 
         Swal.fire({
@@ -1222,7 +1300,7 @@ export class AdministrativeDataComponent implements OnInit {
     // Si tiene no_nomina, buscar en la lista de usuarios
     if (person.no_nomina && this.listauser.length > 0) {
       const foundUser = this.listauser.find(
-        (user) => user.no_nomina === person.no_nomina
+        (user) => user.no_nomina === person.no_nomina,
       );
 
       if (foundUser) {
@@ -1297,5 +1375,121 @@ export class AdministrativeDataComponent implements OnInit {
   // Método para verificar si los campos del cliente deben estar deshabilitados
   areCustomerFieldsDisabled(): boolean {
     return this.customerAction === 'select';
+  }
+
+  // Obtiene el contacto del proyecto desde orden.service
+  private loadProjectContactId() {
+    const certificateNumber = this.coreData.certificate_number;
+    if (!certificateNumber) {
+      this.projectContactId = null;
+      return;
+    }
+
+    const projectId = certificateNumber.split('-')[0];
+    if (!projectId) {
+      this.projectContactId = null;
+      return;
+    }
+
+    this.orderService.loadServicesByProject(projectId).subscribe({
+      next: (services) => {
+        const contactId = services.find((s) => s.id_contact)?.id_contact;
+        this.projectContactId = contactId || null;
+      },
+      error: (error) => {
+        console.error('❌ Error loading project contact:', error);
+        this.projectContactId = null;
+      },
+    });
+  }
+
+  /**
+   * Carga la dirección del Performance Location cuando es "Other"
+   * Obtiene el location del proyecto desde opportunity o opportunity_calpro según el tipo de documento
+   */
+  loadPerformanceLocationAddress() {
+    this.performanceLocationAddress = 'Cargando dirección...';
+
+    const certificateNumber = this.coreData.certificate_number;
+    if (!certificateNumber) {
+      this.performanceLocationAddress = 'No hay certificado disponible';
+      return;
+    }
+
+    // Determinar el proyecto ID desde el certificate_number (formato: PC0497-00 DCC 24 01)
+    const projectId = certificateNumber.split('-')[0]; // Obtiene "PC0497"
+
+    if (!projectId) {
+      this.performanceLocationAddress = 'No se pudo determinar el proyecto';
+      return;
+    }
+
+    // Determinar la tabla según el tipo de documento
+    const table =
+      this.documentType === 'DCC' ? 'opportunity_calpro' : 'opportunity';
+
+    const getOpportunity = {
+      action: 'get',
+      bd: 'hvtest2',
+      table: table,
+      opts: {
+        where: { id: projectId },
+        attributes: ['location'],
+      },
+    };
+
+    this.apiService.post(getOpportunity, UrlClass.URLNuevo).subscribe({
+      next: (response: any) => {
+        const opportunity = response?.result?.[0];
+        this.performanceLocationAddress =
+          opportunity?.location || 'No hay ubicación disponible';
+
+        // Guardar la dirección del proyecto en el servicio DCC para usarla en el PDF
+        const currentData = this.dccDataService.getCurrentData();
+        (currentData as any).projectLocation = this.performanceLocationAddress;
+      },
+      error: (error) => {
+        console.error('❌ Error loading performance location address:', error);
+        this.performanceLocationAddress = 'Error al cargar ubicación';
+      },
+    });
+  }
+
+  /**
+   * Verifica si una fecha debe considerarse como N/A
+   * Retorna true si la fecha es null, undefined, inválida, o representa 00/00/0000
+   */
+  private isDateNA(date: any): boolean {
+    if (!date) return true;
+
+    // Si es un Date object, verificar si es válido
+    if (date instanceof Date) {
+      // Verificar si es una fecha inválida
+      if (isNaN(date.getTime())) return true;
+
+      // Verificar si es 00/00/0000 (año 0 o año 1900 con mes/día 0)
+      const year = date.getFullYear();
+      if (year === 0 || year === 1900) return true;
+    }
+
+    // Si es un string, verificar si representa 00/00/0000 o está vacío
+    if (typeof date === 'string') {
+      const trimmed = date.trim();
+      if (
+        trimmed === '' ||
+        trimmed === '0000-00-00' ||
+        trimmed === '00/00/0000'
+      )
+        return true;
+
+      // Intentar parsear y verificar
+      const parsed = new Date(date);
+      if (isNaN(parsed.getTime())) return true;
+
+      const year = parsed.getFullYear();
+      if (year === 0 || year === 1900) return true;
+    }
+
+    return false;
   }
 }

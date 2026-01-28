@@ -78,8 +78,12 @@ $attachmentsDir = $baseDir . '/attachments/';
 
 if (!is_dir($attachmentsDir)) mkdir($attachmentsDir, 0755, true);
 
-$templateName = $inputData['template_name'] ?? 'dcc_plantilla_general.docx';
+// Seleccionar plantilla según si es acreditado o no
+$isAccredited = $inputData['accredited'] ?? false;
+$templateName = $isAccredited ? 'dcc_plantilla_general.docx' : 'dcc_plantilla_general_na.docx';
 $templatePath = $templatesDir . $templateName;
+
+logtxt("Plantilla seleccionada: $templateName (accredited: " . ($isAccredited ? 'true' : 'false') . ")");
 
 if (!file_exists($templatePath)) {
     logtxt("❌ Error: No existe la plantilla $templatePath");
@@ -183,6 +187,39 @@ try {
     }
 
 
+    // ========== METROLOGICAL TRACEABILITY (Solo para DCC con patrones) ========== //
+    $isDcc = !preg_match('/\bIE\b/i', $inputData['certificate_number'] ?? '');
+    $metroTraceability = [];
+    
+    // Usar directamente los datos enviados desde Angular
+    if ($isDcc && !empty($inputData['metrologicalTraceability']) && is_array($inputData['metrologicalTraceability'])) {
+        $metroTraceability = $inputData['metrologicalTraceability'];
+    }
+    
+    // Clonar filas para Metrological Traceability si existen
+    if (count($metroTraceability) > 0) {
+        $tp->cloneRow('id_patron', count($metroTraceability));
+        foreach ($metroTraceability as $idx => $tz) {
+            $n = $idx + 1;
+            $tp->setValue("id_patron#{$n}", $tz['id_patron'] ?? '');
+            $tp->setValue("tz_name#{$n}", $tz['tz_name'] ?? '');
+            $tp->setValue("tz_by#{$n}", $tz['tz_by'] ?? '');
+            $tp->setValue("tz_date#{$n}", $tz['tz_date'] ?? '');
+            $tp->setValue("tz_quantity#{$n}", $tz['tz_quantity'] ?? '');
+            $tp->setValue("tz_comm#{$n}", $tz['tz_comm'] ?? '');
+            logtxt("Set metrological traceability#{$n}: id_patron={$tz['id_patron']}, tz_by={$tz['tz_by']}, tz_date={$tz['tz_date']}");
+        }
+    } else {
+        // Limpiar marcadores si no hay traceability
+        $tp->setValue('id_patron', '');
+        $tp->setValue('tz_name', '');
+        $tp->setValue('tz_by', '');
+        $tp->setValue('tz_date', '');
+        $tp->setValue('tz_quantity', '');
+        $tp->setValue('tz_comm', '');
+    }
+
+
     // ========== ITEMS Y SUBITEMS ========== //
     // Loguear el valor simple recibido
     // logtxt('Valor recibido de item_manufacturer: ' . ($inputData['item_manufacturer'] ?? '[NO RECIBIDO]'));
@@ -196,6 +233,7 @@ try {
             'model' => $inputData['item_model'] ?? '',
             'sn' => $inputData['item_serial_number'] ?? '',
             'id' => $inputData['item_customer_asset_id'] ?? '',
+            'comment' => $inputData['item_comment'] ?? '',
         ];
     }
     // Subitems (esperados en inputData['subitems'] como array de objetos)
@@ -207,6 +245,7 @@ try {
                 'model' => $sub['model'] ?? '',
                 'sn' => $sub['serialNumber'] ?? '',
                 'id' => $sub['customerAssetId'] ?? '',
+                'comment' => $sub['comment'] ?? '',
             ];
         }
     }
@@ -224,7 +263,8 @@ try {
             $tp->setValue("model_item#{$n}", $item['model']);
             $tp->setValue("sn_item#{$n}", $item['sn']);
             $tp->setValue("id_item#{$n}", $item['id']);
-            // logtxt("Set item#{$n} = $n, name_item#{$n} = {$item['name']}, manufacturer_item#{$n} = {$item['manufacturer']}, model_item#{$n} = {$item['model']}, sn_item#{$n} = {$item['sn']}, id_item#{$n} = {$item['id']}");
+            $tp->setValue("id_comm#{$n}", $item['comment']);
+            // logtxt("Set item#{$n} = $n, name_item#{$n} = {$item['name']}, manufacturer_item#{$n} = {$item['manufacturer']}, model_item#{$n} = {$item['model']}, sn_item#{$n} = {$item['sn']}, id_item#{$n} = {$item['id']}, id_comm#{$n} = {$item['comment']}");
         }
     } else {
         // Si no hay items, limpiar marcadores simples
@@ -234,17 +274,33 @@ try {
         $tp->setValue('model_item', '');
         $tp->setValue('sn_item', '');
         $tp->setValue('id_item', '');
+        $tp->setValue('id_comm', '');
     }
 
-    // ========== LABORATORIO: nombre y dirección ========== //
-    $performanceLocation_name = $inputData['laboratory_name'] ?? '';
-    $performanceLocation_direction = $inputData['laboratory_direction'] ?? '';
+    // ========== PERFORMANCE LOCATION: nombre y dirección según tipo ========== //
+    $performanceLocationType = $inputData['performance_location_type'] ?? 'Laboratory';
+    $performanceLocation_name = '';
+    $performanceLocation_direction = '';
+
+    if ($performanceLocationType === 'Laboratory') {
+        // Laboratory: usar datos del laboratorio
+        $performanceLocation_name = $inputData['laboratory_name'] ?? '';
+        $performanceLocation_direction = $inputData['laboratory_direction'] ?? '';
+    } elseif ($performanceLocationType === 'Customer') {
+        // Customer: usar datos del cliente
+        $performanceLocation_name = $inputData['customer_name'] ?? '';
+        $performanceLocation_direction = $inputData['customer_direction'] ?? '';
+    } elseif ($performanceLocationType === 'Other') {
+        // Other: nombre del cliente y dirección del proyecto
+        $performanceLocation_name = $inputData['customer_name'] ?? '';
+        $performanceLocation_direction = $inputData['project_location'] ?? '';
+    }
 
     $tp->setValue('performanceLocation_name', $performanceLocation_name);
     $tp->setValue('performanceLocation_direction', $performanceLocation_direction);
 
-    // logtxt("Set performanceLocation_name = $performanceLocation_name");
-    // logtxt("Set performanceLocation_direction = $performanceLocation_direction");
+    logtxt("Set performanceLocation_name = $performanceLocation_name (type: $performanceLocationType)");
+    logtxt("Set performanceLocation_direction = $performanceLocation_direction");
 
     // ========== PERFORMANCE DATE ========== //
     $isRange = $inputData['is_range_date'] ?? false;
@@ -307,7 +363,8 @@ try {
     $variables = [
         'certificate_number','issue_date','customer_name','customer_direction','customer_email',
         'customer_phone','laboratory_name','laboratory_direction','laboratory_phone',
-        'item_name','item_manufacturer','item_model','item_serial_number','date_receipt'
+        'item_name','item_manufacturer','item_model','item_serial_number','item_comment','date_receipt',
+        'next_calibration','pt_description','pt_method'
     ];
     foreach ($variables as $var) {
         $val = $inputData[$var] ?? '';
@@ -355,8 +412,11 @@ try {
     // ==================================================
     // GUARDAR DOCX
     // ==================================================
-    $safeName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $inputData['certificate_number'] ?? 'DCC');
-    $outputFile = $safeName . '_' . date('Ymd_His');
+    // Reemplazar "DCC" por "DRAFT" en el nombre del certificado
+    $certificateName = $inputData['certificate_number'] ?? 'DCC';
+    $draftName = preg_replace('/\bDCC\b/i', 'DRAFT', $certificateName);
+    // No agregar timestamp ni convertir espacios, mantener nombre original
+    $outputFile = $draftName;
     $docx = $attachmentsDir . $outputFile . '.docx';
     $tp->saveAs($docx);
     logtxt("PDF generado correctamente para certificado: " . ($inputData['certificate_number'] ?? ''));

@@ -1,11 +1,18 @@
 <div class="administrative-data-container">
   <div class="section-header">
     <h3>Administrative Data</h3>
-    <p>Información administrativa del certificado de calibración digital</p>
+    <p>
+      Información administrativa del certificado de calibración digital o
+      informe de ensayos
+    </p>
   </div>
 
   <!-- Software for DCC creation Block -->
-  <div class="data-block" [class.non-editable]="!isBlockEditable('software')">
+  <div
+    class="data-block"
+    [class.non-editable]="!isBlockEditable('software')"
+    *ngIf="documentType === 'DCC'"
+  >
     <div class="block-header">
       <h4>
         Software for DCC creation
@@ -128,71 +135,113 @@
           <td>{{ coreData.certificate_number || "No asignado" }}</td>
         </tr>
         <tr>
+          <td class="label">Performance Location:</td>
+          <td>{{ coreData.performance_localition || "No asignado" }}</td>
+        </tr>
+        <tr *ngIf="coreData.performance_localition === 'Other'">
+          <td class="label">Location Address:</td>
+          <td>{{ performanceLocationAddress || "No asignado" }}</td>
+        </tr>
+        <tr *ngIf="coreData.performance_localition === 'Laboratory'">
           <td class="label">Receipt Date:</td>
           <td>
             {{
               coreData.receipt_date
-                ? (coreData.receipt_date | date : "dd/MM/yyyy")
+                ? (coreData.receipt_date | date: "dd/MM/yyyy")
                 : "No asignado"
             }}
           </td>
         </tr>
 
         <tr>
-          <td class="label">Date of calibration:</td>
+          <td class="label">
+            {{
+              documentType === "DCC" ? "Date of calibration:" : "Date of test:"
+            }}
+          </td>
           <td>
             {{
               coreData.performance_date
-                ? (coreData.performance_date | date : "dd/MM/yyyy")
+                ? (coreData.performance_date | date: "dd/MM/yyyy")
                 : "No asignado"
             }}
           </td>
         </tr>
         <tr>
-          <td class="label">Is Range Date:</td>
+          <td class="label">
+            {{
+              documentType === "DCC" ? "Is Range Date:" : "Is Range Test Date:"
+            }}
+          </td>
           <td>{{ coreData.is_range_date ? "Sí" : "No" }}</td>
         </tr>
         <tr *ngIf="coreData.is_range_date">
-          <td class="label">End Calibration Date:</td>
+          <td class="label">
+            {{
+              documentType === "DCC"
+                ? "End Calibration Date:"
+                : "End Test Date:"
+            }}
+          </td>
           <td>
             {{
               coreData.end_performance_date
-                ? (coreData.end_performance_date | date : "dd/MM/yyyy")
+                ? (coreData.end_performance_date | date: "dd/MM/yyyy")
                 : "No asignado"
             }}
           </td>
-        </tr>
-        <tr>
-          <td class="label">Performance Location:</td>
-          <td>{{ coreData.performance_localition || "No asignado" }}</td>
         </tr>
         <tr>
           <td class="label">Issue Date:</td>
           <td>
             {{
               coreData.issue_date
-                ? (coreData.issue_date | date : "dd/MM/yyyy")
+                ? (coreData.issue_date | date: "dd/MM/yyyy")
                 : "No asignado"
             }}
           </td>
+        </tr>
+        <tr *ngIf="documentType === 'DCC'">
+          <td class="label">Next Calibration Date:</td>
+          <td>
+            {{
+              coreData.next_calibration
+                ? (coreData.next_calibration | date: "dd/MM/yyyy")
+                : "No asignado"
+            }}
+          </td>
+        </tr>
+        <tr>
+          <td class="label">Accredited:</td>
+          <td>{{ coreData.accredited ? "Sí" : "No" }}</td>
         </tr>
       </table>
 
       <div class="edit-form" *ngIf="isEditing('core')">
         <div class="form-group">
           <label>PT ID:</label>
-          <select [(ngModel)]="coreData.pt_id">
-            <option value="PT-23">PT-23</option>
-            <option value="PT-24">PT-24</option>
-          </select>
+          <input type="text" [(ngModel)]="coreData.pt_id" disabled />
         </div>
         <div class="form-group">
           <label>Country Code:</label>
-          <input type="text" [(ngModel)]="coreData.country_code" />
+          <select [(ngModel)]="coreData.country_code">
+            <option value="MX">MX - México</option>
+            <option value="US">US - United States</option>
+            <option value="CA">CA - Canada</option>
+            <option value="CN">CN - China</option>
+            <option value="DE">DE - Germany</option>
+            <option value="JP">JP - Japan</option>
+            <option value="GB">GB - United Kingdom</option>
+            <option value="FR">FR - France</option>
+            <option value="BR">BR - Brazil</option>
+            <option value="IN">IN - India</option>
+            <option value="ES">ES - Spain</option>
+            <option value="IT">IT - Italy</option>
+          </select>
         </div>
         <div class="form-group">
           <label>Language:</label>
-          <input type="text" [(ngModel)]="coreData.language" />
+          <input type="text" [(ngModel)]="coreData.language" disabled />
         </div>
         <div class="form-group">
           <label>Certificate Number:</label>
@@ -200,19 +249,48 @@
             type="text"
             [(ngModel)]="coreData.certificate_number"
             placeholder="Ingrese el número de certificado"
+            readonly
+            class="readonly-field"
           />
         </div>
         <div class="form-group">
+          <label>
+            <input type="checkbox" [(ngModel)]="coreData.accredited" />
+            Accredited
+          </label>
+        </div>
+        <div class="form-group">
+          <label>Performance Location:</label>
+          <select [(ngModel)]="coreData.performance_localition">
+            <option value="">Seleccione una opción</option>
+            <option value="Customer">Customer</option>
+            <option value="Laboratory">Laboratory</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div
+          class="form-group"
+          *ngIf="coreData.performance_localition === 'Laboratory'"
+        >
           <label>Receipt Date:</label>
-          <input
-            type="date"
-            [(ngModel)]="coreData.receipt_date"
-            placeholder="Seleccione la fecha de recepción"
-          />
+          <div class="date-with-na">
+            <input
+              type="date"
+              [(ngModel)]="coreData.receipt_date"
+              placeholder="Seleccione la fecha de recepción"
+              [disabled]="receiptDateNA"
+            />
+            <label class="na-checkbox">
+              <input type="checkbox" [(ngModel)]="receiptDateNA" />
+              N/A
+            </label>
+          </div>
         </div>
 
         <div class="form-group">
-          <label>Calibration Date:</label>
+          <label>{{
+            documentType === "DCC" ? "Calibration Date:" : "Test Date:"
+          }}</label>
           <input
             type="date"
             [(ngModel)]="coreData.performance_date"
@@ -221,7 +299,9 @@
           />
         </div>
         <div class="form-group">
-          <label>Is Range Date:</label>
+          <label>{{
+            documentType === "DCC" ? "Is Range Date:" : "Is Range Test Date:"
+          }}</label>
           <input
             type="checkbox"
             [(ngModel)]="coreData.is_range_date"
@@ -229,25 +309,20 @@
           />
         </div>
         <div class="form-group" *ngIf="coreData.is_range_date">
-          <label>End Calibration Date:</label>
+          <label>{{
+            documentType === "DCC" ? "End Calibration Date:" : "End Test Date:"
+          }}</label>
           <input
             type="date"
             [(ngModel)]="coreData.end_performance_date"
             [min]="getMinEndDate()"
             (ngModelChange)="onEndDateChange()"
-            placeholder="Seleccione la fecha de fin de calibración"
+            [placeholder]="
+              documentType === 'DCC'
+                ? 'Seleccione la fecha de fin de calibración'
+                : 'Seleccione la fecha de fin de prueba'
+            "
           />
-        </div>
-        <div class="form-group">
-          <label>Performance Location:</label>
-          <select [(ngModel)]="coreData.performance_localition">
-            <option value="">Seleccione la ubicación</option>
-            <option value="customer">Customer</option>
-            <option value="customerBranch">Customer Branch</option>
-            <option value="laboratory">Laboratory</option>
-            <option value="laboratoryBranch">Laboratory Branch</option>
-            <option value="other">Other</option>
-          </select>
         </div>
         <div class="form-group">
           <label>Issue Date:</label>
@@ -256,6 +331,21 @@
             [(ngModel)]="coreData.issue_date"
             placeholder="Seleccione la fecha de emisión"
           />
+        </div>
+        <div class="form-group" *ngIf="documentType === 'DCC'">
+          <label>Next Calibration Date:</label>
+          <div class="date-with-na">
+            <input
+              type="date"
+              [(ngModel)]="coreData.next_calibration"
+              placeholder="Seleccione la próxima fecha de calibración"
+              [disabled]="nextCalibrationDateNA"
+            />
+            <label class="na-checkbox">
+              <input type="checkbox" [(ngModel)]="nextCalibrationDateNA" />
+              N/A
+            </label>
+          </div>
         </div>
         <div class="form-actions">
           <button class="save-btn" (click)="saveBlock('core')">Guardar</button>
@@ -551,7 +641,9 @@
             <th>Name</th>
             <th>Email</th>
             <th>Phone</th>
-            <th>Main Signer</th>
+            <th>Responsible Signer/Approved by</th>
+            <th>Head of Service</th>
+            <th>Coordinator</th>
           </tr>
         </thead>
         <tbody>
@@ -569,6 +661,18 @@
               </span>
               <span *ngIf="!person.mainSigner" class="no-main-signer"> - </span>
             </td>
+            <td>
+              <span *ngIf="person.head" class="head-badge"> Head </span>
+              <span *ngIf="!person.head" class="no-head"> - </span>
+            </td>
+            <td>
+              <span *ngIf="person.coordinator" class="coordinator-badge">
+                Coordinator
+              </span>
+              <span *ngIf="!person.coordinator" class="no-coordinator">
+                -
+              </span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -584,10 +688,18 @@
               <option value="" disabled selected hidden>
                 Seleccione el rol
               </option>
-              <option value="Calibration Technician">
-                Calibration Technician
-              </option>
-              <option value="Calibration Engineer">Calibration Engineer</option>
+              <ng-container *ngIf="documentType === 'DCC'">
+                <option value="Calibration Technician">
+                  Calibration Technician
+                </option>
+                <option value="Calibration Engineer">
+                  Calibration Engineer
+                </option>
+              </ng-container>
+              <ng-container *ngIf="documentType === 'IE'">
+                <option value="Test Technician">Test Technician</option>
+                <option value="Test Engineer">Test Engineer</option>
+              </ng-container>
             </select>
           </div>
           <div class="form-group">
@@ -612,7 +724,7 @@
             <input type="text" [(ngModel)]="person.phone" />
           </div>
           <div class="form-group main-signer-group">
-            <label>Main Signer:</label>
+            <label>Approved by:</label>
             <div class="main-signer-checkbox">
               <input
                 type="checkbox"
@@ -626,6 +738,44 @@
                 </span>
                 <span *ngIf="!person.mainSigner" class="not-main-signer-text">
                   Marcar como principal
+                </span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group head-of-service-group">
+            <label>Head of Service:</label>
+            <div class="head-of-service-checkbox">
+              <input
+                type="checkbox"
+                [(ngModel)]="person.head"
+                (ngModelChange)="onHeadChange(i)"
+                [id]="'head_' + i"
+              />
+              <label [for]="'head_' + i" class="checkbox-label">
+                <span *ngIf="person.head" class="head-text">
+                  Head of Service
+                </span>
+                <span *ngIf="!person.head" class="not-head-text">
+                  Designar como Head
+                </span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group coordinator-group">
+            <label>Coordinator:</label>
+            <div class="coordinator-checkbox">
+              <input
+                type="checkbox"
+                [(ngModel)]="person.coordinator"
+                (ngModelChange)="onCoordinatorChange(i)"
+                [id]="'coordinator_' + i"
+              />
+              <label [for]="'coordinator_' + i" class="checkbox-label">
+                <span *ngIf="person.coordinator" class="coordinator-text">
+                  Coordinator
+                </span>
+                <span *ngIf="!person.coordinator" class="not-coordinator-text">
+                  Designar como Coordinator
                 </span>
               </label>
             </div>
@@ -657,17 +807,6 @@
         >
       </h4>
       <div class="block-actions">
-        <button
-          *ngIf="isBlockEditable('customer')"
-          class="edit-btn"
-          (click)="toggleEdit('customer')"
-          [class.active]="isEditing('customer')"
-        >
-          <i class="material-icons">{{
-            isEditing("customer") ? "close" : "edit"
-          }}</i>
-          {{ isEditing("customer") ? "Cancelar" : "Editar" }}
-        </button>
         <span *ngIf="!isBlockEditable('customer')" class="no-edit-message">
           <i class="material-icons">lock</i>
           No editable

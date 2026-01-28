@@ -644,3 +644,76 @@
 .not-main-signer-text {
   color: #666;
 }
+/* Head of Service badge and styles */
+.head-badge {
+  display: inline-block;
+  background: #2196f3;
+  color: white;
+  font-size: 0.8em;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+/* Coordinator badge and styles */
+.coordinator-badge {
+  display: inline-block;
+  background: #4caf50;
+  color: white;
+  font-size: 0.8em;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+/* Head of Service checkbox group */
+.head-of-service-group {
+  margin-bottom: 20px;
+}
+
+.head-of-service-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.head-of-service-checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  transform: scale(1.3);
+}
+
+.head-text {
+  color: #2196f3;
+  font-weight: 500;
+}
+
+.not-head-text {
+  color: #666;
+}
+
+/* Coordinator checkbox group */
+.coordinator-group {
+  margin-bottom: 20px;
+}
+
+.coordinator-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.coordinator-checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  transform: scale(1.3);
+}
+
+.coordinator-text {
+  color: #4caf50;
+  font-weight: 500;
+}
+
+.not-coordinator-text {
+  color: #666;
+}

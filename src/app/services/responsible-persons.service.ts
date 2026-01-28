@@ -240,6 +240,8 @@ export class ResponsiblePersonsService {
             attributes: {
               role: person.role,
               main: person.mainSigner ? 1 : 0,
+              head: person.head ? 1 : 0,
+              coordinator: person.coordinator ? 1 : 0,
             },
           },
         };
@@ -366,6 +368,8 @@ export class ResponsiblePersonsService {
                 id_dcc: certificateNumber,
                 role: person.role,
                 main: person.mainSigner ? 1 : 0,
+                head: person.head ? 1 : 0,
+                coordinator: person.coordinator ? 1 : 0,
                 deleted: 0,
               },
             },

@@ -57,7 +57,8 @@ export class CustomerService {
   }
 
   // Cargar detalles completos de un cliente específico (email y phone)
-  loadCustomerDetails(customerId: string): Observable<any> {
+  // Usa primero el contacto (si existe) y cae al email/phone del cliente
+  loadCustomerDetails(customerId: string, contactId?: string): Observable<any> {
     return new Observable((observer) => {
       // Primero obtener el account básico
       const getAccount = {
@@ -75,40 +76,51 @@ export class CustomerService {
       this.apiService.post(getAccount, UrlClass.URLNuevo).subscribe({
         next: (response: any) => {
           const account = response.result?.[0];
-          console.log('=== LOAD CUSTOMER DETAILS ===');
-          console.log('Raw account object:', account);
-          console.log(
-            'All account keys:',
-            account ? Object.keys(account) : 'no account'
-          );
 
           if (!account) {
             observer.error(new Error('Cliente no encontrado'));
             return;
           }
 
-          // Cargar email y phone en paralelo
+          // Cargar email/phone priorizando contacto y haciendo fallback al cliente
           Promise.all([
+            contactId ? this.loadContactEmail(contactId) : Promise.resolve(''),
+            contactId ? this.loadContactPhone(contactId) : Promise.resolve(''),
             this.loadAccountEmail(customerId),
-            this.loadAccountPhone(customerId),
+            this.loadPhoneByEntity(customerId),
           ])
-            .then(([email, phone]) => {
-              const fullCustomer = {
-                id: account.id,
-                name: account.name || '',
-                email: email,
-                phone: phone,
-                street: account.billing_address_street || '',
-                city: account.billing_address_city || '',
-                state: account.billing_address_state || '',
-                country: account.billing_address_country || '',
-                postal_code: account.billing_address_postalcode || '',
-                fax: '',
-                street_number: '',
-              };
-              observer.next(fullCustomer);
-              observer.complete();
-            })
+            .then(
+              ([
+                contactEmail,
+                phoneFromContact,
+                accountEmail,
+                phoneFromAccount,
+              ]) => {
+                const email = contactEmail || accountEmail;
+                const baseAccountPhone =
+                  (account as any)?.phone_office ||
+                  (account as any)?.phone_mobile ||
+                  (account as any)?.phone_alternate ||
+                  '';
+                const phone =
+                  phoneFromContact || phoneFromAccount || baseAccountPhone;
+                const fullCustomer = {
+                  id: account.id,
+                  name: account.name || '',
+                  email: email,
+                  phone: phone,
+                  street: account.billing_address_street || '',
+                  city: account.billing_address_city || '',
+                  state: account.billing_address_state || '',
+                  country: account.billing_address_country || '',
+                  postal_code: account.billing_address_postalcode || '',
+                  fax: '',
+                  street_number: '',
+                };
+                observer.next(fullCustomer);
+                observer.complete();
+              },
+            )
             .catch((error) => {
               // Si falla, devolver sin email/phone
               const basicCustomer = {
@@ -140,7 +152,7 @@ export class CustomerService {
   private loadAccountDetails(account: any): Promise<any> {
     return Promise.all([
       this.loadAccountEmail(account.id),
-      this.loadAccountPhone(account.id),
+      this.loadPhoneByEntity(account.id),
     ])
       .then(([email, phone]) => {
         return this.mapAccountToCustomer(account, email, phone);
@@ -199,8 +211,11 @@ export class CustomerService {
     });
   }
 
-  // Cargar phone del account usando entity_phone_number
-  private loadAccountPhone(accountId: string): Promise<string> {
+  // Loader genérico de teléfono por entity_id (cliente o contacto)
+  // Consulta directamente phone_number usando el phone_number_id como ID
+  private loadPhoneByEntity(entityId: string): Promise<string> {
+    if (!entityId) return Promise.resolve('');
+
     return new Promise((resolve) => {
       const getPhoneRelation = {
         action: 'get',
@@ -208,18 +223,35 @@ export class CustomerService {
         table: 'entity_phone_number',
         opts: {
           where: {
-            entity_id: accountId,
-            entity_type: 'Account',
+            entity_id: entityId,
             deleted: 0,
           },
-          limit: 1,
+          // Obtener TODOS los registros, no solo 1
+          attributes: [
+            'id',
+            'entity_id',
+            'phone_number_id',
+            'entity_type',
+            'primary',
+          ],
         },
       };
 
       this.apiService.post(getPhoneRelation, UrlClass.URLNuevo).subscribe({
         next: (response: any) => {
-          const relation = response.result?.[0];
+          const relations = response.result || [];
+
+          if (relations.length === 0) {
+            resolve('');
+            return;
+          }
+
+          // Buscar el registro con primary=1 primero, sino usar el primero
+          const relation =
+            relations.find((r: any) => r.primary === 1) || relations[0];
+
           if (relation && relation.phone_number_id) {
+            // Buscar el teléfono usando phone_number_id directamente en phone_number
             const getPhone = {
               action: 'get',
               bd: this.hvtestDatabase,
@@ -227,15 +259,93 @@ export class CustomerService {
               opts: {
                 where: {
                   id: relation.phone_number_id,
-                  deleted: 0,
+                  // NO filtrar por deleted para detectar registros marcados como eliminados
                 },
+                attributes: ['id', 'name', 'numeric', 'type', 'deleted'],
               },
             };
 
             this.apiService.post(getPhone, UrlClass.URLNuevo).subscribe({
               next: (phoneResponse: any) => {
                 const phoneData = phoneResponse.result?.[0];
-                resolve(phoneData?.name || '');
+
+                if (phoneData) {
+                  // Verificar si está marcado como deleted
+                  if (phoneData.deleted === 1) {
+                    resolve('');
+                  } else {
+                    // Obtener el teléfono del campo 'name' (contiene el número formateado) o 'numeric'
+                    const phone = phoneData.name || phoneData.numeric || '';
+                    resolve(phone);
+                  }
+                } else {
+                  // Si hay más relaciones, intentar con la siguiente
+                  const nextRelation = relations.find(
+                    (r: any) =>
+                      r.phone_number_id !== relation.phone_number_id &&
+                      r.deleted === 0,
+                  );
+                  if (nextRelation) {
+                    // Recursivamente intentar con el siguiente
+                    this.loadPhoneByEntity(entityId).then(resolve);
+                  } else {
+                    resolve('');
+                  }
+                }
+              },
+              error: (err) => {
+                resolve('');
+              },
+            });
+          } else {
+            resolve('');
+          }
+        },
+        error: (err) => {
+          resolve('');
+        },
+      });
+    });
+  }
+
+  // Cargar email desde un contacto (entity_email_address -> email_address)
+  private loadContactEmail(contactId: string): Promise<string> {
+    if (!contactId) return Promise.resolve('');
+
+    return new Promise((resolve) => {
+      const getEmailRelation = {
+        action: 'get',
+        bd: this.hvtestDatabase,
+        table: 'entity_email_address',
+        opts: {
+          where: {
+            entity_id: contactId,
+            deleted: 0,
+          },
+          limit: 1,
+        },
+      };
+
+      this.apiService.post(getEmailRelation, UrlClass.URLNuevo).subscribe({
+        next: (response: any) => {
+          const relation = response.result?.[0];
+          if (relation && relation.email_address_id) {
+            const getEmail = {
+              action: 'get',
+              bd: this.hvtestDatabase,
+              table: 'email_address',
+              opts: {
+                where: {
+                  id: relation.email_address_id,
+                  deleted: 0,
+                },
+              },
+            };
+
+            this.apiService.post(getEmail, UrlClass.URLNuevo).subscribe({
+              next: (emailResponse: any) => {
+                const emailData = emailResponse.result?.[0];
+                resolve(emailData?.name || '');
               },
               error: () => resolve(''),
             });
@@ -248,17 +358,17 @@ export class CustomerService {
     });
   }
 
+  // Cargar teléfono desde un contacto (usa loader genérico)
+  private loadContactPhone(contactId: string): Promise<string> {
+    return this.loadPhoneByEntity(contactId);
+  }
+
   // Mapear account a formato de customer
   private mapAccountToCustomer(
     account: any,
     email: string,
-    phone: string
+    phone: string,
   ): any {
-    console.log('=== MAP ACCOUNT TO CUSTOMER ===');
-    console.log('Raw account data:', account);
-    console.log('Email:', email);
-    console.log('Phone:', phone);
-
     const mapped = {
       id: account.id,
       name: account.name || '',
@@ -272,20 +382,18 @@ export class CustomerService {
       fax: '',
       street_number: '',
     };
-
-    console.log('Mapped customer:', mapped);
     return mapped;
   }
 
   // Guardar id_customer directamente en dcc_data
   saveCustomerRelation(
     certificateNumber: string,
-    customerId: string
+    customerId: string,
   ): Observable<boolean> {
     return new Observable((observer) => {
       if (!certificateNumber || !customerId) {
         observer.error(
-          new Error('Certificate Number o Customer ID no definidos.')
+          new Error('Certificate Number o Customer ID no definidos.'),
         );
         return;
       }
@@ -334,7 +442,7 @@ export class CustomerService {
           } else {
             console.error(
               'Update failed - response.result is false:',
-              response
+              response,
             );
             observer.error(new Error('No se pudo guardar el cliente.'));
           }

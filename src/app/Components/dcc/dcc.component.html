@@ -2,7 +2,7 @@
   <!-- Initial Options Screen -->
   <div *ngIf="showInitialOptions" class="initial-options">
     <div class="options-content">
-      <h1>Gestión de DCC</h1>
+      <h1>Gestión de DCC / IE</h1>
       <p>Selecciona una opción para continuar:</p>
 
       <div class="option-buttons">
@@ -10,13 +10,21 @@
           <i class="material-icons">add_circle</i>
           <span>Crear DCC</span>
         </button>
+        <button class="option-btn create-btn" (click)="openCreateIeModal()">
+          <i class="material-icons">add_circle</i>
+          <span>Crear IE</span>
+        </button>
         <button class="option-btn load-dcc-btn" (click)="openDccSelectModal()">
           <i class="material-icons">folder_open</i>
-          <span>Cargar DCC</span>
+          <span>Cargar DCC/IE</span>
         </button>
-        <button class="option-btn load-btn" (click)="loadExistingDCC()" disabled>
+        <button
+          class="option-btn load-btn"
+          (click)="loadExistingDCC()"
+          disabled
+        >
           <i class="material-icons">upload_file</i>
-          <span>Cargar XML</span>
+          <span>Cargar XML ()</span>
         </button>
       </div>
     </div>
@@ -39,7 +47,7 @@
         </button>
       </div>
       <div class="modal-body">
-        <div>
+        <div class="form-group full-width">
           <label for="projectId">Proyecto:</label>
           <ng-multiselect-dropdown
             id="projectId"
@@ -52,52 +60,281 @@
           >
           </ng-multiselect-dropdown>
         </div>
-        <div class="form-group">
-          <label for="ptId">PT ID:</label>
-          <select
-            id="ptId"
-            [(ngModel)]="newDccPtId"
-            class="dcc-select"
-            (ngModelChange)="updateCertificateNumber()"
-          >
-            <option value="">Seleccione PT ID</option>
-            <option *ngFor="let pt of ptOptions" [value]="pt">
-              {{ pt }}
-            </option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="dutNumber">Número DUT:</label>
-          <input
-            id="dutNumber"
-            type="number"
-            min="1"
-            max="99"
-            [(ngModel)]="newDccDutNumber"
-            class="dcc-select"
-            placeholder="Ingrese número DUT (1-99)"
-            (ngModelChange)="updateCertificateNumber()"
-          />
-        </div>
-        <div class="form-group certificate-preview">
-          <label>Certificate Number:</label>
-          <div class="certificate-number-display">
-            {{ generatedCertificateNumber || "Seleccione todos los campos" }}
+        <div
+          class="form-group full-width"
+          *ngIf="dccCertificatesList && dccCertificatesList.length > 0"
+        >
+          <label>Certificados a crear:</label>
+          <div class="certificates-list">
+            <div
+              *ngFor="let cert of dccCertificatesList; let i = index"
+              class="certificate-item"
+              [class.selected]="dccSelectedCertificate === cert"
+              (click)="onDccCertificateSelect(i)"
+              type="button"
+            >
+              {{ cert.name }}
+            </div>
+          </div>
+          <!-- Mostrar descripción del certificado seleccionado -->
+          <div class="certificate-details" *ngIf="dccSelectedCertificate">
+            <h4>Detalles del DUT</h4>
+            <div class="detail-row">
+              <strong>Descripción:</strong>
+              <span>{{
+                dccSelectedCertificate.dutService?.description ||
+                  "No disponible"
+              }}</span>
+            </div>
+            <div
+              class="detail-row"
+              *ngIf="dccSelectedCertificate.dutService?.serial_number"
+            >
+              <strong>Serial Number:</strong>
+              <span>{{ dccSelectedCertificate.dutService.serial_number }}</span>
+            </div>
+            <div
+              class="detail-row"
+              *ngIf="dccSelectedCertificate.dutService?.calibration_interval"
+            >
+              <strong>Calibration Interval:</strong>
+              <span
+                >{{
+                  dccSelectedCertificate.dutService.calibration_interval
+                }}
+                months</span
+              >
+            </div>
           </div>
         </div>
+
+        <!-- Grid de 2 columnas para los campos de fecha -->
+        <div
+          class="form-fields-grid"
+          *ngIf="dccCertificatesList && dccCertificatesList.length > 0"
+        >
+          <div class="form-group">
+            <label for="dccLocation">Performance Location:</label>
+            <select
+              id="dccLocation"
+              [(ngModel)]="dccLocation"
+              (ngModelChange)="onDccLocationChange()"
+              class="form-control"
+            >
+              <option value="">Seleccione una opción</option>
+              <option value="Customer">Customer (Dirección Fiscal)</option>
+              <option value="Laboratory">Laboratory (HVTest)</option>
+              <option value="Other">Other (Dirección en sitio - CRM)</option>
+            </select>
+          </div>
+          <div class="form-group" *ngIf="dccLocation">
+            <label>Dirección:</label>
+            <div class="location-address-display">
+              {{ dccLocationAddress || "Cargando dirección..." }}
+            </div>
+          </div>
+          <div class="form-group" *ngIf="dccLocation === 'Laboratory'">
+            <label for="dccReceiptDate">Receipt Date:</label>
+            <input
+              type="date"
+              id="dccReceiptDate"
+              [(ngModel)]="dccReceiptDate"
+              class="form-control"
+            />
+          </div>
+          <div class="form-group">
+            <label for="dccCalibrationDate">Date of Calibration:</label>
+            <input
+              type="date"
+              id="dccCalibrationDate"
+              [(ngModel)]="dccCalibrationDate"
+              class="form-control"
+            />
+          </div>
+          <div class="form-group" *ngIf="dccIsRangeDate">
+            <label for="dccEndDate">End Calibration Date:</label>
+            <input
+              type="date"
+              id="dccEndDate"
+              [(ngModel)]="dccEndDate"
+              class="form-control"
+            />
+          </div>
+          <div class="form-group full-width">
+            <label>
+              <input type="checkbox" [(ngModel)]="dccIsRangeDate" />
+              Is Range Date
+            </label>
+          </div>
+        </div>
+
         <div class="form-actions" style="margin-top: 20px">
           <button
             class="save-btn"
             [disabled]="
               !newDccProjectId ||
               newDccProjectId.length === 0 ||
-              !newDccPtId ||
-              !newDccDutNumber ||
-              newDccDutNumber < 1
+              !dccCertificatesList ||
+              dccCertificatesList.length === 0
             "
-            (click)="startNewDcc()"
+            (click)="startNewDccMultiple()"
           >
-            Crear DCC
+            Crear {{ dccCertificatesList?.length || 0 }} Certificados
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para crear IE -->
+  <div
+    *ngIf="showCreateIeModal"
+    class="modal-backdrop"
+    (click)="closeCreateIeModal()"
+  >
+    <div
+      class="modal-content create-dcc-modal"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h3>Crear nuevo IE</h3>
+        <button class="close-btn" (click)="closeCreateIeModal()">
+          <i class="material-icons">close</i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group full-width">
+          <label for="ieProjectId">Proyecto:</label>
+          <ng-multiselect-dropdown
+            id="ieProjectId"
+            [settings]="projectDropdownSettings"
+            [data]="projects"
+            [(ngModel)]="newIeProjectId"
+            (onSelect)="onIeProjectSelect($event)"
+            (onDeSelect)="onIeProjectDeselect($event)"
+            (ngModelChange)="updateIeCertificateNumber()"
+          >
+          </ng-multiselect-dropdown>
+        </div>
+        <div
+          class="form-group full-width"
+          *ngIf="ieCertificatesList && ieCertificatesList.length > 0"
+        >
+          <label>Certificados a crear:</label>
+          <div class="certificates-list">
+            <div
+              *ngFor="let cert of ieCertificatesList; let i = index"
+              class="certificate-item"
+              [class.selected]="ieSelectedCertificate === cert"
+              (click)="onIeCertificateSelect(i)"
+              type="button"
+            >
+              {{ cert.name }}
+            </div>
+          </div>
+          <!-- Mostrar descripción del certificado seleccionado -->
+          <div class="certificate-details" *ngIf="ieSelectedCertificate">
+            <h4>Detalles del DUT</h4>
+            <div class="detail-row">
+              <strong>Descripción:</strong>
+              <span>{{
+                ieSelectedCertificate.dutService?.description || "No disponible"
+              }}</span>
+            </div>
+            <div
+              class="detail-row"
+              *ngIf="ieSelectedCertificate.dutService?.serial_number"
+            >
+              <strong>Serial Number:</strong>
+              <span>{{ ieSelectedCertificate.dutService.serial_number }}</span>
+            </div>
+            <div
+              class="detail-row"
+              *ngIf="ieSelectedCertificate.dutService?.calibration_interval"
+            >
+              <strong>Calibration Interval:</strong>
+              <span
+                >{{
+                  ieSelectedCertificate.dutService.calibration_interval
+                }}
+                months</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- Grid de 2 columnas para los campos de fecha -->
+        <div
+          class="form-fields-grid"
+          *ngIf="ieCertificatesList && ieCertificatesList.length > 0"
+        >
+          <div class="form-group">
+            <label for="ieLocation">Performance Location:</label>
+            <select
+              id="ieLocation"
+              [(ngModel)]="ieLocation"
+              (ngModelChange)="onIeLocationChange()"
+              class="form-control"
+            >
+              <option value="">Seleccione una opción</option>
+              <option value="Customer">Customer (Dirección Fiscal)</option>
+              <option value="Laboratory">Laboratory (HVTest)</option>
+              <option value="Other">Other (Dirección en sitio - CRM)</option>
+            </select>
+          </div>
+          <div class="form-group" *ngIf="ieLocation">
+            <label>Dirección:</label>
+            <div class="location-address-display">
+              {{ ieLocationAddress || "Cargando dirección..." }}
+            </div>
+          </div>
+          <div class="form-group" *ngIf="ieLocation === 'Laboratory'">
+            <label for="ieReceiptDate">Receipt Date:</label>
+            <input
+              type="date"
+              id="ieReceiptDate"
+              [(ngModel)]="ieReceiptDate"
+              class="form-control"
+            />
+          </div>
+          <div class="form-group">
+            <label for="ieTestDate">Date of Test:</label>
+            <input
+              type="date"
+              id="ieTestDate"
+              [(ngModel)]="ieTestDate"
+              class="form-control"
+            />
+          </div>
+          <div class="form-group" *ngIf="ieIsRangeDate">
+            <label for="ieEndDate">End Test Date:</label>
+            <input
+              type="date"
+              id="ieEndDate"
+              [(ngModel)]="ieEndDate"
+              class="form-control"
+            />
+          </div>
+          <div class="form-group full-width">
+            <label>
+              <input type="checkbox" [(ngModel)]="ieIsRangeDate" />
+              Is Range Date
+            </label>
+          </div>
+        </div>
+
+        <div class="form-actions" style="margin-top: 20px">
+          <button
+            class="save-btn"
+            [disabled]="
+              !newIeProjectId ||
+              newIeProjectId.length === 0 ||
+              !ieCertificatesList ||
+              ieCertificatesList.length === 0
+            "
+            (click)="startNewIeMultiple()"
+          >
+            Crear {{ ieCertificatesList?.length || 0 }} Certificados
           </button>
         </div>
       </div>
@@ -111,30 +348,65 @@
     (click)="closeDccSelectModal()"
   >
     <div
-      class="modal-content dcc-select-modal"
+      class="modal-content create-dcc-modal dcc-select-modal"
       (click)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h3>Cargar DCC existente</h3>
+        <h3>Cargar DCC / IE existente</h3>
         <button class="close-btn" (click)="closeDccSelectModal()">
           <i class="material-icons">close</i>
         </button>
       </div>
       <div class="modal-body">
-        <label for="existingDccSelect" class="dcc-select-label">
-          Seleccione un DCC guardado:
-        </label>
-        <select
-          id="existingDccSelect"
-          [(ngModel)]="selectedDccId"
-          (change)="onSelectExistingDcc()"
-          class="dcc-select"
-        >
-          <option value="">Seleccione un DCC...</option>
-          <option *ngFor="let dcc of existingDccList" [value]="dcc.id">
-            {{ dcc.id }}
-          </option>
-        </select>
+        <div class="form-fields-grid">
+          <div class="form-group full-width">
+            <label for="loadProjectSelect">Proyecto con certificados:</label>
+            <ng-multiselect-dropdown
+              id="loadProjectSelect"
+              [settings]="projectDropdownSettings"
+              [data]="loadProjectOptions"
+              [(ngModel)]="loadSelectedProjects"
+              (onSelect)="onLoadProjectSelect()"
+              (onDeSelect)="onLoadProjectDeselect()"
+            >
+            </ng-multiselect-dropdown>
+          </div>
+
+          <div
+            class="form-group full-width"
+            *ngIf="
+              loadCertificatesForProject &&
+              loadCertificatesForProject.length > 0
+            "
+          >
+            <label for="existingDccSelect" class="dcc-select-label">
+              Certificados del proyecto seleccionado:
+            </label>
+            <select
+              id="existingDccSelect"
+              [(ngModel)]="selectedDccId"
+              class="dcc-select"
+            >
+              <option value="">Seleccione un certificado...</option>
+              <option
+                *ngFor="let cert of loadCertificatesForProject"
+                [value]="cert.id"
+              >
+                {{ cert.display }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button
+            class="save-btn"
+            [disabled]="!selectedDccId"
+            (click)="onSelectExistingDcc()"
+          >
+            Cargar certificado
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -186,7 +458,13 @@
         <i class="material-icons">arrow_back</i>
         <span>Volver</span>
       </button>
-      <h2>Digital Calibration Certificate</h2>
+      <h2>
+        {{
+          documentType === "IE"
+            ? "Informe de Ensayos"
+            : "Digital Calibration Certificate"
+        }}
+      </h2>
     </div>
 
     <!-- Tab Navigation -->
@@ -207,7 +485,9 @@
     <div class="tab-content">
       <!-- Administrative Data Tab -->
       <div *ngIf="activeTab === 'administrative-data'" class="tab-panel">
-        <app-administrative-data></app-administrative-data>
+        <app-administrative-data
+          [documentType]="documentType"
+        ></app-administrative-data>
         <!-- Navigation Buttons -->
         <div class="step-navigation">
           <div class="nav-spacer"></div>

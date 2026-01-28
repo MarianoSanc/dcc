@@ -206,9 +206,9 @@
   </div>
 
   <!-- Measuring Equipments Block -->
-  <div class="data-block">
+  <div class="data-block" *ngIf="isDccCertificate">
     <div class="block-header">
-      <h4>Measuring Equipments</h4>
+      <h4>Measuring Equipments (Patrón)</h4>
       <div class="block-actions">
         <button
           *ngIf="!isEditingMeasuringEquipments"
@@ -365,8 +365,8 @@
                         id.issuer === "manufacturer"
                           ? "Manufacturer"
                           : id.issuer === "Laboratory"
-                          ? "Laboratory"
-                          : id.issuer
+                            ? "Laboratory"
+                            : id.issuer
                       }}
                     </span>
                   </div>
@@ -388,6 +388,43 @@
           <p>No hay equipos de medición registrados en la base de datos.</p>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- METROLOGICAL TRACEABILITY Block -->
+  <div
+    class="data-block"
+    *ngIf="isDccCertificate && metrologicalTraceability?.length > 0"
+  >
+    <div class="block-header">
+      <h4>Metrological Traceability</h4>
+    </div>
+
+    <div class="traceability-view">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Equipment</th>
+            <th>Calibration Certificate</th>
+            <th>Calibrated by</th>
+            <th>Date of Calibration</th>
+            <th>Quantity</th>
+            <th>Comments</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of metrologicalTraceability">
+            <td>{{ item.id_patron || "-" }}</td>
+            <td>{{ item.name_patron || "N/A" }}</td>
+            <td>{{ item.tz_name || "-" }}</td>
+            <td>{{ item.tz_by || "-" }}</td>
+            <td>{{ item.tz_date || "-" }}</td>
+            <td>{{ item.tz_quantity || "-" }}</td>
+            <td>{{ item.tz_comm || "-" }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 

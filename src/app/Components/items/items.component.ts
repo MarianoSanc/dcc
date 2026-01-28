@@ -28,7 +28,7 @@ export class ItemsComponent implements OnInit, OnDestroy {
 
   constructor(
     private dccDataService: DccDataService,
-    private apiService: ApiService
+    private apiService: ApiService,
   ) {}
 
   // ===== LIFECYCLE HOOKS =====
@@ -51,7 +51,7 @@ export class ItemsComponent implements OnInit, OnDestroy {
           this.loadedDccId = newDccId;
           this.items = data.items || [];
         }
-      })
+      }),
     );
   }
 
@@ -139,6 +139,7 @@ export class ItemsComponent implements OnInit, OnDestroy {
           model: mainItem.model || '',
           serial_number: mainItem.serialNumber || '',
           costumer_asset: mainItem.customerAssetId || '',
+          comment: mainItem.comment || '',
         },
         where: { id_dcc: dccId },
       },
@@ -309,11 +310,11 @@ export class ItemsComponent implements OnInit, OnDestroy {
               if (response?.result) {
                 return this.saveIdentifiers(
                   subItem.dbId,
-                  subItem.identifiers || []
+                  subItem.identifiers || [],
                 );
               }
               return response;
-            })
+            }),
           );
         } else {
           // Crear nuevo
@@ -324,11 +325,11 @@ export class ItemsComponent implements OnInit, OnDestroy {
                 subItem.dbId = newSubItemId;
                 return this.saveIdentifiers(
                   newSubItemId,
-                  subItem.identifiers || []
+                  subItem.identifiers || [],
                 );
               }
               return response;
-            })
+            }),
           );
         }
       }
@@ -337,14 +338,14 @@ export class ItemsComponent implements OnInit, OnDestroy {
 
       // Limpiar subitems eliminados del array
       this.mainItem.subItems = this.mainItem.subItems.filter(
-        (s: any) => !s._markedForDeletion
+        (s: any) => !s._markedForDeletion,
       );
 
       // Limpiar identificadores eliminados de cada subitem
       this.mainItem.subItems.forEach((subItem: any) => {
         if (subItem.identifiers) {
           subItem.identifiers = subItem.identifiers.filter(
-            (id: any) => !id._markedForDeletion
+            (id: any) => !id._markedForDeletion,
           );
         }
       });
@@ -375,7 +376,7 @@ export class ItemsComponent implements OnInit, OnDestroy {
   private createSubItem(
     dccId: string,
     subItem: any,
-    idItem: number
+    idItem: number,
   ): Promise<any> {
     const createRequest = {
       action: 'create',
@@ -430,7 +431,7 @@ export class ItemsComponent implements OnInit, OnDestroy {
   // ===== GUARDAR IDENTIFICADORES EN dcc_subitem_identificador =====
   private async saveIdentifiers(
     subItemId: number,
-    identifiers: any[]
+    identifiers: any[],
   ): Promise<void> {
     const promises: Promise<any>[] = [];
 
@@ -569,7 +570,7 @@ export class ItemsComponent implements OnInit, OnDestroy {
               id: id.id,
               name: id.name || '',
               value: id.value || '',
-            })
+            }),
           );
 
           this.items = [...this.items];

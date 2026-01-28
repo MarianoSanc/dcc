@@ -81,7 +81,7 @@ export class AdministrativeDataService {
   saveToDatabase(
     dataToSave: any,
     blockType: string,
-    certificateNumber: string
+    certificateNumber: string,
   ): Observable<boolean> {
     return new Observable((observer) => {
       if (!certificateNumber) {
@@ -114,7 +114,7 @@ export class AdministrativeDataService {
               icon: 'success',
               title: '¡Guardado!',
               text: `${this.getBlockDisplayName(
-                blockType
+                blockType,
               )} guardado correctamente`,
               timer: 2000,
               showConfirmButton: false,
@@ -126,7 +126,7 @@ export class AdministrativeDataService {
               icon: 'error',
               title: 'Error',
               text: `No se pudo guardar ${this.getBlockDisplayName(
-                blockType
+                blockType,
               )}.`,
             });
             observer.next(false);
@@ -139,7 +139,7 @@ export class AdministrativeDataService {
             icon: 'error',
             title: 'Error',
             text: `Ocurrió un error al guardar ${this.getBlockDisplayName(
-              blockType
+              blockType,
             )}.`,
           });
           observer.error(error);
@@ -168,16 +168,21 @@ export class AdministrativeDataService {
     }
     if (formatted.performance_date) {
       formatted.performance_date = this.formatDateForInput(
-        formatted.performance_date
+        formatted.performance_date,
       );
     }
     if (formatted.end_performance_date) {
       formatted.end_performance_date = this.formatDateForInput(
-        formatted.end_performance_date
+        formatted.end_performance_date,
       );
     }
     if (formatted.issue_date) {
       formatted.issue_date = this.formatDateForInput(formatted.issue_date);
+    }
+    if (formatted.next_calibration) {
+      formatted.next_calibration = this.formatDateForInput(
+        formatted.next_calibration,
+      );
     }
 
     return formatted;
@@ -189,9 +194,12 @@ export class AdministrativeDataService {
       pt: coreData.pt_id,
       country: coreData.country_code,
       language: coreData.language,
-      receipt_date: coreData.receipt_date
-        ? this.formatDateForDatabase(coreData.receipt_date)
-        : null,
+      receipt_date:
+        coreData.receipt_date === '0000-00-00'
+          ? '0000-00-00'
+          : coreData.receipt_date
+            ? this.formatDateForDatabase(coreData.receipt_date)
+            : '0000-00-00',
       date_calibration: coreData.performance_date
         ? this.formatDateForDatabase(coreData.performance_date)
         : null,
@@ -203,6 +211,13 @@ export class AdministrativeDataService {
       issue_date: coreData.issue_date
         ? this.formatDateForDatabase(coreData.issue_date)
         : null,
+      next_calibration:
+        coreData.next_calibration === '0000-00-00'
+          ? '0000-00-00'
+          : coreData.next_calibration
+            ? this.formatDateForDatabase(coreData.next_calibration)
+            : '0000-00-00',
+      accredited: coreData.accredited ? 1 : 0,
     };
   }
 

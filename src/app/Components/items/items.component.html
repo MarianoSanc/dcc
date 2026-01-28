@@ -1,6 +1,6 @@
 <div class="items-container">
   <div class="section-header">
-    <h3>Items</h3>
+    <h3>Items (DUT)</h3>
     <p>Gestión de equipos e identificaciones de objetos</p>
   </div>
 
@@ -58,6 +58,10 @@
             <td class="label">Customer Asset ID:</td>
             <td>{{ items[0].customerAssetId || "No definido" }}</td>
           </tr>
+          <tr>
+            <td class="label">Comment:</td>
+            <td>{{ items[0].comment || "No definido" }}</td>
+          </tr>
         </table>
       </div>
 
@@ -107,6 +111,15 @@
                 type="text"
                 [(ngModel)]="items[0].customerAssetId"
                 placeholder="Ingrese el ID del activo del cliente"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>Comment:</label>
+              <input
+                type="text"
+                [(ngModel)]="items[0].comment"
+                placeholder="Ingrese un comentario"
               />
             </div>
           </div>

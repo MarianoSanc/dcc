@@ -82,13 +82,13 @@ export class ResultsComponent implements OnInit, OnDestroy {
             measurementUncertainty = {
               expandedMU: {
                 valueExpandedMUXMLList: this.getText(
-                  mu?.['si:valueExpandedMUXMLList']
+                  mu?.['si:valueExpandedMUXMLList'],
                 ),
                 coverageFactorXMLList: this.getText(
-                  mu?.['si:coverageFactorXMLList']
+                  mu?.['si:coverageFactorXMLList'],
                 ),
                 coverageProbabilityXMLList: this.getText(
-                  mu?.['si:coverageProbabilityXMLList']
+                  mu?.['si:coverageProbabilityXMLList'],
                 ),
               },
             };
@@ -236,6 +236,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
   usedMethods: any[] = [];
   influenceConditions: any[] = [];
   measuringEquipments: any[] = [];
+  metrologicalTraceability: any[] = []; // Nuevo: Metrological Traceability
   results: any[] = [];
   editingBlocks: { [key: string]: boolean } = {};
   private subscription: Subscription = new Subscription();
@@ -246,6 +247,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
   items: any;
   database: string = 'calibraciones'; // Ajusta según tu entorno
   availableInfluenceConditions: any[] = [];
+  ptDescription: string = ''; // Description del PT para hv_method
 
   editingMeasurementUncertainty: boolean = false; // NUEVO: modo edición exclusivo
   isEditingMeasurementResult: boolean = false; // Modo edición del nombre
@@ -275,7 +277,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
   constructor(
     private dccDataService: DccDataService,
-    private apiService: ApiService
+    private apiService: ApiService,
   ) {}
 
   ngOnInit() {
@@ -306,7 +308,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
             this.loadAllDataFromDB(certificateNumber);
           }
         }
-      })
+      }),
     );
   }
 
@@ -321,6 +323,9 @@ export class ResultsComponent implements OnInit, OnDestroy {
     // Cargar measuring equipments
     this.loadMeasuringEquipmentsFromDB(dccId);
 
+    // Cargar metrological traceability
+    this.loadMetrologicalTraceabilityFromDB(dccId);
+
     // Cargar used methods
     this.loadUsedMethodsFromDB(dccId);
 
@@ -333,20 +338,29 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
   // Nuevo método para cargar used methods desde BD
   private loadUsedMethodsFromDB(dccId: string) {
-    this.dccDataService.getAllUsedMethodsFromDatabase(this.database).subscribe({
-      next: (methods) => {
-        const ptId = this.coreData?.pt_id;
-        this.usedMethods = methods.map((method) => {
-          if (ptId && method.refType === 'hv_method' && method.description) {
-            method.description = method.description.replace(/PT-\d{2}/g, ptId);
-          }
-          return method;
-        });
-      },
-      error: () => {
-        this.usedMethods = this.getDefaultUsedMethods();
-      },
-    });
+    const ptId = this.coreData?.pt_id;
+    this.dccDataService
+      .getAllUsedMethodsFromDatabase(this.database, ptId)
+      .subscribe({
+        next: (methods) => {
+          this.usedMethods = methods.map((method) => {
+            if (ptId && method.refType === 'hv_method' && method.description) {
+              method.description = method.description.replace(
+                /PT-\d{2}/g,
+                ptId,
+              );
+            }
+            return method;
+          });
+          // Actualizar el observable global para que preview.component tenga acceso
+          this.dccDataService.updateUsedMethods(this.usedMethods);
+        },
+        error: () => {
+          this.usedMethods = this.getDefaultUsedMethods();
+          // Actualizar el observable global con los defaults
+          this.dccDataService.updateUsedMethods(this.usedMethods);
+        },
+      });
   }
 
   // Nuevo método para cargar measurement result name desde BD
@@ -357,31 +371,92 @@ export class ResultsComponent implements OnInit, OnDestroy {
       table: 'dcc_data',
       opts: {
         where: { id: dccId },
-        attributes: ['name_measurement'],
+        attributes: ['name_measurement', 'pt'],
       },
     };
 
     this.dccDataService.post(query).subscribe({
       next: (response: any) => {
         const dccData = response?.result?.[0];
-        if (dccData && dccData.name_measurement) {
-          this.measurementResultName = dccData.name_measurement;
-        } else {
-          // Valor por defecto si no existe
-          this.measurementResultName = `Calibration of`;
+        const ptId = dccData?.pt || this.coreData?.pt_id;
+        const isTest = this.isTestCertificate(
+          this.coreData?.certificate_number,
+        );
+
+        if (ptId && !this.coreData?.pt_id) {
+          this.coreData = { ...this.coreData, pt_id: ptId };
         }
-        // Enviar el nombre actualizado al servicio global para preview
-        this.dccDataService.updateMeasurementResultName(
-          this.measurementResultName
+
+        this.loadPtDescriptionAndComposeName(
+          ptId,
+          isTest,
+          dccData?.name_measurement,
         );
       },
       error: () => {
-        this.measurementResultName = `Calibration of`;
-        this.dccDataService.updateMeasurementResultName(
-          this.measurementResultName
-        );
+        const prefix = this.isTestCertificate(this.coreData?.certificate_number)
+          ? 'Test of'
+          : 'Calibration of';
+        this.pushMeasurementResultName(prefix);
       },
     });
+  }
+
+  private loadPtDescriptionAndComposeName(
+    ptId: string | undefined,
+    isTest: boolean,
+    fallbackName?: string,
+  ) {
+    const prefix = isTest ? 'Test of' : 'Calibration of';
+
+    if (!ptId) {
+      this.pushMeasurementResultName(fallbackName || prefix);
+      this.ptDescription = '';
+      this.dccDataService.updatePtDescription('');
+      return;
+    }
+
+    const ptQuery = {
+      action: 'get',
+      bd: this.database,
+      table: 'procedimientos_tecnicos',
+      opts: {
+        where: { id: ptId },
+        attributes: ['description'],
+      },
+    };
+
+    this.dccDataService.post(ptQuery).subscribe({
+      next: (resp: any) => {
+        const description = resp?.result?.[0]?.description?.trim();
+        // Store the raw description for pt_description
+        this.ptDescription = description || '';
+        // Update dccDataService so preview component can access it
+        this.dccDataService.updatePtDescription(this.ptDescription);
+        const composedName = description
+          ? `${prefix} "${description}"`
+          : fallbackName || prefix;
+        this.pushMeasurementResultName(composedName);
+      },
+      error: () => {
+        this.ptDescription = '';
+        this.dccDataService.updatePtDescription('');
+        this.pushMeasurementResultName(fallbackName || prefix);
+      },
+    });
+  }
+
+  private isTestCertificate(certificateNumber?: string | null): boolean {
+    return /\bIE\b/i.test(certificateNumber || '');
+  }
+
+  get isDccCertificate(): boolean {
+    return !this.isTestCertificate(this.coreData?.certificate_number);
+  }
+
+  private pushMeasurementResultName(name: string) {
+    this.measurementResultName = name;
+    this.dccDataService.updateMeasurementResultName(this.measurementResultName);
   }
 
   // Nuevo método para cargar measurement result desde BD
@@ -421,7 +496,8 @@ export class ResultsComponent implements OnInit, OnDestroy {
     this.availableInfluenceConditions.forEach((condition) => {
       const found = loadedConditions.find(
         (loaded) =>
-          loaded.name === condition.name || loaded.refType === condition.refType
+          loaded.name === condition.name ||
+          loaded.refType === condition.refType,
       );
       if (found) {
         condition.active = true;
@@ -478,13 +554,13 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
   getActiveInfluenceConditions() {
     return this.influenceConditions.filter(
-      (condition) => condition.active !== false
+      (condition) => condition.active !== false,
     );
   }
 
   getActiveAvailableConditions() {
     return this.availableInfluenceConditions.filter(
-      (condition) => condition.active
+      (condition) => condition.active,
     );
   }
 
@@ -647,7 +723,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
         value: '',
         unit: '\\one', // Default to one
         hasUncertainty: false,
-      })
+      }),
     );
   }
 
@@ -875,7 +951,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
           // Buscar resultado existente por nombre Y ref_type (no por índice)
           const existingResult = existingResults.find(
-            (r: any) => r.name === result.name && r.ref_type === result.refType
+            (r: any) => r.name === result.name && r.ref_type === result.refType,
           );
 
           if (existingResult) {
@@ -958,12 +1034,12 @@ export class ResultsComponent implements OnInit, OnDestroy {
           // Sincronizar con los resultados actuales en memoria
           response.result
             .filter(
-              (dbResult: any) => dbResult.ref_type !== 'measurementResult'
+              (dbResult: any) => dbResult.ref_type !== 'measurementResult',
             )
             .forEach((dbResult: any) => {
               const dbData = dbResult.data ? JSON.parse(dbResult.data) : [];
               const resultInMemory = this.results.find(
-                (r) => r.id === dbResult.id
+                (r) => r.id === dbResult.id,
               );
 
               if (
@@ -1081,13 +1157,13 @@ export class ResultsComponent implements OnInit, OnDestroy {
           }));
           // Actualizar el observable global para que Preview reciba los datos reales
           this.dccDataService.updateInfluenceConditions(
-            this.influenceConditions
+            this.influenceConditions,
           );
         } else {
           // Si no hay datos en BD, inicializa con los valores por defecto
           this.influenceConditions = this.getDefaultInfluenceConditions();
           this.dccDataService.updateInfluenceConditions(
-            this.influenceConditions
+            this.influenceConditions,
           );
         }
       },
@@ -1332,7 +1408,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
             .filter((id: any) => id);
           // Seleccionar los patrones que ya están guardados
           this.selectedPatrones = this.availablePatrones.filter((p) =>
-            patronIds.includes(p.id)
+            patronIds.includes(p.id),
           );
           // Cargar equipos de los patrones seleccionados
           if (this.selectedPatrones.length > 0) {
@@ -1431,7 +1507,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
         .catch((error) => {
           console.error(
             `Error loading equipment for asset ${item.assetId}:`,
-            error
+            error,
           );
           return null;
         });
@@ -1522,6 +1598,8 @@ export class ResultsComponent implements OnInit, OnDestroy {
             this.equipmentsFromPatrones = [];
             // Recargar los datos guardados para actualizar la vista
             this.loadMeasuringEquipmentsFromDB(dccId);
+            // Recargar Metrological Traceability para mostrar el bloque si hay patrones
+            this.loadMetrologicalTraceabilityFromDB(dccId);
             Swal.fire({
               icon: 'success',
               title: '¡Guardado!',
@@ -1599,7 +1677,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
           }));
           // Actualizar el observable global para que Preview reciba los datos reales
           this.dccDataService.updateMeasuringEquipments(
-            this.measuringEquipments
+            this.measuringEquipments,
           );
         } else {
           this.measuringEquipments = [];
@@ -1611,6 +1689,134 @@ export class ResultsComponent implements OnInit, OnDestroy {
         this.dccDataService.updateMeasuringEquipments([]);
       },
     });
+  }
+
+  private loadMetrologicalTraceabilityFromDB(dccId: string) {
+    if (!dccId) return;
+
+    // Cargar los patrones (measuring equipments) desde dcc_measuringequipments
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_measuringequipments',
+      opts: {
+        where: { id_dcc: dccId, deleted: 0 },
+        order_by: ['orden', 'ASC'],
+      },
+    };
+
+    this.dccDataService.post(query).subscribe({
+      next: (response: any) => {
+        if (response?.result && response.result.length > 0) {
+          const patrones = response.result;
+
+          // Cargar datos directamente desde equipment_catalog
+          this.loadTraceabilityFromEquipmentCatalog(patrones, dccId);
+        } else {
+          this.metrologicalTraceability = [];
+        }
+      },
+      error: () => {
+        this.metrologicalTraceability = [];
+      },
+    });
+  }
+
+  private loadTraceabilityFromEquipmentCatalog(patrones: any[], dccId: string) {
+    // Extraer los asset_id de los patrones (estos son los idequipment en equipment_catalog)
+    const equipmentIds = patrones
+      .map((eq: any) => eq.asset_id)
+      .filter((id: any) => id);
+
+    if (equipmentIds.length === 0) {
+      // Si no hay asset_id, usar estructura básica
+      this.metrologicalTraceability = patrones.map((eq: any, idx: number) => ({
+        id: null,
+        id_dcc: dccId,
+        id_patron: eq.asset_id || '', // Usar asset_id como ID
+        name_patron: eq.name || '',
+        tz_name: '', // Por agregar
+        tz_by: '',
+        tz_date: '',
+        tz_quantity: '', // Por agregar
+        tz_comm: '', // Por agregar
+        orden: idx + 1,
+      }));
+      // Actualizar el observable global
+      this.dccDataService.updateMetrologicalTraceability(
+        this.metrologicalTraceability,
+      );
+      return;
+    }
+
+    // Consultar equipment_catalog de hvtest2 para cada asset_id
+    const catalogPromises = equipmentIds.map((assetId: string) => {
+      const catalogQuery = {
+        action: 'get',
+        bd: 'hvtest2',
+        table: 'equipment_catalog',
+        opts: {
+          where: { idequipment: assetId },
+          attributes: ['idequipment', 'calibratedby', 'last_calibration'],
+        },
+      };
+
+      return this.apiService.post(catalogQuery, UrlClass.URLNuevo).toPromise();
+    });
+
+    Promise.all(catalogPromises)
+      .then((responses: any[]) => {
+        // Aplanar todos los resultados en un solo array
+        const catalogData = responses
+          .filter((resp) => resp?.result && resp.result.length > 0)
+          .flatMap((resp) => resp.result);
+
+        // Mapear cada patrón con los datos del catálogo usando asset_id
+        this.metrologicalTraceability = patrones.map((eq: any, idx: number) => {
+          const catalogRecord = catalogData.find(
+            (cat: any) => cat.idequipment === eq.asset_id,
+          );
+
+          return {
+            id: null,
+            id_dcc: dccId,
+            id_patron: eq.asset_id || '', // asset_id es el idequipment
+            name_patron: eq.name || '',
+            tz_name: '', // Por agregar (no existe en equipment_catalog)
+            tz_by: catalogRecord?.calibratedby || '',
+            tz_date: catalogRecord?.last_calibration || '',
+            tz_quantity: '', // Por agregar (no existe en equipment_catalog)
+            tz_comm: '', // Por agregar (no existe en equipment_catalog)
+            orden: idx + 1,
+          };
+        });
+        // Actualizar el observable global
+        this.dccDataService.updateMetrologicalTraceability(
+          this.metrologicalTraceability,
+        );
+      })
+      .catch((error) => {
+        console.error('Error loading from equipment_catalog:', error);
+        // Fallback: estructura básica
+        this.metrologicalTraceability = patrones.map(
+          (eq: any, idx: number) => ({
+            id: null,
+            id_dcc: dccId,
+            id_patron: eq.asset_id || '',
+            name_patron: eq.name || '',
+            tz_name: '',
+            tz_by: '',
+            tz_date: '',
+            tz_quantity: '',
+            tz_comm: '',
+            orden: idx + 1,
+          }),
+        );
+        // Actualizar el observable global
+        this.dccDataService.updateMetrologicalTraceability(
+          this.metrologicalTraceability,
+        );
+      });
   }
 }
 

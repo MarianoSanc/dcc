@@ -22,6 +22,10 @@ export interface DCCData {
       end_performance_date: Date;
       issue_date: Date;
       performance_localition: string;
+      next_calibration: Date;
+      accredited: boolean;
+      receipt_date_na?: boolean;
+      next_calibration_na?: boolean;
     };
     laboratory: {
       name: string;
@@ -44,6 +48,8 @@ export interface DCCData {
       email: string;
       phone: string;
       mainSigner?: boolean; // Nueva propiedad para identificar al responsable principal
+      head?: boolean; // Propiedad para Head of Service
+      coordinator?: boolean; // Propiedad para Coordinator
     }>;
     customer: {
       name: string;
@@ -66,6 +72,7 @@ export interface DCCData {
     manufacturer: string;
     serialNumber: string; // Nuevo campo específico
     customerAssetId: string; // Nuevo campo específico
+    comment?: string; // Comentario del item principal
     identifications: Array<{
       issuer: string;
       value: string;
@@ -146,6 +153,16 @@ export interface DCCData {
     description: string;
     norm: string;
     reference: string;
+  }>;
+  ptDescription?: string; // Description del PT para hv_method
+  metrologicalTraceability?: Array<{
+    id_patron: string;
+    name_patron: string;
+    tz_name: string;
+    tz_by: string;
+    tz_date: string;
+    tz_quantity: string;
+    tz_comm: string;
   }>;
   influenceConditions?: Array<{
     id: string;
@@ -259,6 +276,8 @@ export class DccDataService {
           end_performance_date: new Date(),
           issue_date: new Date(),
           performance_localition: '',
+          next_calibration: new Date(),
+          accredited: false,
         },
         laboratory: {
           name: 'HV Test S.A. de C.V.',
@@ -279,12 +298,18 @@ export class DccDataService {
             name: '',
             email: '',
             phone: '',
+            mainSigner: false,
+            head: false,
+            coordinator: false,
           },
           {
             role: '',
             name: '',
             email: '',
             phone: '',
+            mainSigner: false,
+            head: false,
+            coordinator: false,
           },
         ],
         customer: {
@@ -551,7 +576,7 @@ export class DccDataService {
   private updatePTDependentMethod(ptId: string): void {
     const currentData = this.getCurrentData();
     const method1 = currentData.usedMethods?.find(
-      (method) => method.id === 'method_default_1'
+      (method) => method.id === 'method_default_1',
     );
 
     if (method1) {
@@ -591,6 +616,12 @@ export class DccDataService {
     this.dccDataSubject.next(currentData);
   }
 
+  updatePtDescription(ptDescription: string): void {
+    const currentData = this.getCurrentData();
+    currentData.ptDescription = ptDescription;
+    this.dccDataSubject.next(currentData);
+  }
+
   updateInfluenceConditions(influenceConditions: any[]): void {
     const currentData = this.getCurrentData();
     currentData.influenceConditions = influenceConditions;
@@ -600,6 +631,12 @@ export class DccDataService {
   updateMeasuringEquipments(measuringEquipments: any[]): void {
     const currentData = this.getCurrentData();
     currentData.measuringEquipments = measuringEquipments;
+    this.dccDataSubject.next(currentData);
+  }
+
+  updateMetrologicalTraceability(metrologicalTraceability: any[]): void {
+    const currentData = this.getCurrentData();
+    currentData.metrologicalTraceability = metrologicalTraceability;
     this.dccDataSubject.next(currentData);
   }
 
@@ -710,7 +747,7 @@ export class DccDataService {
     if (respPersonsNode) {
       const respPersonNodes = this.getElementsByTagName(
         respPersonsNode,
-        'respPerson'
+        'respPerson',
       );
 
       if (respPersonNodes.length > 0) {
@@ -733,7 +770,7 @@ export class DccDataService {
               mainSigner: isMainSigner, // Nueva propiedad
             };
             return personData;
-          }
+          },
         );
       } else {
         dccData.administrativeData.responsiblePersons = [];
@@ -747,7 +784,7 @@ export class DccDataService {
     if (customerNode) {
       const customerLocationNode = this.getElementByTagName(
         customerNode,
-        'location'
+        'location',
       );
       dccData.administrativeData.customer = {
         name: this.getContentText(customerNode, 'name') || '',
@@ -792,7 +829,7 @@ export class DccDataService {
     if (statementsNode) {
       const statementNodes = this.getElementsByTagName(
         statementsNode,
-        'statement'
+        'statement',
       );
       dccData.statements = statementNodes.map((node) => ({
         id: this.generateId(),
@@ -811,17 +848,17 @@ export class DccDataService {
         respAuthority_name:
           this.getContentText(
             this.getElementByTagName(node, 'respAuthority'),
-            'name'
+            'name',
           ) || '',
         respAuthority_countryCode:
           this.getTextContent(
             this.getElementByTagName(node, 'respAuthority'),
-            'countryCode'
+            'countryCode',
           ) || '',
         respAuthority_postCode:
           this.getTextContent(
             this.getElementByTagName(node, 'respAuthority'),
-            'postCode'
+            'postCode',
           ) || '',
       }));
     }
@@ -829,7 +866,7 @@ export class DccDataService {
     // Parse Measurement Result
     const measurementResultNode = this.getElementByTagName(
       xmlDoc,
-      'measurementResult'
+      'measurementResult',
     );
     if (measurementResultNode) {
       dccData.measurementResult = {
@@ -841,17 +878,17 @@ export class DccDataService {
       // Parse Measuring Equipments
       const measuringEquipmentsNode = this.getElementByTagName(
         measurementResultNode,
-        'measuringEquipments'
+        'measuringEquipments',
       );
       if (measuringEquipmentsNode) {
         const equipmentNodes = this.getElementsByTagName(
           measuringEquipmentsNode,
-          'measuringEquipment'
+          'measuringEquipment',
         );
         dccData.measuringEquipments = equipmentNodes.map((node) => {
           const identificationNodes = this.getElementsByTagName(
             node,
-            'identification'
+            'identification',
           );
           return {
             id: this.generateId(),
@@ -860,7 +897,7 @@ export class DccDataService {
             manufacturer:
               this.getContentText(
                 this.getElementByTagName(node, 'manufacturer'),
-                'name'
+                'name',
               ) || '',
             model: this.getTextContent(node, 'model') || '',
             identifications: identificationNodes.map((idNode) => ({
@@ -875,12 +912,12 @@ export class DccDataService {
       // Parse Influence Conditions
       const influenceConditionsNode = this.getElementByTagName(
         measurementResultNode,
-        'influenceConditions'
+        'influenceConditions',
       );
       if (influenceConditionsNode) {
         const conditionNodes = this.getElementsByTagName(
           influenceConditionsNode,
-          'influenceCondition'
+          'influenceCondition',
         );
         dccData.influenceConditions = conditionNodes.map((node) => {
           const dataNode = this.getElementByTagName(node, 'data');
@@ -917,7 +954,7 @@ export class DccDataService {
       // Parse Results
       const resultsNode = this.getElementByTagName(
         measurementResultNode,
-        'results'
+        'results',
       );
       if (resultsNode) {
         const resultNodes = this.getElementsByTagName(resultsNode, 'result');
@@ -933,7 +970,7 @@ export class DccDataService {
             // Single quantity case
             const singleQuantity = this.getElementByTagName(
               dataNode,
-              'quantity'
+              'quantity',
             );
             if (singleQuantity) {
               quantityNodes = [singleQuantity];
@@ -960,16 +997,16 @@ export class DccDataService {
               // Approach 1: Check for direct realListXMLList (rev_3 format)
               const directRealListNode = this.getElementByTagName(
                 qNode,
-                'realListXMLList'
+                'realListXMLList',
               );
               if (directRealListNode) {
                 const valueXMLListNode = this.getElementByTagName(
                   directRealListNode,
-                  'valueXMLList'
+                  'valueXMLList',
                 );
                 const unitXMLListNode = this.getElementByTagName(
                   directRealListNode,
-                  'unitXMLList'
+                  'unitXMLList',
                 );
 
                 dataResult.dataType = 'realListXMLList';
@@ -981,25 +1018,25 @@ export class DccDataService {
                 // Parse measurement uncertainty if present
                 const uncertaintyNode = this.getElementByTagName(
                   directRealListNode,
-                  'measurementUncertaintyUnivariateXMLList'
+                  'measurementUncertaintyUnivariateXMLList',
                 );
                 if (uncertaintyNode) {
                   const expandedMUNode = this.getElementByTagName(
                     uncertaintyNode,
-                    'expandedMUXMLList'
+                    'expandedMUXMLList',
                   );
                   if (expandedMUNode) {
                     const valueExpandedMUNode = this.getElementByTagName(
                       expandedMUNode,
-                      'valueExpandedMUXMLList'
+                      'valueExpandedMUXMLList',
                     );
                     const coverageFactorNode = this.getElementByTagName(
                       expandedMUNode,
-                      'coverageFactorXMLList'
+                      'coverageFactorXMLList',
                     );
                     const coverageProbabilityNode = this.getElementByTagName(
                       expandedMUNode,
-                      'coverageProbabilityXMLList'
+                      'coverageProbabilityXMLList',
                     );
 
                     dataResult.measurementUncertainty = {
@@ -1023,11 +1060,11 @@ export class DccDataService {
               if (directRealNode) {
                 const valueNode = this.getElementByTagName(
                   directRealNode,
-                  'value'
+                  'value',
                 );
                 const unitNode = this.getElementByTagName(
                   directRealNode,
-                  'unit'
+                  'unit',
                 );
 
                 dataResult.dataType = 'real';
@@ -1041,18 +1078,18 @@ export class DccDataService {
               if (hybridNode) {
                 const realListNode = this.getElementByTagName(
                   hybridNode,
-                  'realListXMLList'
+                  'realListXMLList',
                 );
                 const realNode = this.getElementByTagName(hybridNode, 'real');
 
                 if (realListNode) {
                   const valueXMLListNode = this.getElementByTagName(
                     realListNode,
-                    'valueXMLList'
+                    'valueXMLList',
                   );
                   const unitXMLListNode = this.getElementByTagName(
                     realListNode,
-                    'unitXMLList'
+                    'unitXMLList',
                   );
 
                   dataResult.dataType = 'realListXMLList';
@@ -1064,25 +1101,25 @@ export class DccDataService {
                   // Parse measurement uncertainty from hybrid structure too
                   const uncertaintyNode = this.getElementByTagName(
                     realListNode,
-                    'measurementUncertaintyUnivariateXMLList'
+                    'measurementUncertaintyUnivariateXMLList',
                   );
                   if (uncertaintyNode) {
                     const expandedMUNode = this.getElementByTagName(
                       uncertaintyNode,
-                      'expandedMUXMLList'
+                      'expandedMUXMLList',
                     );
                     if (expandedMUNode) {
                       const valueExpandedMUNode = this.getElementByTagName(
                         expandedMUNode,
-                        'valueExpandedMUXMLList'
+                        'valueExpandedMUXMLList',
                       );
                       const coverageFactorNode = this.getElementByTagName(
                         expandedMUNode,
-                        'coverageFactorXMLList'
+                        'coverageFactorXMLList',
                       );
                       const coverageProbabilityNode = this.getElementByTagName(
                         expandedMUNode,
-                        'coverageProbabilityXMLList'
+                        'coverageProbabilityXMLList',
                       );
 
                       dataResult.measurementUncertainty = {
@@ -1123,7 +1160,7 @@ export class DccDataService {
     if (usedMethodsNode) {
       const methodNodes = this.getElementsByTagName(
         usedMethodsNode,
-        'usedMethod'
+        'usedMethod',
       );
       dccData.usedMethods = methodNodes.map((node) => ({
         id: this.generateId(),
@@ -1165,15 +1202,15 @@ export class DccDataService {
   private parseNewFormatItems(
     xmlDoc: Document,
     dccData: DCCData,
-    mainItemNode: Element
+    mainItemNode: Element,
   ) {
     const manufacturerNode = this.getElementByTagName(
       mainItemNode,
-      'manufacturer'
+      'manufacturer',
     );
     const mainItemIdentificationsNode = this.getElementByTagName(
       mainItemNode,
-      'identifications'
+      'identifications',
     );
     const subItemsNode = this.getElementByTagName(mainItemNode, 'subItems');
 
@@ -1181,7 +1218,7 @@ export class DccDataService {
     if (mainItemIdentificationsNode) {
       identificationNodes = this.getElementsByTagName(
         mainItemIdentificationsNode,
-        'identification'
+        'identification',
       );
     }
 
@@ -1193,7 +1230,7 @@ export class DccDataService {
     // Procesar itemQuantities del main item para object groups
     const itemQuantityNodes = this.getElementsByTagName(
       mainItemNode,
-      'itemQuantity'
+      'itemQuantity',
     );
 
     let currentGroup: any = null;
@@ -1308,15 +1345,15 @@ export class DccDataService {
       mainItem.subItems = subItemNodes.map((node, index) => {
         const subManufacturerNode = this.getElementByTagName(
           node,
-          'manufacturer'
+          'manufacturer',
         );
         const subIdentificationNodes = this.getElementsByTagName(
           node,
-          'identification'
+          'identification',
         );
         const subItemQuantityNodes = this.getElementsByTagName(
           node,
-          'itemQuantity'
+          'itemQuantity',
         );
 
         const subItem = {
@@ -1342,7 +1379,7 @@ export class DccDataService {
           // Buscar la opción exacta
           const selectedOption = this.findExactOptionByNameAndIssuer(
             normalizedName,
-            mappedIssuer
+            mappedIssuer,
           );
 
           if (selectedOption) {
@@ -1416,7 +1453,7 @@ export class DccDataService {
   private parseOldFormatItems(
     xmlDoc: Document,
     dccData: DCCData,
-    itemsRootNode: Element
+    itemsRootNode: Element,
   ) {
     // Usar la lógica existente para el formato viejo
     const allItemNodes = this.getElementsByTagName(itemsRootNode, 'item');
@@ -1426,7 +1463,7 @@ export class DccDataService {
       // Parse main item basic info
       const manufacturerNode = this.getElementByTagName(
         mainItemNode,
-        'manufacturer'
+        'manufacturer',
       );
 
       // Extraer serial number y customer asset ID del primer item (formato viejo)
@@ -1438,12 +1475,12 @@ export class DccDataService {
       if (coreDataNode) {
         const coreIdentificationsNode = this.getElementByTagName(
           coreDataNode,
-          'identifications'
+          'identifications',
         );
         if (coreIdentificationsNode) {
           const coreIdentificationNodes = this.getElementsByTagName(
             coreIdentificationsNode,
-            'identification'
+            'identification',
           );
 
           coreIdentificationNodes.forEach((idNode) => {
@@ -1481,11 +1518,11 @@ export class DccDataService {
         const subItemNode = allItemNodes[i];
         const subManufacturerNode = this.getElementByTagName(
           subItemNode,
-          'manufacturer'
+          'manufacturer',
         );
         const subIdentificationNodes = this.getElementsByTagName(
           subItemNode,
-          'identification'
+          'identification',
         );
 
         const subItem = {
@@ -1508,7 +1545,7 @@ export class DccDataService {
           const mappedIssuer = this.mapIssuerToDisplayCase(issuer);
           const selectedOption = this.findExactOptionByNameAndIssuer(
             normalizedName,
-            mappedIssuer
+            mappedIssuer,
           );
 
           if (selectedOption) {
@@ -1596,7 +1633,7 @@ export class DccDataService {
   // Helper methods for XML parsing
   private getElementByTagName(
     parent: Document | Element | null,
-    tagName: string
+    tagName: string,
   ): Element | null {
     if (!parent) return null;
 
@@ -1621,7 +1658,7 @@ export class DccDataService {
 
   private getElementsByTagName(
     parent: Element | null,
-    tagName: string
+    tagName: string,
   ): Element[] {
     if (!parent) return [];
 
@@ -1634,7 +1671,7 @@ export class DccDataService {
 
   private getTextContent(
     parent: Element | null,
-    tagName: string
+    tagName: string,
   ): string | null {
     if (!parent) return null;
     const element = this.getElementByTagName(parent, tagName);
@@ -1643,7 +1680,7 @@ export class DccDataService {
 
   private getContentText(
     parent: Element | null,
-    tagName: string
+    tagName: string,
   ): string | null {
     if (!parent) return null;
     const element = this.getElementByTagName(parent, tagName);
@@ -1701,7 +1738,7 @@ export class DccDataService {
 
         this.loadFromObject(mergedData);
         return mergedData;
-      })
+      }),
     );
   }
 
@@ -1734,7 +1771,10 @@ export class DccDataService {
   }
 
   // Método para obtener todos los métodos usados desde la tabla dcc_usedmethod
-  getAllUsedMethodsFromDatabase(database: string): Observable<any[]> {
+  getAllUsedMethodsFromDatabase(
+    database: string,
+    ptId?: string,
+  ): Observable<any[]> {
     const getUsedMethods = {
       action: 'get',
       bd: database,
@@ -1744,9 +1784,22 @@ export class DccDataService {
     return this.apiService.post(getUsedMethods, UrlClass.URLNuevo).pipe(
       map((response: any) => {
         const rows = response?.result || [];
+
+        // Filtrar: basic_uncertainty va en todos, hv_method solo si coincide el PT
+        const filteredRows = rows.filter((row: any) => {
+          if (row.refType === 'basic_uncertainty') {
+            return true; // Incluir siempre
+          }
+          if (row.refType === 'hv_method') {
+            // Solo incluir si el PT coincide
+            return !ptId || !row.pt || row.pt === ptId;
+          }
+          return true; // Otros refType se incluyen
+        });
+
         // Agrupar por método (por refType, name, description, norm)
         const grouped: { [key: string]: any } = {};
-        rows.forEach((row: any) => {
+        filteredRows.forEach((row: any) => {
           const key = `${row.refType}|${row.name}|${row.description}|${row.norm}`;
           if (!grouped[key]) {
             grouped[key] = {
@@ -1770,7 +1823,7 @@ export class DccDataService {
           }
         });
         return Object.values(grouped);
-      })
+      }),
     );
   }
 
@@ -1819,13 +1872,13 @@ export class DccDataService {
 
   private findOptionByName(name: string): any {
     return this.getIdentificationOptions().find(
-      (option) => option.name === name
+      (option) => option.name === name,
     );
   }
 
   private findOptionByNameAndIssuer(name: string, issuer: string): any {
     return this.getIdentificationOptions().find(
-      (option) => option.name === name && option.issuer === issuer
+      (option) => option.name === name && option.issuer === issuer,
     );
   }
 
@@ -1927,7 +1980,7 @@ export class DccDataService {
 
     // Buscar coincidencia exacta
     const exactMatch = identificationOptions.find(
-      (option) => option.name === name && option.issuer === issuer
+      (option) => option.name === name && option.issuer === issuer,
     );
 
     if (exactMatch) {
@@ -1936,7 +1989,7 @@ export class DccDataService {
 
     // Si no hay coincidencia exacta con issuer, buscar solo por name
     const nameMatch = identificationOptions.find(
-      (option) => option.name === name
+      (option) => option.name === name,
     );
 
     if (nameMatch) {
@@ -1966,7 +2019,7 @@ export class DccDataService {
       (result) =>
         !result.refType?.includes('hv_') &&
         !result.name?.includes('SF ') &&
-        !result.name?.includes('Scale Factor')
+        !result.name?.includes('Scale Factor'),
     );
 
     // Combinar: mantener los resultados no-PT23 + agregar los nuevos resultados PT-23

@@ -27,7 +27,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
 
   constructor(
     private dccDataService: DccDataService,
-    private pdfGeneratorService: PdfGeneratorService
+    private pdfGeneratorService: PdfGeneratorService,
   ) {}
 
   ngOnInit() {
@@ -36,7 +36,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
         // Antes de generar el XML, fuerza recarga de resultados desde la BD
         this.dccData = data;
         this.reloadResultsFromDBAndGenerateXML();
-      })
+      }),
     );
   }
 
@@ -60,12 +60,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
     };
     this.dccDataService.post(nameQuery).subscribe({
       next: (nameResp: any) => {
-        console.log('Name response:', nameResp);
         if (nameResp?.result?.[0]?.name_measurement && this.dccData) {
-          console.log(
-            'Updating measurementResult name to:',
-            nameResp.result[0].name_measurement
-          );
           if (!this.dccData.measurementResult) {
             this.dccData.measurementResult = { name: '', description: '' };
           }
@@ -270,20 +265,20 @@ export class PreviewComponent implements OnInit, OnDestroy {
       <dcc:software>
         <dcc:name>
           <dcc:content>${this.escapeXml(
-            data.administrativeData.software.name
+            data.administrativeData.software.name,
           )}</dcc:content>
         </dcc:name>
         <dcc:release>${this.escapeXml(
-          data.administrativeData.software.version
+          data.administrativeData.software.version,
         )}</dcc:release>
         <dcc:type>${this.escapeXml(
-          data.administrativeData.software.type
+          data.administrativeData.software.type,
         )}</dcc:type>
         ${
           data.administrativeData.software.description
             ? `<dcc:description>
           <dcc:content>${this.escapeXml(
-            data.administrativeData.software.description
+            data.administrativeData.software.description,
           )}</dcc:content>
         </dcc:description>`
             : ''
@@ -294,40 +289,40 @@ export class PreviewComponent implements OnInit, OnDestroy {
     <!-- Datos centrales -->
     <dcc:coreData>
       <dcc:countryCodeISO3166_1>${this.escapeXml(
-        data.administrativeData.core.country_code
+        data.administrativeData.core.country_code,
       )}</dcc:countryCodeISO3166_1>
       <dcc:usedLangCodeISO639_1>${this.escapeXml(
-        data.administrativeData.core.language
+        data.administrativeData.core.language,
       )}</dcc:usedLangCodeISO639_1>
       <dcc:mandatoryLangCodeISO639_1>${this.escapeXml(
-        data.administrativeData.core.language
+        data.administrativeData.core.language,
       )}</dcc:mandatoryLangCodeISO639_1>
       <dcc:uniqueIdentifier>${this.escapeXml(
-        pdfData.certificate_number
+        pdfData.certificate_number,
       )}</dcc:uniqueIdentifier>
       ${
         pdfData.beginPerformanceDate
           ? `<dcc:beginPerformanceDate>${this.escapeXml(
-              pdfData.beginPerformanceDate
+              pdfData.beginPerformanceDate,
             )}</dcc:beginPerformanceDate>`
           : ''
       }
       ${
         pdfData.endPerformanceDate
           ? `<dcc:endPerformanceDate>${this.escapeXml(
-              pdfData.endPerformanceDate
+              pdfData.endPerformanceDate,
             )}</dcc:endPerformanceDate>`
           : `<dcc:endPerformanceDate>${this.escapeXml(
-              pdfData.beginPerformanceDate
+              pdfData.beginPerformanceDate,
             )}</dcc:endPerformanceDate>`
       }
       <dcc:performanceLocation>${this.escapeXml(
-        pdfData.performanceLocation
+        pdfData.performanceLocation,
       )}</dcc:performanceLocation>
       ${
         pdfData.issue_date
           ? `<dcc:issueDate>${this.escapeXml(
-              pdfData.issue_date
+              pdfData.issue_date,
             )}</dcc:issueDate>`
           : ''
       }
@@ -343,34 +338,34 @@ export class PreviewComponent implements OnInit, OnDestroy {
       <dcc:contact>
         <dcc:name>
           <dcc:content lang="en">${this.escapeXml(
-            data.administrativeData.laboratory.name
+            data.administrativeData.laboratory.name,
           )}</dcc:content>
         </dcc:name>
         ${
           data.administrativeData.laboratory.phone
             ? `<dcc:phone>${this.escapeXml(
-                data.administrativeData.laboratory.phone
+                data.administrativeData.laboratory.phone,
               )}</dcc:phone>`
             : ''
         }
         <dcc:location>
           <dcc:city>${this.escapeXml(
-            data.administrativeData.laboratory.city
+            data.administrativeData.laboratory.city,
           )}</dcc:city>
           <dcc:countryCode>${this.escapeXml(
-            data.administrativeData.core.country_code
+            data.administrativeData.core.country_code,
           )}</dcc:countryCode>
           <dcc:postCode>${this.escapeXml(
-            data.administrativeData.laboratory.postal_code
+            data.administrativeData.laboratory.postal_code,
           )}</dcc:postCode>
           <dcc:state>${this.escapeXml(
-            data.administrativeData.laboratory.state
+            data.administrativeData.laboratory.state,
           )}</dcc:state>
           <dcc:street>${this.escapeXml(
-            data.administrativeData.laboratory.street
+            data.administrativeData.laboratory.street,
           )}</dcc:street>
           <dcc:streetNo>${this.escapeXml(
-            data.administrativeData.laboratory.street_number
+            data.administrativeData.laboratory.street_number,
           )}</dcc:streetNo>
         </dcc:location>
       </dcc:contact>
@@ -386,7 +381,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
         <dcc:person>
           <dcc:name>
             <dcc:content>${this.escapeXml(
-              this.getPersonDisplayName(person)
+              this.getPersonDisplayName(person),
             )}</dcc:content>
           </dcc:name>${
             person.email
@@ -402,7 +397,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
         </dcc:person>
         <dcc:role>${this.escapeXml(person.role)}</dcc:role>
         ${person.mainSigner ? '<dcc:mainSigner>true</dcc:mainSigner>' : ''}
-      </dcc:respPerson>`
+      </dcc:respPerson>`,
         )
         .join('')}
     </dcc:respPersons>
@@ -411,27 +406,27 @@ export class PreviewComponent implements OnInit, OnDestroy {
     <dcc:customer>
       <dcc:name>
         <dcc:content>${this.escapeXml(
-          data.administrativeData.customer.name
+          data.administrativeData.customer.name,
         )}</dcc:content>
       </dcc:name>
       <dcc:location>
         <dcc:street>${this.escapeXml(
-          data.administrativeData.customer.street
+          data.administrativeData.customer.street,
         )}</dcc:street>
         <dcc:streetNo>${this.escapeXml(
-          data.administrativeData.customer.street_number
+          data.administrativeData.customer.street_number,
         )}</dcc:streetNo>
         <dcc:city>${this.escapeXml(
-          data.administrativeData.customer.city
+          data.administrativeData.customer.city,
         )}</dcc:city>
         <dcc:state>${this.escapeXml(
-          data.administrativeData.customer.state
+          data.administrativeData.customer.state,
         )}</dcc:state>
         <dcc:countryCode>${this.escapeXml(
-          data.administrativeData.core.country_code
+          data.administrativeData.core.country_code,
         )}</dcc:countryCode>
         <dcc:postCode>${this.escapeXml(
-          data.administrativeData.customer.postal_code
+          data.administrativeData.customer.postal_code,
         )}</dcc:postCode>
       </dcc:location>
     </dcc:customer>
@@ -519,14 +514,14 @@ export class PreviewComponent implements OnInit, OnDestroy {
             <dcc:name>
               <dcc:content lang="en">${this.escapeXml(id.name)}</dcc:content>
             </dcc:name>
-          </dcc:identification>`
+          </dcc:identification>`,
             )
             .join('')}
         </dcc:identifications>`;
   }
 
   private generateItemQuantitiesXML(
-    objectIdentifications?: any[] | undefined
+    objectIdentifications?: any[] | undefined,
   ): string {
     if (!objectIdentifications || objectIdentifications.length === 0) return '';
 
@@ -569,7 +564,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
               <si:value>${this.escapeXml(qty.value)}</si:value>
               <si:unit>${this.escapeXml(qty.unit)}</si:unit>
             </si:real>
-          </dcc:itemQuantity>`
+          </dcc:itemQuantity>`,
             )
             .join('')}
         </dcc:itemQuantities>`;
@@ -586,7 +581,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
           <dcc:item>
             <dcc:name>
               <dcc:content lang="en">${this.escapeXml(
-                subItem.name
+                subItem.name,
               )}</dcc:content>
             </dcc:name>
             ${
@@ -595,7 +590,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
             <dcc:manufacturer>
               <dcc:name>
                 <dcc:content lang="en">${this.escapeXml(
-                  subItem.manufacturer
+                  subItem.manufacturer,
                 )}</dcc:content>
               </dcc:name>
             </dcc:manufacturer>`
@@ -608,7 +603,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
             }
             ${this.generateSubItemIdentificationsXML(subItem.identifications)}
             ${this.generateSubItemQuantitiesXML(subItem.itemQuantities)}
-          </dcc:item>`
+          </dcc:item>`,
             )
             .join('')}
         </dcc:subItems>`;
@@ -630,12 +625,12 @@ export class PreviewComponent implements OnInit, OnDestroy {
                     ? `
                 <dcc:name>
                   <dcc:content lang="en">${this.escapeXml(
-                    id.name
+                    id.name,
                   )}</dcc:content>
                 </dcc:name>`
                     : ''
                 }
-              </dcc:identification>`
+              </dcc:identification>`,
                 )
                 .join('')}
             </dcc:identifications>`;
@@ -654,14 +649,14 @@ export class PreviewComponent implements OnInit, OnDestroy {
               }>
                 <dcc:name>
                   <dcc:content lang="en">${this.escapeXml(
-                    qty.name
+                    qty.name,
                   )}</dcc:content>
                 </dcc:name>
                 <si:real>
                   <si:value>${this.escapeXml(qty.value)}</si:value>
                   <si:unit>${this.escapeXml(qty.unit)}</si:unit>
                 </si:real>
-              </dcc:itemQuantity>`
+              </dcc:itemQuantity>`,
                 )
                 .join('')}
             </dcc:itemQuantities>`;
@@ -707,13 +702,13 @@ export class PreviewComponent implements OnInit, OnDestroy {
         ${
           statement.reference
             ? `<dcc:reference>${this.escapeXml(
-                statement.reference
+                statement.reference,
               )}</dcc:reference>`
             : ''
         }
         <dcc:declaration>
           <dcc:content lang="en">${this.escapeXml(
-            statement.declaration || ''
+            statement.declaration || '',
           )}</dcc:content>
         </dcc:declaration>
         ${
@@ -724,7 +719,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
             : ''
         }
         ${this.generateRespAuthorityXML(statement)}
-      </dcc:statement>`
+      </dcc:statement>`,
       )
       .join('');
   }
@@ -745,7 +740,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
               ? `
           <dcc:name>
             <dcc:content lang="en">${this.escapeXml(
-              statement.respAuthority_name
+              statement.respAuthority_name,
             )}</dcc:content>
           </dcc:name>`
               : ''
@@ -756,7 +751,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
                 ? `
             <dcc:city>Ciudad de México</dcc:city>
             <dcc:countryCode>${this.escapeXml(
-              statement.respAuthority_countryCode
+              statement.respAuthority_countryCode,
             )}</dcc:countryCode>`
                 : ''
             }
@@ -764,7 +759,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
               statement.respAuthority_postCode
                 ? `
             <dcc:postCode>${this.escapeXml(
-              statement.respAuthority_postCode
+              statement.respAuthority_postCode,
             )}</dcc:postCode>`
                 : ''
             }
@@ -786,7 +781,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
           </dcc:name>
           <dcc:description>
             <dcc:content lang="en">${this.escapeXml(
-              method.description
+              method.description,
             )}</dcc:content>
           </dcc:description>
           ${
@@ -795,7 +790,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
               : ''
           }
           ${this.generateUsedMethodQuantitiesXML(method)}
-        </dcc:usedMethod>`
+        </dcc:usedMethod>`,
           )
           .join('')}
       </dcc:usedMethods>`;
@@ -822,7 +817,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
                 <si:value>${this.escapeXml(qty.value)}</si:value>
                 <si:unit>${this.escapeXml(qty.unit || '')}</si:unit>
               </si:real>
-            </dcc:usedMethodQuantity>`
+            </dcc:usedMethodQuantity>`,
               )
               .join('')}
           </dcc:usedMethodQuantities>`;
@@ -840,7 +835,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
         <dcc:measuringEquipment refType="${this.escapeXml(equipment.refType)}">
           <dcc:name>
             <dcc:content lang="en">${this.escapeXml(
-              equipment.name
+              equipment.name,
             )}</dcc:content>
           </dcc:name>
           ${
@@ -849,7 +844,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
           <dcc:manufacturer>
             <dcc:name>
               <dcc:content lang="en">${this.escapeXml(
-                equipment.manufacturer
+                equipment.manufacturer,
               )}</dcc:content>
             </dcc:name>
           </dcc:manufacturer>`
@@ -861,7 +856,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
               : ''
           }
           ${this.generateEquipmentIdentificationsXML(equipment.identifications)}
-        </dcc:measuringEquipment>`
+        </dcc:measuringEquipment>`,
           )
           .join('')}
       </dcc:measuringEquipments>`;
@@ -877,15 +872,15 @@ export class PreviewComponent implements OnInit, OnDestroy {
                 (identification) => `
             <dcc:identification>
               <dcc:issuer>${this.mapIssuerToLowerCase(
-                identification.issuer
+                identification.issuer,
               )}</dcc:issuer>
               <dcc:value>${this.escapeXml(identification.value)}</dcc:value>
               <dcc:name>
                 <dcc:content lang="en">${this.escapeXml(
-                  identification.name
+                  identification.name,
                 )}</dcc:content>
               </dcc:name>
-            </dcc:identification>`
+            </dcc:identification>`,
               )
               .join('')}
           </dcc:identifications>`;
@@ -900,21 +895,22 @@ export class PreviewComponent implements OnInit, OnDestroy {
         ${data.influenceConditions
           .filter(
             (condition) =>
-              condition.subBlock.value && condition.subBlock.value.trim() !== ''
+              condition.subBlock.value &&
+              condition.subBlock.value.trim() !== '',
           )
           .map(
             (condition) => `
         <dcc:influenceCondition refType="${this.escapeXml(condition.refType)}">
           <dcc:name>
             <dcc:content lang="en">${this.escapeXml(
-              condition.name
+              condition.name,
             )}</dcc:content>
           </dcc:name>
           <dcc:data>
             <dcc:quantity>
               <dcc:name>
                 <dcc:content lang="en">${this.escapeXml(
-                  condition.subBlock.name
+                  condition.subBlock.name,
                 )}</dcc:content>
               </dcc:name>
               <si:real>
@@ -923,7 +919,7 @@ export class PreviewComponent implements OnInit, OnDestroy {
               </si:real>
             </dcc:quantity>
           </dcc:data>
-        </dcc:influenceCondition>`
+        </dcc:influenceCondition>`,
           )
           .join('')}
       </dcc:influenceConditions>`;
@@ -988,7 +984,7 @@ ${result.data
                 }>
                   <dcc:name>
                     <dcc:content lang="en">${this.escapeXml(
-                      mapInfo.xmlName
+                      mapInfo.xmlName,
                     )}</dcc:content>
                   </dcc:name>
 ${this.generateQuantityValueXML(forcedQty)}
@@ -1083,10 +1079,10 @@ ${this.generateResultDataXML(result.data)}
       let xmlContent = `
                     <si:realListXMLList>
                       <si:valueXMLList>${this.escapeXml(
-                        data.valueXMLList || ''
+                        data.valueXMLList || '',
                       )}</si:valueXMLList>
                       <si:unitXMLList>${this.escapeXml(
-                        data.unitXMLList || ''
+                        data.unitXMLList || '',
                       )}</si:unitXMLList>`;
 
       // Agregar incertidumbre de medición si existe
@@ -1100,15 +1096,15 @@ ${this.generateResultDataXML(result.data)}
                         <si:expandedMUXMLList>
                           <si:valueExpandedMUXMLList>${this.escapeXml(
                             data.measurementUncertainty.expandedMU
-                              .valueExpandedMUXMLList || ''
+                              .valueExpandedMUXMLList || '',
                           )}</si:valueExpandedMUXMLList>
                           <si:coverageFactorXMLList>${this.escapeXml(
                             data.measurementUncertainty.expandedMU
-                              .coverageFactorXMLList || ''
+                              .coverageFactorXMLList || '',
                           )}</si:coverageFactorXMLList>
                           <si:coverageProbabilityXMLList>${this.escapeXml(
                             data.measurementUncertainty.expandedMU
-                              .coverageProbabilityXMLList || ''
+                              .coverageProbabilityXMLList || '',
                           )}</si:coverageProbabilityXMLList>
                         </si:expandedMUXMLList>
                       </si:measurementUncertaintyUnivariateXMLList>`;
@@ -1142,7 +1138,7 @@ ${this.generateResultDataXML(result.data)}
             <dcc:content lang="en">${this.escapeXml(item.name)}</dcc:content>
           </dcc:name>
           ${this.generateQuantityValueXML(item)}
-        </dcc:quantity>`
+        </dcc:quantity>`,
       )
       .join('');
   }
@@ -1168,9 +1164,6 @@ ${this.generateResultDataXML(result.data)}
 
     // Preparar los datos para la plantilla
     const pdfData = this.preparePdfData();
-
-    // Log detallado de lo que se envía al backend
-    console.log('[PDF][ENVIADO AL BACKEND]', JSON.stringify(pdfData, null, 2));
 
     Swal.fire({
       title: 'Generando documento...',
@@ -1219,7 +1212,7 @@ ${this.generateResultDataXML(result.data)}
                 <p>Se generó el documento Word.</p>
                 <p><small>LibreOffice no está disponible para convertir a PDF.</small></p>
               `,
-              confirmButtonText: 'Descargar DOCX',
+              confirmButtonText: 'Descargar DRAFT DOCX',
             }).then((result) => {
               if (result.isConfirmed && response.docx_url) {
                 window.open(response.docx_url, '_blank');
@@ -1270,7 +1263,7 @@ ${this.generateResultDataXML(result.data)}
       };
       const tabla = data.results.find(
         (r: any) =>
-          Array.isArray(r.data) && r.data.some((q: any) => q.name === 'Range')
+          Array.isArray(r.data) && r.data.some((q: any) => q.name === 'Range'),
       );
       if (tabla && Array.isArray(tabla.data)) {
         tabla.data.forEach((qty: any) => {
@@ -1309,7 +1302,7 @@ ${this.generateResultDataXML(result.data)}
         console.log(
           `[PDF] [${idx}] Procesando resultado individual:`,
           r.name,
-          r
+          r,
         );
         // Si data es array y es la tabla principal, omitir para individuales
         if (
@@ -1318,7 +1311,7 @@ ${this.generateResultDataXML(result.data)}
           r.data.some((q: any) => q.name === 'Range')
         ) {
           console.log(
-            `[PDF] [${idx}] data es array de tabla, se omite para individuales.`
+            `[PDF] [${idx}] data es array de tabla, se omite para individuales.`,
           );
           return;
         }
@@ -1342,13 +1335,13 @@ ${this.generateResultDataXML(result.data)}
             linearityValue = r.data[0].value;
             console.log(
               `[PDF] [${idx}] linearity_sf_obtained (array):`,
-              linearityValue
+              linearityValue,
             );
           } else if (r.data?.value) {
             linearityValue = r.data.value;
             console.log(
               `[PDF] [${idx}] linearity_sf_obtained (obj):`,
-              linearityValue
+              linearityValue,
             );
           } else {
             console.log(`[PDF] [${idx}] linearity_sf_obtained sin valor.`);
@@ -1360,13 +1353,13 @@ ${this.generateResultDataXML(result.data)}
             linearityTestResults = r.data[0].value;
             console.log(
               `[PDF] [${idx}] linearity_test_results (array):`,
-              linearityTestResults
+              linearityTestResults,
             );
           } else if (r.data?.value) {
             linearityTestResults = r.data.value;
             console.log(
               `[PDF] [${idx}] linearity_test_results (obj):`,
-              linearityTestResults
+              linearityTestResults,
             );
           } else {
             console.log(`[PDF] [${idx}] linearity_test_results sin valor.`);
@@ -1384,7 +1377,7 @@ ${this.generateResultDataXML(result.data)}
       if (linearityTestResults !== null) {
         console.log(
           '[PDF] Agregando linearity_test_results:',
-          linearityTestResults
+          linearityTestResults,
         );
         results.push({ linearity_test_results: linearityTestResults });
       }
@@ -1441,12 +1434,18 @@ ${this.generateResultDataXML(result.data)}
       Array.isArray(data.influenceConditions) &&
       data.influenceConditions.length > 0
     ) {
-      influenceConditions = data.influenceConditions.map((cond: any) => ({
-        refType: cond.refType || '',
-        value: cond.subBlock?.value || '',
-        name: cond.name || '',
-        unit: cond.subBlock?.unit || '',
-      }));
+      influenceConditions = data.influenceConditions.map((cond: any) => {
+        const value = cond.subBlock?.value || '';
+        // Si no tiene valor (especialmente para pressure), enviar "N/A"
+        const displayValue = value.trim() === '' ? 'N/A' : value;
+
+        return {
+          refType: cond.refType || '',
+          value: displayValue,
+          name: cond.name || '',
+          unit: cond.subBlock?.unit || '',
+        };
+      });
     }
 
     // Subitems: todos menos el principal (primer item)
@@ -1485,15 +1484,18 @@ ${this.generateResultDataXML(result.data)}
     const labDirection = this.buildFullAddress(admin.laboratory);
     const performanceLocation = `${labName}\n${labDirection}`;
 
-    // Fecha de recepción
-    const date_receipt = admin.core?.receipt_date
-      ? this.formatDateForPdf(admin.core.receipt_date)
-      : '';
+    // Fecha de recepción - enviar N/A si está marcado o si la fecha es inválida
+    const date_receipt =
+      admin.core?.receipt_date_na || this.isDateNA(admin.core?.receipt_date)
+        ? 'N/A'
+        : admin.core?.receipt_date
+          ? this.formatDateForPdf(admin.core.receipt_date)
+          : '';
 
     // PerformanceDate y rango
     const is_range_date = !!admin.core?.is_range_date;
     const beginPerformanceDate = this.formatDateForPdf(
-      admin.core?.performance_date
+      admin.core?.performance_date,
     );
     const endPerformanceDate =
       is_range_date && admin.core?.end_performance_date
@@ -1511,6 +1513,27 @@ ${this.generateResultDataXML(result.data)}
       subitems,
     });
 
+    // Determinar performance location type y dirección del proyecto
+    const performanceLocationType =
+      admin.core?.performance_localition || 'Laboratory';
+    let projectLocation = '';
+
+    // Si es 'Other', obtener la dirección del proyecto desde dccData
+    if (performanceLocationType === 'Other') {
+      // Obtener la dirección del proyecto (ya guardada en dccData o calcularla)
+      projectLocation =
+        (this.dccDataService.getCurrentData() as any).projectLocation || '';
+    }
+
+    // Next calibration - enviar N/A si está marcado o si la fecha es inválida
+    const nextCalibration =
+      admin.core?.next_calibration_na ||
+      this.isDateNA(admin.core?.next_calibration)
+        ? 'N/A'
+        : admin.core?.next_calibration
+          ? this.formatDateForPdf(admin.core.next_calibration)
+          : '';
+
     return {
       pt,
       measuringEquipments,
@@ -1522,6 +1545,12 @@ ${this.generateResultDataXML(result.data)}
       endPerformanceDate,
       performanceLocation,
       is_range_date,
+      accredited: !!admin.core?.accredited,
+      next_calibration: nextCalibration,
+
+      // Performance Location
+      performance_location_type: performanceLocationType,
+      project_location: projectLocation,
 
       // Customer Data
       customer_name: customer.name || '',
@@ -1539,6 +1568,16 @@ ${this.generateResultDataXML(result.data)}
       item_manufacturer: data.items?.[0]?.manufacturer || '',
       item_model: data.items?.[0]?.model || '',
       item_serial_number: data.items?.[0]?.serialNumber || '',
+      item_customer_asset_id: data.items?.[0]?.customerAssetId || '',
+      item_comment: data.items?.[0]?.comment || '',
+
+      // PT Description and PT Method from usedMethods (hv_method)
+      pt_description:
+        this.getPtDescriptionFromUsedMethods(data.usedMethods, pt) || '',
+      pt_method: this.getPtMethodFromUsedMethods(data.usedMethods, pt) || '',
+
+      // Metrological Traceability
+      metrologicalTraceability: data.metrologicalTraceability || [],
 
       // Responsible persons
       responsiblePersons,
@@ -1596,13 +1635,130 @@ ${this.generateResultDataXML(result.data)}
   private formatDateForPdf(date: Date | string | undefined): string {
     if (!date) return '';
 
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    // Si es string, asumir que ya está en formato DD/MM/YYYY o ISO
+    if (typeof date === 'string') {
+      // Si ya tiene el formato DD/MM/YYYY, retornarlo tal cual
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+        return date;
+      }
 
-    // Formato: DD/MM/YYYY o el que prefieras
-    const day = dateObj.getDate().toString().padStart(2, '0');
-    const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-    const year = dateObj.getFullYear();
+      // Si es ISO (YYYY-MM-DD), convertir a DD/MM/YYYY
+      if (/^\d{4}-\d{2}-\d{2}/.test(date)) {
+        const parts = date.split('-');
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+
+      // Si es otro formato, intentar parsearlo
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) return date; // Retornar como está si no se puede parsear
+
+      // Para evitar problemas de zona horaria, usar UTC
+      const day = dateObj.getUTCDate().toString().padStart(2, '0');
+      const month = (dateObj.getUTCMonth() + 1).toString().padStart(2, '0');
+      const year = dateObj.getUTCFullYear();
+      return `${day}/${month}/${year}`;
+    }
+
+    // Si es Date object, usar UTC para evitar problemas de zona horaria
+    const day = date.getUTCDate().toString().padStart(2, '0');
+    const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+    const year = date.getUTCFullYear();
 
     return `${day}/${month}/${year}`;
+  }
+
+  /**
+   * Obtiene PT Description desde usedMethods
+   * Busca el método del tipo hv_method y retorna: description + norm
+   */
+  private getPtDescriptionFromUsedMethods(
+    usedMethods: any[] | undefined,
+    pt: string,
+  ): string {
+    if (!usedMethods || usedMethods.length === 0) {
+      return '';
+    }
+
+    // Buscar el método que sea de tipo hv_method (el que viene de BD para el PT específico)
+    const ptMethod = usedMethods.find(
+      (method: any) => method.refType === 'hv_method',
+    );
+
+    if (!ptMethod) {
+      return '';
+    }
+
+    // Construir: description, norm
+    const description = ptMethod.description || '';
+    const norm = ptMethod.norm ? `, ${ptMethod.norm}` : '';
+    const result = `${description}${norm}`;
+
+    return result;
+  }
+
+  /**
+   * Obtiene PT Method desde usedMethods
+   * Busca el método del tipo hv_method y retorna: pt + name
+   */
+  private getPtMethodFromUsedMethods(
+    usedMethods: any[] | undefined,
+    pt: string,
+  ): string {
+    if (!usedMethods || usedMethods.length === 0) {
+      return '';
+    }
+
+    // Buscar el método que sea de tipo hv_method (el que viene de BD para el PT específico)
+    const ptMethod = usedMethods.find(
+      (method: any) => method.refType === 'hv_method',
+    );
+
+    if (!ptMethod) {
+      return '';
+    }
+
+    // Construir: pt + name
+    const name = ptMethod.name || '';
+    const result = `${pt} ${name}`;
+
+    return result;
+  }
+
+  /**
+   * Verifica si una fecha debe considerarse como N/A
+   * Retorna true si la fecha es null, undefined, inválida, o representa 00/00/0000
+   */
+  private isDateNA(date: any): boolean {
+    if (!date) return true;
+
+    // Si es un Date object, verificar si es válido
+    if (date instanceof Date) {
+      // Verificar si es una fecha inválida
+      if (isNaN(date.getTime())) return true;
+
+      // Verificar si es 00/00/0000 (año 0 o año 1900 con mes/día 0)
+      const year = date.getFullYear();
+      if (year === 0 || year === 1900) return true;
+    }
+
+    // Si es un string, verificar si representa 00/00/0000 o está vacío
+    if (typeof date === 'string') {
+      const trimmed = date.trim();
+      if (
+        trimmed === '' ||
+        trimmed === '0000-00-00' ||
+        trimmed === '00/00/0000'
+      )
+        return true;
+
+      // Intentar parsear y verificar
+      const parsed = new Date(date);
+      if (isNaN(parsed.getTime())) return true;
+
+      const year = parsed.getFullYear();
+      if (year === 0 || year === 1900) return true;
+    }
+
+    return false;
   }
 }

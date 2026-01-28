@@ -18,7 +18,7 @@
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   text-align: center;
-  max-width: 500px;
+  max-width: 900px;
   width: 100%;
 }
 
@@ -38,6 +38,8 @@
   display: flex;
   gap: 15px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .option-btn {
@@ -52,6 +54,10 @@
   background: #2196f3;
   color: white;
   transition: background 0.3s;
+  flex: 1;
+  min-width: 180px;
+  max-width: 200px;
+  justify-content: center;
 }
 
 .option-btn.create-btn {
@@ -59,6 +65,12 @@
 }
 .option-btn.create-btn:hover {
   background: #388e3c;
+}
+.option-btn.create-ie-btn {
+  background: #9c27b0;
+}
+.option-btn.create-ie-btn:hover {
+  background: #7b1fa2;
 }
 .option-btn.load-dcc-btn {
   background: #ff9800;
@@ -465,7 +477,7 @@
   top: 0;
   left: 0;
   width: 100vw;
-  height: 100vh;
+  height: 120vh;
   background: rgba(0, 0, 0, 0.3);
   z-index: 1000;
 }
@@ -553,12 +565,20 @@
   align-items: center;
 }
 
+.dcc-select-modal {
+  /* Hereda el layout amplio del modal de creación */
+  max-width: 900px;
+  width: 95%;
+  max-height: 85vh;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
 .dcc-select-modal .modal-header h3 {
   margin: 0;
   font-size: 1.15em;
   color: #333;
 }
-
 .dcc-select-modal .close-btn {
   background: none;
   border: none;
@@ -572,20 +592,25 @@
 .dcc-select-modal .close-btn:hover {
   background: #eee;
 }
-
 .dcc-select-modal .modal-body {
   padding: 24px;
+  overflow-y: auto;
+  flex: 1;
 }
 
 /* Estilos para el modal de creación de DCC */
 .create-dcc-modal {
   background: #fff;
   border-radius: 8px;
-  max-width: 400px;
-  width: 100%;
+  max-width: 900px;
+  width: 95%;
+  max-height: 85vh;
+  min-height: 400px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
   padding: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .create-dcc-modal .modal-header {
@@ -619,6 +644,31 @@
 
 .create-dcc-modal .modal-body {
   padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Grid de 2 columnas para los campos del formulario */
+.create-dcc-modal .form-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px 20px;
+}
+
+/* Hacer que algunos campos ocupen todo el ancho */
+.create-dcc-modal .form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+/* Responsive: volver a 1 columna en pantallas pequeñas */
+@media (max-width: 768px) {
+  .create-dcc-modal .form-fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .create-dcc-modal {
+    max-width: 95%;
+  }
 }
 
 .create-dcc-modal .form-group {
@@ -630,6 +680,44 @@
   margin-bottom: 7px;
   font-weight: 500;
   color: #333;
+  font-size: 0.9em;
+}
+
+.create-dcc-modal input[type="date"],
+.create-dcc-modal select.form-control {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.95em;
+  background: #fafafa;
+  transition: border-color 0.3s;
+}
+
+.create-dcc-modal input[type="date"]:focus,
+.create-dcc-modal select.form-control:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.15);
+}
+
+.create-dcc-modal input[type="checkbox"] {
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+/* Estilos para el display de dirección del Performance Location */
+.create-dcc-modal .location-address-display {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #f5f5f5;
+  font-size: 0.9em;
+  color: #555;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  line-height: 1.4;
 }
 
 .create-dcc-modal .dcc-select {
@@ -651,6 +739,10 @@
 .create-dcc-modal .form-actions {
   display: flex;
   justify-content: flex-end;
+  padding: 16px 24px;
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+  flex-shrink: 0;
 }
 
 .create-dcc-modal .save-btn {
@@ -691,6 +783,94 @@
   min-height: 20px;
   display: flex;
   align-items: center;
+}
+
+/* Estilos para la lista de certificados */
+.certificates-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  padding: 15px;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.certificate-item {
+  padding: 12px 15px;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  font-size: 0.95em;
+  text-align: left;
+  font-family: "Courier New", monospace;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+}
+
+.certificate-item:hover {
+  border-color: #2196f3;
+  background: #f0f7ff;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+}
+
+.certificate-item.selected {
+  border-color: #2196f3;
+  background: #e3f2fd;
+  font-weight: 600;
+}
+
+/* Estilos para mostrar detalles del certificado */
+.certificate-details {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.certificate-details h4 {
+  margin: 0 0 15px 0;
+  color: #2196f3;
+  font-size: 1.1em;
+  border-bottom: 2px solid #2196f3;
+  padding-bottom: 8px;
+}
+
+.certificate-details .detail-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: flex-start;
+}
+
+.certificate-details .detail-row strong {
+  min-width: 150px;
+  color: #555;
+  font-weight: 600;
+}
+
+.certificate-details .detail-row span {
+  color: #333;
+  flex: 1;
 }
 
 .save-btn:disabled {
@@ -858,7 +1038,47 @@
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .option-buttons {
+    gap: 12px;
+  }
+
+  .option-btn {
+    min-width: 160px;
+    max-width: 180px;
+    padding: 10px 18px;
+    font-size: 1em;
+  }
+}
+
 @media (max-width: 768px) {
+  .options-content {
+    padding: 30px 20px;
+    max-width: 600px;
+  }
+
+  .options-content h1 {
+    font-size: 1.8em;
+    margin-bottom: 8px;
+  }
+
+  .options-content p {
+    font-size: 0.95em;
+    margin-bottom: 20px;
+  }
+
+  .option-buttons {
+    gap: 10px;
+  }
+
+  .option-btn {
+    min-width: 140px;
+    max-width: 160px;
+    padding: 10px 15px;
+    font-size: 0.95em;
+    gap: 5px;
+  }
+
   .step-navigation {
     padding: 15px 20px;
   }
@@ -867,5 +1087,44 @@
   .next-step-btn {
     padding: 10px 18px;
     font-size: 0.95em;
+  }
+}
+
+@media (max-width: 480px) {
+  .initial-options {
+    padding: 10px;
+    min-height: auto;
+  }
+
+  .options-content {
+    padding: 20px 15px;
+    max-width: 100%;
+  }
+
+  .options-content h1 {
+    font-size: 1.5em;
+    margin-bottom: 5px;
+  }
+
+  .options-content p {
+    font-size: 0.9em;
+    margin-bottom: 15px;
+  }
+
+  .option-buttons {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .option-btn {
+    width: 100%;
+    min-width: unset;
+    max-width: unset;
+    padding: 12px;
+    font-size: 1em;
+  }
+
+  .option-btn i {
+    display: none;
   }
 }

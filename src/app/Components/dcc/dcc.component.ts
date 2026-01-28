@@ -9,6 +9,7 @@ import { FormsModule } from '@angular/forms';
 import { NgMultiSelectDropDownModule } from 'ng-multiselect-dropdown';
 import { ApiService } from '../../api/api.service';
 import { DccDataService } from '../../services/dcc-data.service';
+import { OrderService } from '../../services/order.service';
 import Swal from 'sweetalert2';
 import { UrlClass } from '../../shared/models/url.model';
 
@@ -31,6 +32,8 @@ import { UrlClass } from '../../shared/models/url.model';
 export class DccComponent implements OnInit {
   // Variable para guardar el modo de operación actual
   operationMode: 'create' | 'load' | 'xml' | null = null;
+  // Tipo de documento: 'DCC' o 'IE'
+  documentType: 'DCC' | 'IE' = 'DCC';
   // Controla la pantalla inicial de opciones
   showInitialOptions: boolean = true;
   // Controla la visualización de la interfaz principal (tabs)
@@ -60,14 +63,43 @@ export class DccComponent implements OnInit {
   selectedDccId: string = '';
   // Controla la visualización del modal para seleccionar DCC existente
   showDccSelect: boolean = false;
+  // Opciones y selección para cargar por proyecto existente
+  loadProjectOptions: any[] = [];
+  loadSelectedProjects: any[] = [];
+  loadCertificatesForProject: any[] = [];
   // Controla la visualización del modal para crear un nuevo DCC
   showCreateDccModal: boolean = false;
+  // Controla la visualización del modal para crear un nuevo IE
+  showCreateIeModal: boolean = false;
 
   // Variables para el modal de creación de DCC
   newDccProjectId: any = [];
   newDccPtId: string = '';
   newDccDutNumber: number | null = null;
   generatedCertificateNumber: string = '';
+
+  // Variables para el modal de creación de IE
+  newIeProjectId: any = [];
+  newIePtId: string = '';
+  newIeDutNumber: number | null = null;
+  generatedIeCertificateNumber: string = '';
+
+  // Variables comunes para fechas de DCC
+  dccLocation: string = '';
+  dccLocationAddress: string = ''; // Dirección del Performance Location
+  dccReceiptDate: string = '';
+  dccCalibrationDate: string = '';
+  dccIsRangeDate: boolean = false;
+  dccEndDate: string = '';
+
+  // Variables comunes para fechas de IE
+  ieLocation: string = '';
+  ieLocationAddress: string = ''; // Dirección del Performance Location
+  ieReceiptDate: string = '';
+  ieTestDate: string = '';
+  ieIsRangeDate: boolean = false;
+  ieEndDate: string = '';
+
   ptOptions: string[] = [
     'PT-05',
     'PT-08',
@@ -86,6 +118,18 @@ export class DccComponent implements OnInit {
     'PT-43',
     'PT-45',
   ];
+
+  // Datos de certificados generados desde dutServices
+  dccCertificatesList: any[] = []; // Lista de certificados para DCC
+  ieCertificatesList: any[] = []; // Lista de certificados para IE
+  dccCurrentDutService: any = null; // DutService actual seleccionado para DCC
+  ieCurrentDutService: any = null; // DutService actual seleccionado para IE
+  dccAccountId: string | null = null; // Account ID del proyecto DCC (de opportunity_calpro)
+  ieAccountId: string | null = null; // Account ID del proyecto IE (de opportunity)
+  dccSelectedCertificateIndex: number = -1; // Índice del certificado seleccionado para DCC
+  ieSelectedCertificateIndex: number = -1; // Índice del certificado seleccionado para IE
+  dccSelectedCertificate: any = null; // Certificado seleccionado para mostrar detalles (DCC)
+  ieSelectedCertificate: any = null; // Certificado seleccionado para mostrar detalles (IE)
 
   // Configuración para el multiselect de proyectos
   projectDropdownSettings = {
@@ -109,66 +153,192 @@ export class DccComponent implements OnInit {
 
   constructor(
     private apiService: ApiService,
-    private dccDataService: DccDataService
+    private dccDataService: DccDataService,
+    private orderService: OrderService,
   ) {}
+
+  /**
+   * Extrae el ID del usuario de la URL
+   * Ejemplo: http://192.168.1.200:81/DCC/view?id=63c704bfb9c9d8482
+   * Retorna: 63c704bfb9c9d8482
+   */
+  private getUserIdFromUrl(): string {
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get('id');
+    return userId || '';
+  }
+
+  /**
+   * Obtiene el account_id desde la tabla opportunity_calpro (para DCC)
+   * @param projectId ID del proyecto seleccionado
+   * @returns Promise con el account_id
+   */
+  private getAccountIdFromOpportunityCalpro(
+    projectId: string,
+  ): Promise<string | null> {
+    return new Promise((resolve) => {
+      const getOpportunity = {
+        action: 'get',
+        bd: 'hvtest2',
+        table: 'opportunity_calpro',
+        opts: {
+          where: { id: projectId },
+          attributes: ['account_id'],
+        },
+      };
+
+      this.apiService.post(getOpportunity, UrlClass.URLNuevo).subscribe({
+        next: (response: any) => {
+          const opportunity = response?.result?.[0];
+          const accountId = opportunity?.account_id || null;
+          console.log('🏛️ Account ID from opportunity_calpro:', accountId);
+          resolve(accountId);
+        },
+        error: (error) => {
+          console.error('❌ Error loading opportunity_calpro:', error);
+          resolve(null);
+        },
+      });
+    });
+  }
+
+  /**
+   * Obtiene el account_id desde la tabla opportunity (para IE)
+   * @param projectId ID del proyecto seleccionado
+   * @returns Promise con el account_id
+   */
+  private getAccountIdFromOpportunity(
+    projectId: string,
+  ): Promise<string | null> {
+    return new Promise((resolve) => {
+      const getOpportunity = {
+        action: 'get',
+        bd: 'hvtest2',
+        table: 'opportunity',
+        opts: {
+          where: { id: projectId },
+          attributes: ['account_id'],
+        },
+      };
+
+      this.apiService.post(getOpportunity, UrlClass.URLNuevo).subscribe({
+        next: (response: any) => {
+          const opportunity = response?.result?.[0];
+          const accountId = opportunity?.account_id || null;
+          console.log('🏛️ Account ID from opportunity:', accountId);
+          resolve(accountId);
+        },
+        error: (error) => {
+          console.error('❌ Error loading opportunity:', error);
+          resolve(null);
+        },
+      });
+    });
+  }
 
   // Al iniciar el componente, carga la lista de DCCs existentes
   ngOnInit() {
     this.loadExistingDccList();
-    this.loadProjects();
+    // Suscribirse a cambios en el certificate_number para detectar tipo automáticamente
+    this.dccDataService.dccData$.subscribe((data) => {
+      this.detectDocumentType(data.administrativeData.core.certificate_number);
+    });
+  }
+
+  // Método para detectar automáticamente si es DCC o IE basándose en el certificate_number
+  private detectDocumentType(certificateNumber: string): void {
+    if (!certificateNumber) {
+      return; // No hacer nada si no hay número de certificado
+    }
+
+    if (certificateNumber.includes(' DCC ')) {
+      this.documentType = 'DCC';
+    } else if (certificateNumber.includes(' IE ')) {
+      this.documentType = 'IE';
+    } else if (certificateNumber.includes(' CC ')) {
+      // Formato antiguo CC también es DCC
+      this.documentType = 'DCC';
+    }
   }
 
   // Carga la lista de proyectos desde la base de datos para el modal de creación de DCC
   projects: any[] = [];
-  // Optimizar la carga de proyectos para que sea más rápida
-  loadProjects() {
-    const requests = [
-      // Request 1: Opportunity
-      this.apiService.post(
-        {
-          action: 'get',
-          bd: 'hvtest2',
-          table: 'opportunity',
-          opts: {
-            attributes: ['id', 'name'],
-            where: { deleted: 0 },
-            order_by: ['created_at', 'DESC'],
-          },
-        },
-        UrlClass.URLNuevo
-      ),
+  // Método flexible para cargar proyectos según el tipo (dcc, ie, o ambos)
+  loadProjects(type: 'dcc' | 'ie' | 'both' = 'both') {
+    let requests: any[] = [];
 
-      // Request 2: Opportunity Calpro
-      this.apiService.post(
-        {
-          action: 'get',
-          bd: 'hvtest2',
-          table: 'opportunity_calpro',
-          opts: {
-            attributes: ['id', 'name'],
-            where: { deleted: 0 },
-            order_by: ['created_at', 'DESC'],
+    if (type === 'dcc' || type === 'both') {
+      // Request para opportunity_calpro (para DCC)
+      requests.push(
+        this.apiService.post(
+          {
+            action: 'get',
+            bd: 'hvtest2',
+            table: 'opportunity_calpro',
+            opts: {
+              attributes: ['id', 'name'],
+              where: { deleted: 0 },
+              order_by: ['created_at', 'DESC'],
+            },
           },
-        },
-        UrlClass.URLNuevo
-      ),
-    ];
+          UrlClass.URLNuevo,
+        ),
+      );
+    }
 
-    // Ejecutar ambos requests en paralelo usando forkJoin para mayor velocidad
+    if (type === 'ie' || type === 'both') {
+      // Request para opportunity (para IE)
+      requests.push(
+        this.apiService.post(
+          {
+            action: 'get',
+            bd: 'hvtest2',
+            table: 'opportunity',
+            opts: {
+              attributes: ['id', 'name'],
+              where: { deleted: 0 },
+              order_by: ['created_at', 'DESC'],
+            },
+          },
+          UrlClass.URLNuevo,
+        ),
+      );
+    }
+
+    // Ejecutar requests en paralelo usando forkJoin para mayor velocidad
     import('rxjs').then((rxjs) => {
       rxjs.forkJoin(requests).subscribe({
-        next: ([response1, response2]: any[]) => {
-          const projectsPh = (response1.result || []).map((p: any) => ({
-            id: p.id,
-            name: p.name,
-          }));
+        next: (responses: any[]) => {
+          let combinedProjects: any[] = [];
 
-          const projectsPc = (response2.result || []).map((p: any) => ({
-            id: p.id,
-            name: p.name,
-          }));
+          if (type === 'dcc') {
+            // Solo oportunidades Calpro (para DCC)
+            combinedProjects = (responses[0]?.result || []).map((p: any) => ({
+              id: p.id,
+              name: p.name,
+            }));
+          } else if (type === 'ie') {
+            // Solo oportunidades normales (para IE)
+            combinedProjects = (responses[0]?.result || []).map((p: any) => ({
+              id: p.id,
+              name: p.name,
+            }));
+          } else if (type === 'both') {
+            // Ambos tipos
+            const projectsDcc = (responses[0]?.result || []).map((p: any) => ({
+              id: p.id,
+              name: p.name,
+            }));
 
-          this.projects = [...projectsPh, ...projectsPc];
+            const projectsIe = (responses[1]?.result || []).map((p: any) => ({
+              id: p.id,
+              name: p.name,
+            }));
+
+            combinedProjects = [...projectsDcc, ...projectsIe];
+          }
+
+          this.projects = combinedProjects;
         },
         error: (error) => {
           console.error('Error loading projects:', error);
@@ -196,7 +366,7 @@ export class DccComponent implements OnInit {
       currentData.administrativeData.core.certificate_number ||
       currentData.items.length > 0 ||
       currentData.administrativeData.responsiblePersons.some(
-        (p) => p.role || p.full_name
+        (p) => p.role || p.full_name,
       );
 
     if (hasCurrentData) {
@@ -254,12 +424,12 @@ export class DccComponent implements OnInit {
 
           // Mensaje de éxito
           alert(
-            'XML cargado exitosamente. Los datos han sido importados a todas las pestañas.'
+            'XML cargado exitosamente. Los datos han sido importados a todas las pestañas.',
           );
         } catch (error) {
           console.error('Error loading XML:', error);
           alert(
-            'Error al cargar el archivo XML. Por favor verifica que el formato sea correcto.'
+            'Error al cargar el archivo XML. Por favor verifica que el formato sea correcto.',
           );
         }
       };
@@ -299,19 +469,91 @@ export class DccComponent implements OnInit {
       .post(getDccList, UrlClass.URLNuevo)
       .subscribe((response: any) => {
         this.existingDccList = response.result || [];
+        this.buildLoadProjectOptions();
       });
+  }
+
+  // Construye la lista de proyectos únicos a partir de los IDs de certificado
+  private buildLoadProjectOptions() {
+    const projectMap = new Map<string, any>();
+
+    this.existingDccList.forEach((dcc: any) => {
+      const projectKey = this.getProjectPrefix(dcc.id);
+      if (projectKey && !projectMap.has(projectKey)) {
+        projectMap.set(projectKey, { id: projectKey, name: projectKey });
+      }
+    });
+
+    this.loadProjectOptions = Array.from(projectMap.values());
+  }
+
+  // Obtiene el prefijo del ID (antes del primer espacio)
+  private getProjectPrefix(certificateId: string): string {
+    if (!certificateId) return '';
+    const parts = certificateId.split(' ');
+    return parts.length > 0 ? parts[0] : '';
+  }
+
+  // Actualiza los certificados disponibles para el proyecto seleccionado
+  private updateCertificatesForSelectedProject() {
+    const selectedProject = this.loadSelectedProjects?.[0]?.id;
+
+    if (!selectedProject) {
+      this.loadCertificatesForProject = [];
+      this.selectedDccId = '';
+      return;
+    }
+
+    this.loadCertificatesForProject = this.existingDccList
+      .filter((dcc: any) => this.getProjectPrefix(dcc.id) === selectedProject)
+      .map((dcc: any) => ({
+        id: dcc.id,
+        pt: dcc.pt,
+        display: dcc.id,
+      }))
+      .sort((a: any, b: any) => {
+        // Extraer los dos últimos números del certificado (ej: "PC0497-00 DCC 45 14" -> 45, 14)
+        const partsA = a.display.split(' ');
+        const partsB = b.display.split(' ');
+
+        const lastNumA = parseInt(partsA[partsA.length - 1]) || 0;
+        const lastNumB = parseInt(partsB[partsB.length - 1]) || 0;
+        const penultimateA = parseInt(partsA[partsA.length - 2]) || 0;
+        const penultimateB = parseInt(partsB[partsB.length - 2]) || 0;
+
+        // Ordenar primero por el último número
+        if (lastNumA !== lastNumB) {
+          return lastNumA - lastNumB;
+        }
+
+        // Si el último número es igual, ordenar por el penúltimo
+        return penultimateA - penultimateB;
+      });
+
+    this.selectedDccId = '';
+  }
+
+  onLoadProjectSelect() {
+    this.updateCertificatesForSelectedProject();
+  }
+
+  onLoadProjectDeselect() {
+    this.updateCertificatesForSelectedProject();
   }
 
   // Abre el modal para seleccionar un DCC existente
   openDccSelectModal() {
     this.operationMode = 'load';
+    this.loadSelectedProjects = [];
+    this.loadCertificatesForProject = [];
+    this.selectedDccId = '';
     // Si hay datos en el DCC current, mostrar confirmación
     const currentData = this.dccDataService.getCurrentData();
     const hasCurrentData =
       currentData.administrativeData.core.certificate_number ||
       currentData.items.length > 0 ||
       currentData.administrativeData.responsiblePersons.some(
-        (p) => p.role || p.full_name
+        (p) => p.role || p.full_name,
       );
 
     if (hasCurrentData) {
@@ -340,6 +582,8 @@ export class DccComponent implements OnInit {
   closeDccSelectModal() {
     this.showDccSelect = false;
     this.selectedDccId = '';
+    this.loadSelectedProjects = [];
+    this.loadCertificatesForProject = [];
   }
 
   // Al seleccionar un DCC, busca los datos completos en la base de datos y los carga
@@ -374,6 +618,8 @@ export class DccComponent implements OnInit {
           'date_end',
           'location',
           'issue_date',
+          'next_calibration',
+          'accredited',
           'id_laboratory',
           'id_customer',
           'dcc_data',
@@ -567,7 +813,7 @@ export class DccComponent implements OnInit {
         // Mapear responsible persons con datos de usuarios
         const mapped = responsibleData.map((person: any) => {
           const foundUser = users.find(
-            (u: any) => String(u.no_nomina) === String(person.no_nomina)
+            (u: any) => String(u.no_nomina) === String(person.no_nomina),
           );
           return {
             ...person,
@@ -613,7 +859,7 @@ export class DccComponent implements OnInit {
           dccData.date_calibration;
       if (dccData.date_range !== undefined)
         mergedData.administrativeData.core.is_range_date = Boolean(
-          dccData.date_range
+          dccData.date_range,
         );
       if (dccData.date_end)
         mergedData.administrativeData.core.end_performance_date =
@@ -623,6 +869,13 @@ export class DccComponent implements OnInit {
           dccData.location;
       if (dccData.issue_date)
         mergedData.administrativeData.core.issue_date = dccData.issue_date;
+      if (dccData.next_calibration)
+        mergedData.administrativeData.core.next_calibration =
+          dccData.next_calibration;
+      if (dccData.accredited !== undefined)
+        mergedData.administrativeData.core.accredited = Boolean(
+          dccData.accredited,
+        );
 
       // Asignar datos del laboratorio si existen
       if (dccData.laboratoryInfo) {
@@ -676,6 +929,8 @@ export class DccComponent implements OnInit {
               email: person.user_email || '',
               phone: person.user_phone || '',
               mainSigner: Boolean(person.main),
+              head: Boolean(person.head),
+              coordinator: Boolean(person.coordinator),
             };
           });
       }
@@ -714,6 +969,7 @@ export class DccComponent implements OnInit {
             model: mainItemData.model || '',
             serialNumber: mainItemData.serial_number || '',
             customerAssetId: mainItemData.costumer_asset || '',
+            comment: mainItemData.comment || '',
           };
         } else {
           // Asegurar que al menos existe un item vacío
@@ -726,6 +982,7 @@ export class DccComponent implements OnInit {
                 model: '',
                 serialNumber: '',
                 customerAssetId: '',
+                comment: '',
                 identifications: [],
                 itemQuantities: [],
                 subItems: [],
@@ -821,7 +1078,7 @@ export class DccComponent implements OnInit {
   // Navega al siguiente step/tab
   nextStep() {
     const currentIndex = this.tabs.findIndex(
-      (tab) => tab.id === this.activeTab
+      (tab) => tab.id === this.activeTab,
     );
     if (currentIndex < this.tabs.length - 1) {
       this.activeTab = this.tabs[currentIndex + 1].id;
@@ -833,7 +1090,7 @@ export class DccComponent implements OnInit {
   // Navega al step/tab anterior
   previousStep() {
     const currentIndex = this.tabs.findIndex(
-      (tab) => tab.id === this.activeTab
+      (tab) => tab.id === this.activeTab,
     );
     if (currentIndex > 0) {
       this.activeTab = this.tabs[currentIndex - 1].id;
@@ -913,7 +1170,7 @@ export class DccComponent implements OnInit {
       currentData.administrativeData.core.certificate_number ||
       currentData.items.length > 0 ||
       currentData.administrativeData.responsiblePersons.some(
-        (p) => p.role || p.full_name
+        (p) => p.role || p.full_name,
       );
 
     if (hasCurrentData) {
@@ -928,12 +1185,14 @@ export class DccComponent implements OnInit {
         cancelButtonText: 'Cancelar',
       }).then((result) => {
         if (result.isConfirmed) {
-          this.loadProjects();
+          this.documentType = 'DCC';
+          this.loadProjects('dcc');
           this.showCreateDccModal = true;
         }
       });
     } else {
-      this.loadProjects();
+      this.documentType = 'DCC';
+      this.loadProjects('dcc');
       this.showCreateDccModal = true;
     }
   }
@@ -945,11 +1204,398 @@ export class DccComponent implements OnInit {
     this.newDccPtId = '';
     this.newDccDutNumber = null;
     this.generatedCertificateNumber = '';
+    this.dccCertificatesList = [];
+    this.dccSelectedCertificateIndex = -1;
+    this.dccCurrentDutService = null;
+    this.dccSelectedCertificate = null;
+    // Limpiar campos de fecha y location
+    this.dccLocation = '';
+    this.dccLocationAddress = '';
+    this.dccReceiptDate = '';
+    this.dccCalibrationDate = '';
+    this.dccIsRangeDate = false;
+    this.dccEndDate = '';
+  }
+
+  // Abre el modal para crear un nuevo IE
+  openCreateIeModal(): void {
+    // Si hay datos en el IE actual, mostrar confirmación
+    const currentData = this.dccDataService.getCurrentData();
+    const hasCurrentData =
+      currentData.administrativeData.core.certificate_number ||
+      currentData.items.length > 0 ||
+      currentData.administrativeData.responsiblePersons.some(
+        (p) => p.role || p.full_name,
+      );
+
+    if (hasCurrentData) {
+      Swal.fire({
+        title: '¿Crear nuevo IE?',
+        text: 'Se perderán todos los cambios no guardados del IE actual.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#2196f3',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sí, crear nuevo',
+        cancelButtonText: 'Cancelar',
+      }).then((result) => {
+        if (result.isConfirmed) {
+          this.documentType = 'IE';
+          this.loadProjects('ie');
+          this.showCreateIeModal = true;
+        }
+      });
+    } else {
+      this.documentType = 'IE';
+      this.loadProjects('ie');
+      this.showCreateIeModal = true;
+    }
+  }
+
+  // Cierra el modal de creación de IE
+  closeCreateIeModal() {
+    this.showCreateIeModal = false;
+    this.newIeProjectId = [];
+    this.newIePtId = '';
+    this.newIeDutNumber = null;
+    this.generatedIeCertificateNumber = '';
+    this.ieCertificatesList = [];
+    this.ieSelectedCertificateIndex = -1;
+    this.ieCurrentDutService = null;
+    this.ieSelectedCertificate = null;
+    // Limpiar campos de fecha y location
+    this.ieLocation = '';
+    this.ieLocationAddress = '';
+    this.ieReceiptDate = '';
+    this.ieTestDate = '';
+    this.ieIsRangeDate = false;
+    this.ieEndDate = '';
+  }
+
+  /**
+   * Maneja el cambio de Performance Location para DCC
+   * Carga la dirección correspondiente según la selección
+   */
+  onDccLocationChange() {
+    this.dccLocationAddress = ''; // Limpiar dirección anterior
+
+    if (!this.dccLocation) {
+      return;
+    }
+
+    if (this.dccLocation === 'Customer') {
+      // Obtener dirección del customer (account_id)
+      if (this.dccAccountId) {
+        this.loadAddressFromCustomer(this.dccAccountId).then((address) => {
+          this.dccLocationAddress = address;
+        });
+      }
+    } else if (this.dccLocation === 'Laboratory') {
+      // Obtener dirección del laboratorio (id_laboratory = 1)
+      this.loadAddressFromLaboratory(1).then((address) => {
+        this.dccLocationAddress = address;
+      });
+    } else if (this.dccLocation === 'Other') {
+      // Obtener location del proyecto (opportunity_calpro)
+      const projectId = this.newDccProjectId?.[0]?.id;
+      if (projectId) {
+        this.loadLocationFromOpportunityCalpro(projectId).then((location) => {
+          this.dccLocationAddress = location;
+        });
+      }
+    }
+  }
+
+  /**
+   * Maneja el cambio de Performance Location para IE
+   * Carga la dirección correspondiente según la selección
+   */
+  onIeLocationChange() {
+    this.ieLocationAddress = ''; // Limpiar dirección anterior
+
+    if (!this.ieLocation) {
+      return;
+    }
+
+    if (this.ieLocation === 'Customer') {
+      // Obtener dirección del customer (account_id)
+      if (this.ieAccountId) {
+        this.loadAddressFromCustomer(this.ieAccountId).then((address) => {
+          this.ieLocationAddress = address;
+        });
+      }
+    } else if (this.ieLocation === 'Laboratory') {
+      // Obtener dirección del laboratorio (id_laboratory = 1)
+      this.loadAddressFromLaboratory(1).then((address) => {
+        this.ieLocationAddress = address;
+      });
+    } else if (this.ieLocation === 'Other') {
+      // Obtener location del proyecto (opportunity)
+      const projectId = this.newIeProjectId?.[0]?.id;
+      if (projectId) {
+        this.loadLocationFromOpportunity(projectId).then((location) => {
+          this.ieLocationAddress = location;
+        });
+      }
+    }
+  }
+
+  /**
+   * Carga la dirección de un customer desde hvtest2.account
+   */
+  private loadAddressFromCustomer(customerId: string): Promise<string> {
+    return new Promise((resolve) => {
+      const getCustomer = {
+        action: 'get',
+        bd: 'hvtest2',
+        table: 'account',
+        opts: {
+          where: { id: customerId, deleted: 0 },
+        },
+      };
+
+      this.apiService.post(getCustomer, UrlClass.URLNuevo).subscribe({
+        next: (response: any) => {
+          const account = response?.result?.[0];
+          if (account) {
+            const addressParts: string[] = [];
+
+            if (account.billing_address_street)
+              addressParts.push(account.billing_address_street);
+            if (account.billing_address_city)
+              addressParts.push(account.billing_address_city);
+            if (account.billing_address_state)
+              addressParts.push(account.billing_address_state);
+            if (account.billing_address_postalcode)
+              addressParts.push(account.billing_address_postalcode);
+            if (account.billing_address_country)
+              addressParts.push(account.billing_address_country);
+
+            const address =
+              addressParts.join(', ') || 'No hay dirección disponible';
+            resolve(address);
+          } else {
+            resolve('Customer no encontrado');
+          }
+        },
+        error: (error) => {
+          console.error('❌ Error loading customer address:', error);
+          resolve('Error al cargar dirección');
+        },
+      });
+    });
+  }
+
+  /**
+   * Carga la dirección de un laboratorio desde dcc_laboratory
+   */
+  private loadAddressFromLaboratory(laboratoryId: number): Promise<string> {
+    return new Promise((resolve) => {
+      const getLaboratory = {
+        action: 'get',
+        bd: this.database,
+        table: 'dcc_laboratory',
+        opts: {
+          where: { id: laboratoryId, deleted: 0 },
+        },
+      };
+
+      this.apiService.post(getLaboratory, UrlClass.URLNuevo).subscribe({
+        next: (response: any) => {
+          const laboratory = response?.result?.[0];
+          if (laboratory) {
+            const addressParts: string[] = [];
+
+            if (laboratory.street) addressParts.push(laboratory.street);
+            if (laboratory.number) addressParts.push(laboratory.number);
+            if (laboratory.city) addressParts.push(laboratory.city);
+            if (laboratory.state) addressParts.push(laboratory.state);
+            if (laboratory.postal_code)
+              addressParts.push(laboratory.postal_code);
+            if (laboratory.country) addressParts.push(laboratory.country);
+
+            const address =
+              addressParts.join(', ') || 'No hay dirección disponible';
+            resolve(address);
+          } else {
+            resolve('Laboratory no encontrado');
+          }
+        },
+        error: (error) => {
+          console.error('❌ Error loading laboratory address:', error);
+          resolve('Error al cargar dirección');
+        },
+      });
+    });
+  }
+
+  /**
+   * Carga el location desde opportunity_calpro para DCC
+   */
+  private loadLocationFromOpportunityCalpro(
+    projectId: string,
+  ): Promise<string> {
+    return new Promise((resolve) => {
+      const getOpportunity = {
+        action: 'get',
+        bd: 'hvtest2',
+        table: 'opportunity_calpro',
+        opts: {
+          where: { id: projectId },
+          attributes: ['location'],
+        },
+      };
+
+      this.apiService.post(getOpportunity, UrlClass.URLNuevo).subscribe({
+        next: (response: any) => {
+          const opportunity = response?.result?.[0];
+          const location =
+            opportunity?.location || 'No hay ubicación disponible';
+          resolve(location);
+        },
+        error: (error) => {
+          console.error('❌ Error loading opportunity location:', error);
+          resolve('Error al cargar ubicación');
+        },
+      });
+    });
+  }
+
+  /**
+   * Carga el location desde opportunity para IE
+   */
+  private loadLocationFromOpportunity(projectId: string): Promise<string> {
+    return new Promise((resolve) => {
+      const getOpportunity = {
+        action: 'get',
+        bd: 'hvtest2',
+        table: 'opportunity',
+        opts: {
+          where: { id: projectId },
+          attributes: ['location'],
+        },
+      };
+
+      this.apiService.post(getOpportunity, UrlClass.URLNuevo).subscribe({
+        next: (response: any) => {
+          const opportunity = response?.result?.[0];
+          const location =
+            opportunity?.location || 'No hay ubicación disponible';
+          resolve(location);
+        },
+        error: (error) => {
+          console.error('❌ Error loading opportunity location:', error);
+          resolve('Error al cargar ubicación');
+        },
+      });
+    });
+  }
+
+  /**
+   * Genera una lista de certificados desde los DUT Services
+   * - Ordena los DUT Services por id
+   * - Numera consecutivamente del 1 al n
+   * - Si un DUT tiene múltiples PTs (PT-24, PT-44), crea un certificado por cada PT
+   * - Si PT está vacío, no incluye nada entre DCC y el número
+   * Formato: {projectId}-00 {DCC|IE} {ptNumber} {contador} o {projectId}-00 {DCC|IE} {contador} si PT está vacío
+   * Ejemplo: PC0497-00 DCC 24 01, PC0497-00 DCC 44 01 (con PT)
+   * Ejemplo: PC0497-00 DCC 01 (sin PT)
+   */
+  private generateCertificatesFromDutServices(
+    projectId: string,
+    dutServices: any[],
+    documentType: 'DCC' | 'IE',
+  ): any[] {
+    if (!dutServices || dutServices.length === 0) {
+      console.warn('⚠️ NO DUT SERVICES PROVIDED');
+      return [];
+    }
+
+    // Ordenar dutServices por id
+    const sortedDutServices = [...dutServices].sort((a, b) => {
+      const idA = parseInt(a.id) || 0;
+      const idB = parseInt(b.id) || 0;
+      return idA - idB;
+    });
+
+    const certificates: any[] = [];
+
+    sortedDutServices.forEach((dut, index) => {
+      // Número consecutivo del 1 al n
+      const counter = (index + 1).toString().padStart(2, '0');
+
+      // El PT puede tener múltiples valores separados por comas: "PT-24, PT-44"
+      // O puede tener otros valores que no sean PT-XX
+      const ptString = dut.pt || '';
+      let ptList = ptString
+        .split(',')
+        .map((pt: string) => pt.trim())
+        .filter((pt: string) => pt.length > 0);
+
+      // Si no hay PTs, crear certificado sin PT
+      if (ptList.length === 0) {
+        console.warn('⚠️ DUT SERVICE WITHOUT PT, CREATING WITHOUT PT:', dut);
+        const certificateName = `${projectId}-00 ${documentType} ${counter}`;
+        certificates.push({
+          name: certificateName,
+          dutService: dut,
+          pt: '',
+          counter: counter,
+        });
+        return;
+      }
+
+      // Crear un certificado por cada PT
+      ptList.forEach((pt: string) => {
+        // Extraer el número: si es "PT-24" obtiene "24", si es "Calibración" obtiene "Calibración"
+        const ptNumber = pt.replace(/^PT-/, ''); // Remover "PT-" solo si existe
+        const certificateName = `${projectId}-00 ${documentType} ${ptNumber} ${counter}`;
+
+        certificates.push({
+          name: certificateName,
+          dutService: dut,
+          pt: pt,
+          counter: counter,
+        });
+      });
+    });
+
+    console.log('✅ GENERATED CERTIFICATES:', certificates);
+    return certificates;
   }
 
   // Maneja la selección de proyecto
   onProjectSelect(item: any) {
     this.newDccProjectId = [item]; // Asegurar que sea un array con un solo elemento
+    console.log('🎯 PROJECT SELECTED (DCC):', item.id, item);
+
+    // Cargar account_id desde opportunity_calpro
+    this.getAccountIdFromOpportunityCalpro(item.id).then((accountId) => {
+      this.dccAccountId = accountId;
+      console.log('💼 DCC Account ID guardado:', this.dccAccountId);
+    });
+
+    // Cargar servicios y DUT services de la BD orden
+    this.orderService.loadProjectData(item.id).then(
+      (data) => {
+        console.log('📊 PROJECT DATA LOADED:', {
+          projectId: item.id,
+          services: data.services,
+          dutServices: data.dutServices,
+        });
+
+        // Generar lista de certificados desde dutServices
+        this.dccCertificatesList = this.generateCertificatesFromDutServices(
+          item.id,
+          data.dutServices,
+          'DCC',
+        );
+      },
+      (error) => {
+        console.error('❌ ERROR LOADING PROJECT DATA:', error);
+      },
+    );
+
     this.updateCertificateNumber();
   }
 
@@ -957,6 +1603,102 @@ export class DccComponent implements OnInit {
   onProjectDeselect(item: any) {
     this.newDccProjectId = [];
     this.updateCertificateNumber();
+  }
+
+  // Maneja la selección de proyecto para IE
+  onIeProjectSelect(item: any) {
+    this.newIeProjectId = [item]; // Asegurar que sea un array con un solo elemento
+    console.log('🎯 PROJECT SELECTED (IE):', item.id, item);
+
+    // Cargar account_id desde opportunity
+    this.getAccountIdFromOpportunity(item.id).then((accountId) => {
+      this.ieAccountId = accountId;
+      console.log('💼 IE Account ID guardado:', this.ieAccountId);
+    });
+
+    // Cargar servicios y DUT services de la BD orden
+    this.orderService.loadProjectData(item.id).then(
+      (data) => {
+        console.log('📊 PROJECT DATA LOADED:', {
+          projectId: item.id,
+          services: data.services,
+          dutServices: data.dutServices,
+        });
+
+        // Generar lista de certificados desde dutServices
+        this.ieCertificatesList = this.generateCertificatesFromDutServices(
+          item.id,
+          data.dutServices,
+          'IE',
+        );
+      },
+      (error) => {
+        console.error('❌ ERROR LOADING PROJECT DATA:', error);
+      },
+    );
+
+    this.updateIeCertificateNumber();
+  }
+
+  /**
+   * Maneja la selección de un certificado desde la lista generada
+   * Carga los datos del DUT Service seleccionado
+   */
+  onDccCertificateSelect(index: number) {
+    if (index < 0 || index >= this.dccCertificatesList.length) {
+      return;
+    }
+
+    const certificate = this.dccCertificatesList[index];
+    console.log('🎯 DCC CERTIFICATE SELECTED:', certificate.name);
+    console.log('📋 DUT SERVICE DATA:', certificate.dutService);
+
+    this.dccCurrentDutService = certificate.dutService;
+    this.newDccPtId = certificate.pt;
+    this.newDccDutNumber = parseInt(certificate.counter);
+    this.dccSelectedCertificate = certificate; // Guardar certificado seleccionado
+
+    // Actualizar el nombre del certificado
+    this.generatedCertificateNumber = certificate.name;
+    console.log('✅ DCC CERTIFICATE DATA LOADED:', {
+      name: certificate.name,
+      pt: certificate.pt,
+      dutNumber: certificate.counter,
+      dutService: certificate.dutService,
+    });
+  }
+
+  /**
+   * Maneja la selección de un certificado para IE
+   */
+  onIeCertificateSelect(index: number) {
+    if (index < 0 || index >= this.ieCertificatesList.length) {
+      return;
+    }
+
+    const certificate = this.ieCertificatesList[index];
+    console.log('🎯 IE CERTIFICATE SELECTED:', certificate.name);
+    console.log('📋 DUT SERVICE DATA:', certificate.dutService);
+
+    this.ieCurrentDutService = certificate.dutService;
+    this.newIePtId = certificate.pt;
+    this.newIeDutNumber = parseInt(certificate.counter);
+    this.ieSelectedCertificate = certificate; // Guardar certificado seleccionado
+
+    // Actualizar el nombre del certificado
+    this.generatedIeCertificateNumber = certificate.name;
+    console.log('✅ IE CERTIFICATE DATA LOADED:', {
+      name: certificate.name,
+      pt: certificate.pt,
+      dutNumber: certificate.counter,
+      dutService: certificate.dutService,
+    });
+  }
+
+  // Maneja la deselección de proyecto para IE
+  onIeProjectDeselect(item: any) {
+    this.newIeProjectId = [];
+    this.updateIeCertificateNumber();
   }
 
   // Actualiza el número de certificado generado
@@ -977,6 +1719,27 @@ export class DccComponent implements OnInit {
       this.generatedCertificateNumber = `${projectId}-00 DCC ${ptNumber} ${dutFormatted}`;
     } else {
       this.generatedCertificateNumber = '';
+    }
+  }
+
+  // Actualiza el número de certificado para IE
+  updateIeCertificateNumber() {
+    const projectId =
+      this.newIeProjectId && this.newIeProjectId.length > 0
+        ? this.newIeProjectId[0].id
+        : '';
+
+    if (
+      projectId &&
+      this.newIePtId &&
+      this.newIeDutNumber &&
+      this.newIeDutNumber > 0
+    ) {
+      const ptNumber = this.newIePtId.replace('PT-', '');
+      const dutFormatted = this.newIeDutNumber.toString().padStart(2, '0');
+      this.generatedIeCertificateNumber = `${projectId}-00 IE ${ptNumber} ${dutFormatted}`;
+    } else {
+      this.generatedIeCertificateNumber = '';
     }
   }
 
@@ -1101,12 +1864,575 @@ export class DccComponent implements OnInit {
     });
   }
 
+  /**
+   * Crea múltiples DCC basados en la lista de certificados cargados
+   * Se ejecuta cuando el usuario selecciona crear todos los certificados
+   */
+  startNewDccMultiple() {
+    const projectId =
+      this.newDccProjectId && this.newDccProjectId.length > 0
+        ? this.newDccProjectId[0].id
+        : '';
+
+    if (
+      !projectId ||
+      !this.dccCertificatesList ||
+      this.dccCertificatesList.length === 0
+    ) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Validación',
+        text: 'Debe seleccionar un proyecto y tener certificados disponibles.',
+      });
+      return;
+    }
+
+    // Mostrar loading
+    Swal.fire({
+      title: `Creando ${this.dccCertificatesList.length} DCC...`,
+      text: 'Por favor espere',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    console.log('📋 INICIANDO CREACIÓN DE MÚLTIPLES DCC');
+    console.log('📌 Proyecto:', projectId);
+    console.log('📌 Certificados a crear:', this.dccCertificatesList.length);
+    console.log('� Fechas comunes para todos los certificados:', {
+      receipt_date: this.dccReceiptDate || 'No definida',
+      date_calibration: this.dccCalibrationDate || 'No definida',
+      date_range: this.dccIsRangeDate,
+      date_end: this.dccEndDate || 'No definida',
+    });
+    console.log('�📋 Datos de certificados:', this.dccCertificatesList);
+
+    // Array para almacenar las promesas de creación
+    const creationPromises: Promise<any>[] = [];
+
+    // Por cada certificado, crear un DCC
+    this.dccCertificatesList.forEach((certificate, index) => {
+      console.log(
+        `📌 Creando DCC ${index + 1}/${this.dccCertificatesList.length}:`,
+        certificate.name,
+      );
+
+      const ptNumber = certificate.pt;
+      const dutService = certificate.dutService;
+
+      // Usar el account_id cargado previamente desde opportunity_calpro
+      const idContact = this.dccAccountId;
+
+      // Obtener el user ID de la URL
+      const createdBy = this.getUserIdFromUrl();
+
+      // Datos que se guardarán para cada DCC
+      const attributes: any = {
+        id: certificate.name, // Certificate Number
+        pt: ptNumber, // PT ID
+        sw_name: 'DCC Generator', // Software name
+        sw_version: '1.0.2', // Software version
+        sw_type: 'application', // Software type
+        country: 'MX', // Country code
+        language: 'en', // Language
+        id_laboratory: 1, // Laboratory ID (fijo)
+      };
+
+      // Agregar id_customer si existe
+      if (idContact) {
+        attributes.id_customer = idContact;
+      }
+
+      // Agregar created_by si existe
+      if (createdBy) {
+        attributes.created_by = createdBy;
+      }
+
+      // Agregar location si está definido
+      if (this.dccLocation) {
+        attributes.location = this.dccLocation;
+      }
+      // Agregar campos de fecha si están definidos
+      if (this.dccReceiptDate) {
+        attributes.receipt_date = this.dccReceiptDate;
+      }
+      if (this.dccCalibrationDate) {
+        attributes.date_calibration = this.dccCalibrationDate;
+        // Calcular next_calibration como date_calibration + 1 año
+        const calibrationDate = new Date(this.dccCalibrationDate);
+        const nextCalibrationDate = new Date(calibrationDate);
+        nextCalibrationDate.setFullYear(nextCalibrationDate.getFullYear() + 1);
+        attributes.next_calibration = nextCalibrationDate
+          .toISOString()
+          .split('T')[0];
+        console.log(
+          `📅 Next Calibration calculada: ${this.dccCalibrationDate} + 1 año = ${attributes.next_calibration}`,
+        );
+      }
+      if (this.dccIsRangeDate) {
+        attributes.date_range = 1;
+      } else {
+        attributes.date_range = 0;
+      }
+      if (this.dccEndDate && this.dccIsRangeDate) {
+        attributes.date_end = this.dccEndDate;
+      }
+
+      console.log(`✅ Atributos para ${certificate.name}:`, {
+        certificate_number: certificate.name,
+        pt_id: ptNumber,
+        dut_service_id: dutService.id,
+        description: dutService.description,
+        serial_number: dutService.serial_number,
+        calibration_interval: dutService.calibration_interval,
+      });
+
+      const createDcc = {
+        action: 'create',
+        bd: this.database,
+        table: 'dcc_data',
+        opts: {
+          attributes: attributes,
+        },
+      };
+
+      // Crear promesa para este DCC
+      const promise = this.apiService
+        .post(createDcc, UrlClass.URLNuevo)
+        .toPromise()
+        .then((dccResponse: any) => {
+          console.log(`✅ DCC ${certificate.name} creado exitosamente`);
+          console.log('DCC Response:', dccResponse);
+
+          // Crear el item asociado con todos los campos requeridos
+          const createItem = {
+            action: 'create',
+            bd: this.database,
+            table: 'dcc_item',
+            opts: {
+              attributes: {
+                id_dcc: certificate.name,
+                object: dutService.description || '',
+                serial_number: dutService.serial_number || '',
+              },
+            },
+          };
+
+          console.log(
+            `📝 Creando item para DCC ${certificate.name}:`,
+            createItem,
+          );
+
+          return this.apiService
+            .post(createItem, UrlClass.URLNuevo)
+            .toPromise()
+            .then((itemResponse: any) => {
+              console.log(
+                `✅ Item para DCC ${certificate.name} creado exitosamente`,
+              );
+              console.log('Item Response:', itemResponse);
+              return { dcc: dccResponse, item: itemResponse };
+            })
+            .catch((itemError: any) => {
+              console.error(
+                `❌ Error creando item para DCC ${certificate.name}:`,
+                itemError,
+              );
+              throw itemError;
+            });
+        })
+        .catch((error) => {
+          console.error(`❌ Error creando DCC ${certificate.name}:`, error);
+          throw error;
+        });
+
+      creationPromises.push(promise);
+    });
+
+    // Ejecutar todas las creaciones en paralelo
+    Promise.all(creationPromises)
+      .then((results) => {
+        Swal.close();
+        console.log('✅ TODOS LOS DCC CREADOS EXITOSAMENTE');
+        console.log('Resultados finales:', results);
+
+        Swal.fire({
+          icon: 'success',
+          title: '¡DCC Creados!',
+          text: `Se han creado ${this.dccCertificatesList.length} DCC correctamente`,
+          timer: 2500,
+          showConfirmButton: false,
+        });
+
+        // Cerrar modal y refrescar lista
+        this.closeCreateDccModal();
+        this.loadExistingDccList();
+      })
+      .catch((error) => {
+        Swal.close();
+        console.error('❌ Error en la creación de DCC:', error);
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Ocurrió un problema al crear los DCC. Revisa la consola para más detalles.',
+        });
+      });
+  }
+
+  // Inicia un nuevo IE con los datos ingresados en el modal
+  startNewIe() {
+    const projectId =
+      this.newIeProjectId && this.newIeProjectId.length > 0
+        ? this.newIeProjectId[0].id
+        : '';
+
+    if (!projectId || !this.newIePtId || !this.newIeDutNumber) {
+      return;
+    }
+
+    this.dccDataService.resetData();
+    // Asigna PT ID y Certificate Number
+    const currentData = this.dccDataService.getCurrentData();
+    currentData.administrativeData.core.pt_id = this.newIePtId;
+    currentData.administrativeData.core.certificate_number =
+      this.generatedIeCertificateNumber;
+    this.dccDataService.loadFromObject(currentData);
+
+    // Mostrar loading mientras se crean los registros
+    Swal.fire({
+      title: 'Creando IE...',
+      text: 'Por favor espere',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    // Prepara los atributos base para guardar en la base de datos
+    let attributes: any = {
+      id: this.generatedIeCertificateNumber,
+      pt: this.newIePtId,
+    };
+
+    const createIe = {
+      action: 'create',
+      bd: this.database,
+      table: 'dcc_data',
+      opts: {
+        attributes: attributes,
+      },
+    };
+
+    const createItem = {
+      action: 'create',
+      bd: this.database,
+      table: 'dcc_item',
+      opts: {
+        attributes: {
+          id_dcc: this.generatedIeCertificateNumber,
+        },
+      },
+    };
+
+    // Crear primero el IE y luego el item
+    this.apiService.post(createIe, UrlClass.URLNuevo).subscribe({
+      next: (ieResponse: any) => {
+        if (ieResponse.result) {
+          // Si el IE se creó exitosamente, crear el item
+          this.apiService.post(createItem, UrlClass.URLNuevo).subscribe({
+            next: (itemResponse: any) => {
+              Swal.close();
+
+              if (itemResponse.result) {
+                Swal.fire({
+                  icon: 'success',
+                  title: '¡IE Creado!',
+                  text: `Se ha creado el IE ${this.generatedIeCertificateNumber} correctamente con su item asociado`,
+                  timer: 2500,
+                  showConfirmButton: false,
+                  position: 'top-end',
+                });
+
+                // Proceder a la interfaz principal
+                this.proceedToMainInterfaceIe();
+              } else {
+                Swal.fire({
+                  icon: 'warning',
+                  title: 'IE Creado Parcialmente',
+                  text: 'El IE se creó pero hubo un problema al crear el item asociado.',
+                });
+
+                // Proceder a la interfaz principal de todos modos
+                this.proceedToMainInterfaceIe();
+              }
+            },
+            error: (itemError) => {
+              Swal.close();
+              console.error('❌ Error al crear item:', itemError);
+              Swal.fire({
+                icon: 'warning',
+                title: 'IE Creado Parcialmente',
+                text: 'El IE se creó pero hubo un error al crear el item asociado.',
+              });
+
+              // Proceder a la interfaz principal de todos modos
+              this.proceedToMainInterfaceIe();
+            },
+          });
+        } else {
+          Swal.close();
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Ocurrió un problema al crear el IE.',
+          });
+        }
+      },
+      error: (ieError) => {
+        Swal.close();
+        console.error('❌ Error al crear IE:', ieError);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Ocurrió un problema en la petición para crear el IE.',
+        });
+      },
+    });
+  }
+
+  /**
+   * Crea múltiples IE basados en la lista de certificados cargados
+   * Se ejecuta cuando el usuario selecciona crear todos los certificados
+   */
+  startNewIeMultiple() {
+    const projectId =
+      this.newIeProjectId && this.newIeProjectId.length > 0
+        ? this.newIeProjectId[0].id
+        : '';
+
+    if (
+      !projectId ||
+      !this.ieCertificatesList ||
+      this.ieCertificatesList.length === 0
+    ) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Validación',
+        text: 'Debe seleccionar un proyecto y tener certificados disponibles.',
+      });
+      return;
+    }
+
+    // Mostrar loading
+    Swal.fire({
+      title: `Creando ${this.ieCertificatesList.length} IE...`,
+      text: 'Por favor espere',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    console.log('📋 INICIANDO CREACIÓN DE MÚLTIPLES IE');
+    console.log('📌 Proyecto:', projectId);
+    console.log('📌 Certificados a crear:', this.ieCertificatesList.length);
+    console.log('� Fechas comunes para todos los certificados:', {
+      receipt_date: this.ieReceiptDate || 'No definida',
+      date_calibration: this.ieTestDate || 'No definida',
+      date_range: this.ieIsRangeDate,
+      date_end: this.ieEndDate || 'No definida',
+    });
+    console.log('�📋 Datos de certificados:', this.ieCertificatesList);
+
+    // Array para almacenar las promesas de creación
+    const creationPromises: Promise<any>[] = [];
+
+    // Por cada certificado, crear un IE
+    this.ieCertificatesList.forEach((certificate, index) => {
+      console.log(
+        `📌 Creando IE ${index + 1}/${this.ieCertificatesList.length}:`,
+        certificate.name,
+      );
+
+      const ptNumber = certificate.pt;
+      const dutService = certificate.dutService;
+
+      // Usar el account_id cargado previamente desde opportunity
+      const idContact = this.ieAccountId;
+
+      // Obtener el user ID de la URL
+      const createdBy = this.getUserIdFromUrl();
+
+      // Datos que se guardarán para cada IE
+      const attributes: any = {
+        id: certificate.name, // Certificate Number
+        pt: ptNumber, // PT ID
+        sw_name: 'IE Generator', // Software name
+        sw_version: '1.0.2', // Software version
+        sw_type: 'application', // Software type
+        country: 'MX', // Country code
+        language: 'en', // Language
+        id_laboratory: 1, // Laboratory ID (fijo)
+      };
+
+      // Agregar id_customer si existe
+      if (idContact) {
+        attributes.id_customer = idContact;
+      }
+
+      // Agregar created_by si existe
+      if (createdBy) {
+        attributes.created_by = createdBy;
+      }
+
+      // Agregar location si está definido
+      if (this.ieLocation) {
+        attributes.location = this.ieLocation;
+      }
+      // Agregar campos de fecha si están definidos
+      if (this.ieReceiptDate) {
+        attributes.receipt_date = this.ieReceiptDate;
+      }
+      if (this.ieTestDate) {
+        attributes.date_calibration = this.ieTestDate;
+        // IE no tiene next_calibration (se guarda vacío)
+      }
+      if (this.ieIsRangeDate) {
+        attributes.date_range = 1;
+      } else {
+        attributes.date_range = 0;
+      }
+      if (this.ieEndDate && this.ieIsRangeDate) {
+        attributes.date_end = this.ieEndDate;
+      }
+
+      console.log(`✅ Atributos para ${certificate.name}:`, {
+        certificate_number: certificate.name,
+        pt_id: ptNumber,
+        dut_service_id: dutService.id,
+        description: dutService.description,
+        serial_number: dutService.serial_number,
+        calibration_interval: dutService.calibration_interval,
+      });
+
+      const createIe = {
+        action: 'create',
+        bd: this.database,
+        table: 'dcc_data',
+        opts: {
+          attributes: attributes,
+        },
+      };
+
+      // Crear promesa para este IE
+      const promise = this.apiService
+        .post(createIe, UrlClass.URLNuevo)
+        .toPromise()
+        .then((ieResponse: any) => {
+          console.log(`✅ IE ${certificate.name} creado exitosamente`);
+          console.log('IE Response:', ieResponse);
+
+          // Crear el item asociado con todos los campos requeridos
+          const createItem = {
+            action: 'create',
+            bd: this.database,
+            table: 'dcc_item',
+            opts: {
+              attributes: {
+                id_dcc: certificate.name,
+                object: dutService.description || '',
+                serial_number: dutService.serial_number || '',
+              },
+            },
+          };
+
+          console.log(
+            `📝 Creando item para IE ${certificate.name}:`,
+            createItem,
+          );
+
+          return this.apiService
+            .post(createItem, UrlClass.URLNuevo)
+            .toPromise()
+            .then((itemResponse: any) => {
+              console.log(
+                `✅ Item para IE ${certificate.name} creado exitosamente`,
+              );
+              console.log('Item Response:', itemResponse);
+              return { ie: ieResponse, item: itemResponse };
+            })
+            .catch((itemError: any) => {
+              console.error(
+                `❌ Error creando item para IE ${certificate.name}:`,
+                itemError,
+              );
+              throw itemError;
+            });
+        })
+        .catch((error) => {
+          console.error(`❌ Error creando IE ${certificate.name}:`, error);
+          throw error;
+        });
+
+      creationPromises.push(promise);
+    });
+
+    // Ejecutar todas las creaciones en paralelo
+    Promise.all(creationPromises)
+      .then((results) => {
+        Swal.close();
+        console.log('✅ TODOS LOS IE CREADOS EXITOSAMENTE');
+        console.log('Resultados finales:', results);
+
+        Swal.fire({
+          icon: 'success',
+          title: '¡IE Creados!',
+          text: `Se han creado ${this.ieCertificatesList.length} IE correctamente`,
+          timer: 2500,
+          showConfirmButton: false,
+        });
+
+        // Cerrar modal y refrescar lista
+        this.closeCreateIeModal();
+        this.loadExistingDccList();
+      })
+      .catch((error) => {
+        Swal.close();
+        console.error('❌ Error en la creación de IE:', error);
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Ocurrió un problema al crear los IE. Revisa la consola para más detalles.',
+        });
+      });
+  }
+
   // Método auxiliar para proceder a la interfaz principal
   private proceedToMainInterface() {
     this.showInitialOptions = false;
     this.showMainInterface = true;
     this.activeTab = 'administrative-data';
     this.closeCreateDccModal();
+
+    // Cargar statements desde la base de datos si el componente está disponible
+    if (this.statementsComponent) {
+      this.statementsComponent.loadStatementsFromDatabase(this.databaseName);
+    }
+  }
+
+  // Método auxiliar para proceder a la interfaz principal desde IE
+  private proceedToMainInterfaceIe() {
+    this.showInitialOptions = false;
+    this.showMainInterface = true;
+    this.activeTab = 'administrative-data';
+    this.closeCreateIeModal();
 
     // Cargar statements desde la base de datos si el componente está disponible
     if (this.statementsComponent) {

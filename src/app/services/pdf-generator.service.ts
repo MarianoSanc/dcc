@@ -78,6 +78,12 @@ export interface PdfTemplateData {
   endPerformanceDate: string;
   performanceLocation: string;
   is_range_date?: boolean;
+  accredited?: boolean;
+  next_calibration?: string;
+
+  // Performance Location
+  performance_location_type?: string; // 'Laboratory', 'Customer', 'Other'
+  project_location?: string; // Dirección del proyecto cuando es 'Other'
 
   // Customer Data
   customer_name: string;
@@ -95,6 +101,25 @@ export interface PdfTemplateData {
   item_manufacturer?: string;
   item_model?: string;
   item_serial_number?: string;
+  item_customer_asset_id?: string;
+  item_comment?: string;
+
+  // PT Description from hv_method
+  pt_description?: string;
+
+  // PT Method (PT + name)
+  pt_method?: string;
+
+  // Metrological Traceability
+  metrologicalTraceability?: Array<{
+    id_patron: string;
+    name_patron: string;
+    tz_name: string;
+    tz_by: string;
+    tz_date: string;
+    tz_quantity: string;
+    tz_comm: string;
+  }>;
 
   // Responsible persons
   responsiblePersons?: Array<{
