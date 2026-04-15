@@ -34,6 +34,7 @@ export class AdministrativeDataComponent implements OnInit {
     laboratory: true,
     responsible: true,
     customer: true,
+    responsibleCustomer: true,
   };
 
   // Propiedades de datos
@@ -670,6 +671,11 @@ export class AdministrativeDataComponent implements OnInit {
       case 'customer':
         this.customerData = { ...currentData.administrativeData.customer };
         break;
+      case 'responsibleCustomer':
+        this.coreData = this.administrativeDataService.formatCoreDates(
+          currentData.administrativeData.core,
+        );
+        break;
     }
   }
 
@@ -740,7 +746,26 @@ export class AdministrativeDataComponent implements OnInit {
       case 'customer':
         this.saveCustomer();
         break;
+      case 'responsibleCustomer':
+        this.saveResponsibleCustomerBlock(certificateNumber);
+        break;
     }
+  }
+
+  private saveResponsibleCustomerBlock(certificateNumber: string) {
+    this.dccDataService.updateAdministrativeData('core', this.coreData);
+    const dataToSave =
+      this.administrativeDataService.prepareResponsibleCustomerDataForSave(
+        this.coreData,
+      );
+
+    this.administrativeDataService
+      .saveToDatabase(dataToSave, 'responsibleCustomer', certificateNumber)
+      .subscribe({
+        next: (success) => {
+          if (success) this.editingBlocks['responsibleCustomer'] = false;
+        },
+      });
   }
 
   private saveSoftwareBlock(certificateNumber: string) {
@@ -847,6 +872,7 @@ export class AdministrativeDataComponent implements OnInit {
         certificateNumber,
         this.responsiblePersons,
         this.listauser,
+        this.documentType,
       )
       .subscribe({
         next: (success) => {
@@ -1060,6 +1086,17 @@ export class AdministrativeDataComponent implements OnInit {
     }
   }
 
+  // Método para manejar el cambio de doneBy
+  onDoneByChange(personIndex: number) {
+    if (this.responsiblePersons[personIndex].doneBy) {
+      this.responsiblePersons.forEach((person, index) => {
+        if (index !== personIndex) {
+          person.doneBy = false;
+        }
+      });
+    }
+  }
+
   // Métodos para responsible persons
   addResponsiblePerson() {
     const newIndex = this.responsiblePersons.length;
@@ -1070,6 +1107,9 @@ export class AdministrativeDataComponent implements OnInit {
       email: '',
       phone: '',
       mainSigner: false,
+      doneBy: false,
+      head: false,
+      coordinator: false,
     });
     this.selectedUsers[newIndex] = [];
   }
@@ -1128,6 +1168,7 @@ export class AdministrativeDataComponent implements OnInit {
         email: '',
         phone: '',
         mainSigner: false,
+        doneBy: false,
       },
       {
         role: '',
@@ -1137,6 +1178,7 @@ export class AdministrativeDataComponent implements OnInit {
         email: '',
         phone: '',
         mainSigner: false,
+        doneBy: false,
       },
     ];
 

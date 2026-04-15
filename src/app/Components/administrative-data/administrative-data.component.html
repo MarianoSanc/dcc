@@ -134,6 +134,14 @@
           <td class="label">Certificate Number:</td>
           <td>{{ coreData.certificate_number || "No asignado" }}</td>
         </tr>
+        <tr *ngIf="documentType === 'IE'">
+          <td class="label">Circuito:</td>
+          <td>{{ coreData.circuito || "No asignado" }}</td>
+        </tr>
+        <tr *ngIf="documentType === 'IE'">
+          <td class="label">Test object:</td>
+          <td>{{ coreData.test_object || "No asignado" }}</td>
+        </tr>
         <tr>
           <td class="label">Performance Location:</td>
           <td>{{ coreData.performance_localition || "No asignado" }}</td>
@@ -201,7 +209,13 @@
             }}
           </td>
         </tr>
-        <tr *ngIf="documentType === 'DCC'">
+        <tr
+          *ngIf="
+            documentType === 'DCC' &&
+            coreData.next_calibration &&
+            coreData.next_calibration !== '0000-00-00'
+          "
+        >
           <td class="label">Next Calibration Date:</td>
           <td>
             {{
@@ -211,13 +225,38 @@
             }}
           </td>
         </tr>
-        <tr>
+        <tr *ngIf="documentType === 'DCC'">
           <td class="label">Accredited:</td>
           <td>{{ coreData.accredited ? "Sí" : "No" }}</td>
+        </tr>
+        <tr *ngIf="documentType === 'DCC' && coreData.technical_verification">
+          <td class="label">Technical Verification:</td>
+          <td>{{ coreData.technical_verification ? "Sí" : "No" }}</td>
         </tr>
       </table>
 
       <div class="edit-form" *ngIf="isEditing('core')">
+        <div class="form-group core-flags-row" *ngIf="documentType === 'DCC'">
+          <label class="checkbox-inline">
+            <input type="checkbox" [(ngModel)]="coreData.accredited" />
+            Accredited
+          </label>
+          <label class="checkbox-inline">
+            <input
+              type="checkbox"
+              [(ngModel)]="coreData.technical_verification"
+            />
+            Technical Verification
+          </label>
+        </div>
+        <div class="form-group" *ngIf="documentType === 'IE'">
+          <label>Test object:</label>
+          <input
+            type="text"
+            [(ngModel)]="coreData.test_object"
+            placeholder="Ingrese el objeto de prueba"
+          />
+        </div>
         <div class="form-group">
           <label>PT ID:</label>
           <input type="text" [(ngModel)]="coreData.pt_id" disabled />
@@ -253,20 +292,27 @@
             class="readonly-field"
           />
         </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" [(ngModel)]="coreData.accredited" />
-            Accredited
-          </label>
+        <div class="form-group" *ngIf="documentType === 'IE'">
+          <label>Circuito:</label>
+          <input
+            type="text"
+            [(ngModel)]="coreData.circuito"
+            readonly
+            class="readonly-field"
+          />
         </div>
         <div class="form-group">
           <label>Performance Location:</label>
           <select [(ngModel)]="coreData.performance_localition">
             <option value="">Seleccione una opción</option>
-            <option value="Customer">Customer</option>
-            <option value="Laboratory">Laboratory</option>
-            <option value="Other">Other</option>
+            <option value="Customer">Customer (Dirección Fiscal)</option>
+            <option value="Laboratory">Laboratory (HVTEST)</option>
+            <option value="Other">Other (Location)</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label>Location Address:</label>
+          <p>{{ performanceLocationAddress || "No asignado" }}</p>
         </div>
         <div
           class="form-group"
@@ -641,9 +687,10 @@
             <th>Name</th>
             <th>Email</th>
             <th>Phone</th>
-            <th>Responsible Signer/Approved by</th>
-            <th>Head of Service</th>
-            <th>Coordinator</th>
+            <th>Signatario Autorizado</th>
+            <th *ngIf="documentType === 'IE'">Realizado por</th>
+            <th *ngIf="documentType === 'DCC'">Head of Service</th>
+            <th *ngIf="documentType === 'DCC'">Coordinator</th>
           </tr>
         </thead>
         <tbody>
@@ -661,11 +708,15 @@
               </span>
               <span *ngIf="!person.mainSigner" class="no-main-signer"> - </span>
             </td>
-            <td>
+            <td *ngIf="documentType === 'IE'">
+              <span *ngIf="person.doneBy" class="main-signer-badge"> Sí </span>
+              <span *ngIf="!person.doneBy" class="no-main-signer"> - </span>
+            </td>
+            <td *ngIf="documentType === 'DCC'">
               <span *ngIf="person.head" class="head-badge"> Head </span>
               <span *ngIf="!person.head" class="no-head"> - </span>
             </td>
-            <td>
+            <td *ngIf="documentType === 'DCC'">
               <span *ngIf="person.coordinator" class="coordinator-badge">
                 Coordinator
               </span>
@@ -697,8 +748,13 @@
                 </option>
               </ng-container>
               <ng-container *ngIf="documentType === 'IE'">
-                <option value="Test Technician">Test Technician</option>
-                <option value="Test Engineer">Test Engineer</option>
+                <option value="Coordinador">Coordinador</option>
+                <option value="Jefe de ensayos">Jefe de ensayos</option>
+                <option value="Ingeniero de ensayos">
+                  Ingeniero de ensayos
+                </option>
+                <option value="Técnico de ensayos">Técnico de ensayos</option>
+                <option value="Auxiliar Técnico">Auxiliar Técnico</option>
               </ng-container>
             </select>
           </div>
@@ -724,7 +780,7 @@
             <input type="text" [(ngModel)]="person.phone" />
           </div>
           <div class="form-group main-signer-group">
-            <label>Approved by:</label>
+            <label>Signatario Autorizado:</label>
             <div class="main-signer-checkbox">
               <input
                 type="checkbox"
@@ -742,7 +798,32 @@
               </label>
             </div>
           </div>
-          <div class="form-group head-of-service-group">
+          <div
+            class="form-group main-signer-group"
+            *ngIf="documentType === 'IE'"
+          >
+            <label>Realizado por:</label>
+            <div class="main-signer-checkbox">
+              <input
+                type="checkbox"
+                [(ngModel)]="person.doneBy"
+                (ngModelChange)="onDoneByChange(i)"
+                [id]="'doneBy_' + i"
+              />
+              <label [for]="'doneBy_' + i" class="checkbox-label">
+                <span *ngIf="person.doneBy" class="main-signer-text">
+                  Responsable de ejecución
+                </span>
+                <span *ngIf="!person.doneBy" class="not-main-signer-text">
+                  Marcar como realizado por
+                </span>
+              </label>
+            </div>
+          </div>
+          <div
+            class="form-group head-of-service-group"
+            *ngIf="documentType === 'DCC'"
+          >
             <label>Head of Service:</label>
             <div class="head-of-service-checkbox">
               <input
@@ -761,7 +842,10 @@
               </label>
             </div>
           </div>
-          <div class="form-group coordinator-group">
+          <div
+            class="form-group coordinator-group"
+            *ngIf="documentType === 'DCC'"
+          >
             <label>Coordinator:</label>
             <div class="coordinator-checkbox">
               <input
@@ -940,6 +1024,86 @@
             Guardar
           </button>
           <button class="cancel-btn" (click)="cancelEdit('customer')">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div
+    class="data-block"
+    [class.non-editable]="!isBlockEditable('responsibleCustomer')"
+    *ngIf="documentType === 'IE'"
+  >
+    <div class="block-header">
+      <h4>
+        Responsible Customer
+        <span
+          *ngIf="!isBlockEditable('responsibleCustomer')"
+          class="readonly-badge"
+          >Solo lectura</span
+        >
+      </h4>
+      <div class="block-actions">
+        <button
+          *ngIf="isBlockEditable('responsibleCustomer')"
+          class="edit-btn"
+          (click)="toggleEdit('responsibleCustomer')"
+          [class.active]="isEditing('responsibleCustomer')"
+        >
+          <i class="material-icons">{{
+            isEditing("responsibleCustomer") ? "close" : "edit"
+          }}</i>
+          {{ isEditing("responsibleCustomer") ? "Cancelar" : "Editar" }}
+        </button>
+        <span
+          *ngIf="!isBlockEditable('responsibleCustomer')"
+          class="no-edit-message"
+        >
+          <i class="material-icons">lock</i>
+          No editable
+        </span>
+      </div>
+    </div>
+
+    <div class="block-content">
+      <table class="data-table" *ngIf="!isEditing('responsibleCustomer')">
+        <tr>
+          <td class="label">Name:</td>
+          <td>{{ coreData.customer_rep || "No asignado" }}</td>
+        </tr>
+        <tr>
+          <td class="label">Phone:</td>
+          <td>{{ coreData.customer_rep_tel || "No asignado" }}</td>
+        </tr>
+      </table>
+
+      <div class="edit-form" *ngIf="isEditing('responsibleCustomer')">
+        <div class="form-group">
+          <label>Name:</label>
+          <input
+            type="text"
+            [(ngModel)]="coreData.customer_rep"
+            placeholder="Ingrese el nombre del responsable del cliente"
+          />
+        </div>
+        <div class="form-group">
+          <label>Phone:</label>
+          <input
+            type="text"
+            [(ngModel)]="coreData.customer_rep_tel"
+            placeholder="Ingrese el teléfono del responsable del cliente"
+          />
+        </div>
+        <div class="form-actions">
+          <button class="save-btn" (click)="saveBlock('responsibleCustomer')">
+            Guardar
+          </button>
+          <button
+            class="cancel-btn"
+            (click)="cancelEdit('responsibleCustomer')"
+          >
             Cancelar
           </button>
         </div>

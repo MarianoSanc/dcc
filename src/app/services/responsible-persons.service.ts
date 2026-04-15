@@ -28,7 +28,6 @@ export class ResponsiblePersonsService {
       opts: {
         where: {
           deleted: 0,
-          organizacion: 0,
         },
         order_by: ['first_name', 'ASC'],
       },
@@ -40,8 +39,12 @@ export class ResponsiblePersonsService {
           const rawUsers = Array.isArray(response?.result)
             ? response.result
             : [];
+          const filteredUsers = rawUsers.filter((user: any) => {
+            const organizacion = Number(user?.organizacion);
+            return organizacion === 0 || organizacion === 2;
+          });
           // Mapear usuarios para tener el formato esperado
-          const users = rawUsers.map((user: any) => ({
+          const users = filteredUsers.map((user: any) => ({
             no_nomina: user.no_nomina,
             name: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
             email: user.email || '',
@@ -80,7 +83,8 @@ export class ResponsiblePersonsService {
   saveResponsiblePersons(
     certificateNumber: string,
     responsiblePersons: any[],
-    listauser: any[]
+    listauser: any[],
+    documentType: 'DCC' | 'IE' = 'DCC',
   ): Observable<boolean> {
     return new Observable((observer) => {
       Swal.fire({
@@ -97,7 +101,8 @@ export class ResponsiblePersonsService {
             certificateNumber,
             responsiblePersons,
             existingPersons,
-            listauser
+            listauser,
+            documentType,
           ).subscribe({
             next: (success) => {
               Swal.close();
@@ -115,7 +120,8 @@ export class ResponsiblePersonsService {
           this.insertResponsiblePersons(
             certificateNumber,
             responsiblePersons,
-            listauser
+            listauser,
+            documentType,
           ).subscribe({
             next: (success) => {
               Swal.close();
@@ -136,13 +142,10 @@ export class ResponsiblePersonsService {
     certificateNumber: string,
     newPersons: any[],
     existingPersons: any[],
-    listauser: any[]
+    listauser: any[],
+    documentType: 'DCC' | 'IE',
   ): Observable<boolean> {
     return new Observable((observer) => {
-      console.log('🔄 Syncing responsible persons');
-      console.log('🔄 New persons:', newPersons);
-      console.log('🔄 Existing persons:', existingPersons);
-
       const operations: Promise<any>[] = [];
 
       // 1. Preparar datos de nuevas personas con no_nomina
@@ -150,58 +153,66 @@ export class ResponsiblePersonsService {
         .map((person) => {
           let noNomina = '';
 
-          if (typeof person.name === 'string' && person.name) {
+          // PRIORIDAD 1: Si la persona ya tiene no_nomina (edit mode), preservarlo
+          if (person.no_nomina) {
+            noNomina = person.no_nomina;
+          }
+          // PRIORIDAD 2: Si tiene full_name, buscar en listauser (new mode)
+          else if (typeof person.full_name === 'string' && person.full_name) {
             const foundUser = listauser.find(
-              (user) => user.name === person.name
+              (user) => user.name === person.full_name,
             );
             if (foundUser) {
               noNomina = foundUser.no_nomina;
             }
-          } else if (person.no_nomina) {
-            noNomina = person.no_nomina;
+          }
+          // PRIORIDAD 3: Si tiene name (fallback), buscar en listauser
+          else if (typeof person.name === 'string' && person.name) {
+            const foundUser = listauser.find(
+              (user) => user.name === person.name,
+            );
+            if (foundUser) {
+              noNomina = foundUser.no_nomina;
+            }
           }
 
           return {
             ...person,
             no_nomina: noNomina,
             mainSigner: person.mainSigner || false,
+            doneBy: documentType === 'IE' ? person.doneBy || false : false,
+            head: documentType === 'DCC' ? person.head || false : false,
+            coordinator:
+              documentType === 'DCC' ? person.coordinator || false : false,
           };
         })
-        .filter((person) => person.no_nomina && person.role); // Solo personas válidas
-
-      console.log('🔄 Prepared new persons:', preparedNewPersons);
+        .filter((person) => person.no_nomina && person.role);
 
       // 2. Encontrar personas a eliminar (que están en BD pero no en nueva lista)
       const personsToDelete = existingPersons.filter(
         (existingPerson) =>
           !preparedNewPersons.some(
             (newPerson) =>
-              String(newPerson.no_nomina) === String(existingPerson.no_nomina)
-          )
+              String(newPerson.no_nomina) === String(existingPerson.no_nomina),
+          ),
       );
-
-      console.log('🗑️ Persons to delete:', personsToDelete);
 
       // 3. Encontrar personas a actualizar (que están en ambas listas)
       const personsToUpdate = preparedNewPersons.filter((newPerson) =>
         existingPersons.some(
           (existingPerson) =>
-            String(existingPerson.no_nomina) === String(newPerson.no_nomina)
-        )
+            String(existingPerson.no_nomina) === String(newPerson.no_nomina),
+        ),
       );
-
-      console.log('🔄 Persons to update:', personsToUpdate);
 
       // 4. Encontrar personas a insertar (que están en nueva lista pero no en BD)
       const personsToInsert = preparedNewPersons.filter(
         (newPerson) =>
           !existingPersons.some(
             (existingPerson) =>
-              String(existingPerson.no_nomina) === String(newPerson.no_nomina)
-          )
+              String(existingPerson.no_nomina) === String(newPerson.no_nomina),
+          ),
       );
-
-      console.log('➕ Persons to insert:', personsToInsert);
 
       // 5. Eliminar personas que ya no están
       personsToDelete.forEach((person) => {
@@ -219,9 +230,8 @@ export class ResponsiblePersonsService {
           },
         };
 
-        console.log('🗑️ Delete request:', deleteRequest);
         operations.push(
-          this.apiService.post(deleteRequest, UrlClass.URLNuevo).toPromise()
+          this.apiService.post(deleteRequest, UrlClass.URLNuevo).toPromise(),
         );
       });
 
@@ -239,16 +249,18 @@ export class ResponsiblePersonsService {
             },
             attributes: {
               role: person.role,
+              email: person.email || '',
+              phone: person.phone || '',
               main: person.mainSigner ? 1 : 0,
+              done_by: documentType === 'IE' && person.doneBy ? 1 : 0,
               head: person.head ? 1 : 0,
               coordinator: person.coordinator ? 1 : 0,
             },
           },
         };
 
-        console.log('🔄 Update request:', updateRequest);
         operations.push(
-          this.apiService.post(updateRequest, UrlClass.URLNuevo).toPromise()
+          this.apiService.post(updateRequest, UrlClass.URLNuevo).toPromise(),
         );
       });
 
@@ -263,15 +275,19 @@ export class ResponsiblePersonsService {
               no_nomina: person.no_nomina,
               id_dcc: certificateNumber,
               role: person.role,
+              email: person.email || '',
+              phone: person.phone || '',
               main: person.mainSigner ? 1 : 0,
+              done_by: documentType === 'IE' && person.doneBy ? 1 : 0,
+              head: person.head ? 1 : 0,
+              coordinator: person.coordinator ? 1 : 0,
               deleted: 0,
             },
           },
         };
 
-        console.log('➕ Insert request:', insertRequest);
         operations.push(
-          this.apiService.post(insertRequest, UrlClass.URLNuevo).toPromise()
+          this.apiService.post(insertRequest, UrlClass.URLNuevo).toPromise(),
         );
       });
 
@@ -279,19 +295,17 @@ export class ResponsiblePersonsService {
       if (operations.length > 0) {
         Promise.all(operations)
           .then((responses) => {
-            console.log('✅ All operations completed:', responses);
             const allSuccessful = responses.every(
-              (response: any) => response.result
+              (response: any) => response.result,
             );
             observer.next(allSuccessful);
             observer.complete();
           })
           .catch((error) => {
-            console.error('❌ Error in sync operations:', error);
+            console.error('Error in sync operations:', error);
             observer.error(error);
           });
       } else {
-        console.log('ℹ️ No operations needed');
         observer.next(true);
         observer.complete();
       }
@@ -300,41 +314,34 @@ export class ResponsiblePersonsService {
 
   mapResponsiblePersonsWithUsers(
     responsibleData: any[],
-    listauser: any[]
+    listauser: any[],
   ): any[] {
     return responsibleData.map((person) => {
       // Buscar el usuario en listauser por no_nomina
       const foundUser = listauser.find(
-        (user) => user.no_nomina === person.no_nomina
+        (user) => user.no_nomina === person.no_nomina,
       );
 
-      if (foundUser) {
-        return {
-          role: person.role || '',
-          no_nomina: person.no_nomina,
-          full_name: foundUser.name, // nombre completo del CONCAT
-          email: foundUser.email || '',
-          phone: foundUser.phone || '',
-          mainSigner: Boolean(person.main),
-        };
-      } else {
-        // Si no se encuentra el usuario, mostrar no_nomina como fallback
-        return {
-          role: person.role || '',
-          no_nomina: person.no_nomina,
-          full_name: `Usuario ${person.no_nomina}`,
-          email: '',
-          phone: '',
-          mainSigner: Boolean(person.main),
-        };
-      }
+      return {
+        role: person.role || '',
+        no_nomina: person.no_nomina,
+        name: foundUser ? foundUser.name : undefined,
+        full_name: foundUser ? foundUser.name : `Usuario ${person.no_nomina}`,
+        email: person.email || foundUser?.email || '',
+        phone: person.phone || foundUser?.phone || '',
+        mainSigner: Boolean(person.main),
+        doneBy: Boolean(person.done_by),
+        head: Boolean(person.head),
+        coordinator: Boolean(person.coordinator),
+      };
     });
   }
 
   private insertResponsiblePersons(
     certificateNumber: string,
     responsiblePersons: any[],
-    listauser: any[]
+    listauser: any[],
+    documentType: 'DCC' | 'IE',
   ): Observable<boolean> {
     return new Observable((observer) => {
       if (responsiblePersons.length === 0) {
@@ -368,15 +375,17 @@ export class ResponsiblePersonsService {
                 id_dcc: certificateNumber,
                 role: person.role,
                 main: person.mainSigner ? 1 : 0,
-                head: person.head ? 1 : 0,
-                coordinator: person.coordinator ? 1 : 0,
+                done_by: documentType === 'IE' && person.doneBy ? 1 : 0,
+                head: documentType === 'DCC' && person.head ? 1 : 0,
+                coordinator:
+                  documentType === 'DCC' && person.coordinator ? 1 : 0,
                 deleted: 0,
               },
             },
           };
 
           insertPromises.push(
-            this.apiService.post(insertRequest, UrlClass.URLNuevo).toPromise()
+            this.apiService.post(insertRequest, UrlClass.URLNuevo).toPromise(),
           );
         }
       });
@@ -385,7 +394,7 @@ export class ResponsiblePersonsService {
         Promise.all(insertPromises)
           .then((responses) => {
             const allSuccessful = responses.every(
-              (response: any) => response.result
+              (response: any) => response.result,
             );
             observer.next(allSuccessful);
             observer.complete();

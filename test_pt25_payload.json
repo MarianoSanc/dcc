@@ -1,0 +1,77 @@
+{
+  "document_type": "25",
+  "certificate_number": "PC0489-00",
+  "customer_name": "TEST CUSTOMER",
+  "document_name": "DRAFT 25 02",
+  "patron": {
+    "id_patron": "180",
+    "name_patron": "Sistema de medición de alto voltaje",
+    "manufacturer_patron": "BHT",
+    "model_patron": "PT-25",
+    "sn_patron": "SN001",
+    "interval_patron": "12"
+  },
+  "metrological_traceability": {
+    "tz_id": "180",
+    "tz_name": "Sistema de medición",
+    "tz_by": "HV TEST",
+    "tz_date": "10/06/2025",
+    "tz_quantity": "High Voltage",
+    "tz_comm": "Vpk (LI, SI), t1 & t2 (LI) , tp & t2 (SI)"
+  },
+  "items_list": [
+    {
+      "object": "HV DIVIDER",
+      "manufacturer": "HIGHVOLT",
+      "model": "HV-1000",
+      "serial_number": "HV001",
+      "costumer_asset": "ASSET001",
+      "comment": "Main divider with R & C network"
+    },
+    {
+      "object": "LV Unit",
+      "manufacturer": "LOWVOLT",
+      "model": "LV-500",
+      "serial_number": "LV001",
+      "costumer_asset": "ASSET002",
+      "comment": "Measurement & control unit"
+    },
+    {
+      "object": "Measuring cable",
+      "manufacturer": "CABLE MFG",
+      "model": "MC-5000",
+      "serial_number": "MC001",
+      "costumer_asset": "ASSET003",
+      "comment": "10m cable with connectors & shields"
+    },
+    {
+      "object": "Channel 1",
+      "manufacturer": "ELECTRONICS",
+      "model": "CH-200",
+      "serial_number": "CH001",
+      "costumer_asset": "ASSET004",
+      "comment": "Differential channel with filters & amplifiers"
+    },
+    {
+      "object": "Impulse Software",
+      "manufacturer": "SOFTWARE CO",
+      "model": "v2.5",
+      "serial_number": "SW-25",
+      "costumer_asset": "ASSET005",
+      "comment": "Analysis & reporting software"
+    }
+  ],
+  "results": [
+    {
+      "magnitude": "Voltage Ratio",
+      "unit": "kV",
+      "measured_value": "100.5",
+      "uncertainty": "±0.5"
+    }
+  ],
+  "performance_location": "Laboratory",
+  "responsible_person": "John Doe",
+  "responsible_phone": "123-456-7890",
+  "responsible_email": "john@example.com",
+  "footer_text": "Test & Validation Certificate"
+}

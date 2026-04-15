@@ -155,6 +155,7 @@ export class AdministrativeDataService {
       laboratory: 'Laboratorio',
       responsible: 'Personas Responsables',
       customer: 'Cliente',
+      responsibleCustomer: 'Responsable del Cliente',
     };
     return displayNames[blockType] || blockType;
   }
@@ -190,16 +191,26 @@ export class AdministrativeDataService {
 
   // Preparar datos para guardar
   prepareCoreDataForSave(coreData: any): any {
-    return {
-      pt: coreData.pt_id,
-      country: coreData.country_code,
-      language: coreData.language,
-      receipt_date:
-        coreData.receipt_date === '0000-00-00'
+    // Si Performance Location es "Other" o "Customer", siempre guardar Receipt Date como 0000-00-00
+    const receiptDate =
+      coreData.performance_localition === 'Other' ||
+      coreData.performance_localition === 'Customer'
+        ? '0000-00-00'
+        : coreData.receipt_date === '0000-00-00'
           ? '0000-00-00'
           : coreData.receipt_date
             ? this.formatDateForDatabase(coreData.receipt_date)
-            : '0000-00-00',
+            : '0000-00-00';
+
+    return {
+      pt: coreData.pt_id,
+      object: coreData.test_object || '',
+      country: coreData.country_code,
+      language: coreData.language,
+      circuito: coreData.circuito || '',
+      customer_rep: coreData.customer_rep || '',
+      customer_rep_tel: coreData.customer_rep_tel || '',
+      receipt_date: receiptDate,
       date_calibration: coreData.performance_date
         ? this.formatDateForDatabase(coreData.performance_date)
         : null,
@@ -218,6 +229,7 @@ export class AdministrativeDataService {
             ? this.formatDateForDatabase(coreData.next_calibration)
             : '0000-00-00',
       accredited: coreData.accredited ? 1 : 0,
+      technical_verification: coreData.technical_verification ? 1 : 0,
     };
   }
 
@@ -227,6 +239,13 @@ export class AdministrativeDataService {
       software_version: softwareData.version,
       software_type: softwareData.type,
       software_description: softwareData.description,
+    };
+  }
+
+  prepareResponsibleCustomerDataForSave(coreData: any): any {
+    return {
+      customer_rep: coreData.customer_rep || '',
+      customer_rep_tel: coreData.customer_rep_tel || '',
     };
   }
 }

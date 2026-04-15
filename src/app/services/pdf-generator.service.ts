@@ -63,7 +63,17 @@ export interface PdfTemplateData {
     name: string;
     unit: string;
   }>;
-  // Subitems para el backend
+  // Items - Nuevo sistema (itemsList del nuevo dcc_items)
+  itemsList?: Array<{
+    object?: string;
+    manufacturer?: string;
+    model?: string;
+    serial_number?: string;
+    costumer_asset?: string;
+    comment?: string;
+    description?: string;
+  }>;
+  // Subitems para el backend (legacy)
   subitems?: Array<{
     name: string;
     manufacturer: string;
@@ -79,7 +89,9 @@ export interface PdfTemplateData {
   performanceLocation: string;
   is_range_date?: boolean;
   accredited?: boolean;
+  technical_verification?: boolean;
   next_calibration?: string;
+  circuito?: string;
 
   // Performance Location
   performance_location_type?: string; // 'Laboratory', 'Customer', 'Other'
@@ -90,6 +102,20 @@ export interface PdfTemplateData {
   customer_direction: string;
   customer_email: string;
   customer_phone: string;
+  customer_rep?: string;
+  customer_rep_tel?: string;
+  test_number?: string;
+  PerformanceDate?: string;
+  norma?: string;
+  approved_by?: string;
+  approved_by_role?: string;
+  approved_by_email?: string;
+  calibrated_by?: string;
+  calibrated_by_role?: string;
+  calibrated_by_email?: string;
+  faseA?: string;
+  faseB?: string;
+  faseC?: string;
 
   // Laboratory Data (opcional, para futuras expansiones)
   laboratory_name?: string;
@@ -109,6 +135,32 @@ export interface PdfTemplateData {
 
   // PT Method (PT + name)
   pt_method?: string;
+  descripcion_servicio?: string;
+  objeto_test?: string;
+  equipamiento?: string;
+
+  // Tested Material (IE only)
+  material_description?: string;
+  cable_fabricante?: string;
+  cable_modelo?: string;
+  cable_metrajeA?: string;
+  cable_metrajeB?: string;
+  cable_metrajeC?: string;
+  terminal1_fabricante?: string;
+  terminal1_modelo?: string;
+  terminal1_snA?: string;
+  terminal1_snB?: string;
+  terminal1_snC?: string;
+  terminal2_fabricante?: string;
+  terminal2_modelo?: string;
+  terminal2_snA?: string;
+  terminal2_snB?: string;
+  terminal2_snC?: string;
+  empalmes_fabricante?: string;
+  empalmes_modelo?: string;
+  empalmes_metrajeA?: string;
+  empalmes_metrajeB?: string;
+  empalmes_metrajeC?: string;
 
   // Metrological Traceability
   metrologicalTraceability?: Array<{

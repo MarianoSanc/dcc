@@ -173,6 +173,23 @@
   border-radius: 2px;
 }
 
+.core-flags-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.core-flags-row .checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.core-flags-row .checkbox-inline input[type="checkbox"] {
+  margin-right: 0;
+}
+
 /* Dynamic Item Styles */
 .identification-item,
 .responsible-item {

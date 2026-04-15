@@ -1,0 +1,242 @@
+<div class="results-container">
+  <div class="section-header">
+    <h3>Results</h3>
+    <p>Used Methods para informes IE/IED</p>
+  </div>
+
+  <div class="data-block">
+    <div class="block-header">
+      <h4>Used Methods</h4>
+    </div>
+    <div class="block-content">
+      <div class="methods-view">
+        <div class="item-card" *ngFor="let method of usedMethods">
+          <div class="item-header">
+            <h5>{{ method.name || "Sin nombre" }}</h5>
+          </div>
+          <div class="item-details">
+            <div class="detail-row" *ngIf="method.description">
+              <strong>Description:</strong> {{ method.description }}
+            </div>
+            <div class="detail-row" *ngIf="method.norm">
+              <strong>Norm:</strong> {{ method.norm }}
+            </div>
+          </div>
+        </div>
+
+        <div *ngIf="usedMethods.length === 0" class="empty-state">
+          <p>No hay used methods disponibles para este informe.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Equipamiento Block -->
+  <div class="data-block">
+    <div class="block-header">
+      <h4>Equipamiento</h4>
+      <div class="block-actions">
+        <button
+          *ngIf="!isEditingEquipamiento"
+          class="edit-btn"
+          (click)="toggleEditEquipamiento()"
+        >
+          <i class="material-icons">edit</i>
+          Editar
+        </button>
+        <ng-container *ngIf="isEditingEquipamiento">
+          <button class="save-btn" (click)="saveEquipamiento()">
+            <i class="material-icons">save</i>
+            Guardar
+          </button>
+          <button class="cancel-btn" (click)="toggleEditEquipamiento()">
+            <i class="material-icons">close</i>
+            Cancelar
+          </button>
+        </ng-container>
+      </div>
+    </div>
+    <div class="block-content">
+      <div class="form-group" *ngIf="isEditingEquipamiento">
+        <label>Seleccionar equipos del {{ coreData.pt_id || "PT" }}:</label>
+        <select
+          class="equipment-select"
+          [(ngModel)]="selectedEquipmentId"
+          (ngModelChange)="onEquipmentChange()"
+          [disabled]="isLoadingEquipments || availableEquipments.length === 0"
+        >
+          <option value="">
+            <ng-container *ngIf="isLoadingEquipments"
+              >Cargando equipos...</ng-container
+            >
+            <ng-container
+              *ngIf="!isLoadingEquipments && availableEquipments.length === 0"
+              >No hay equipos disponibles</ng-container
+            >
+            <ng-container
+              *ngIf="!isLoadingEquipments && availableEquipments.length > 0"
+              >-- Seleccionar equipo --</ng-container
+            >
+          </option>
+          <option
+            *ngFor="let eq of availableEquipments"
+            [value]="eq.idequipment"
+          >
+            {{ (eq.name || "Sin nombre") + " (" + eq.idequipment + ")" }}
+          </option>
+        </select>
+      </div>
+
+      <!-- Selected Equipment Details -->
+      <div
+        *ngIf="isEditingEquipamiento && selectedEquipment"
+        class="equipment-detail-card"
+      >
+        <div class="equipment-detail-header">
+          <h5>{{ selectedEquipment.name || "Sin nombre" }}</h5>
+          <span class="equipment-id-badge">{{
+            selectedEquipment.idequipment
+          }}</span>
+        </div>
+        <div class="equipment-detail-body">
+          <div class="equipment-detail-row">
+            <span class="equipment-detail-label">Modelo:</span>
+            <span class="equipment-detail-value">{{
+              selectedEquipment.model || "N/A"
+            }}</span>
+          </div>
+          <div class="equipment-detail-row">
+            <span class="equipment-detail-label">Marca:</span>
+            <span class="equipment-detail-value">{{
+              selectedEquipment.maker || "N/A"
+            }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        *ngIf="!isEditingEquipamiento && savedEquipment"
+        class="equipment-detail-card"
+      >
+        <div class="equipment-detail-header">
+          <h5>{{ savedEquipment.name || "Sin nombre" }}</h5>
+          <span class="equipment-id-badge">{{
+            savedEquipment.idequipment
+          }}</span>
+        </div>
+        <div class="equipment-detail-body">
+          <div class="equipment-detail-row">
+            <span class="equipment-detail-label">Modelo:</span>
+            <span class="equipment-detail-value">{{
+              savedEquipment.model || "N/A"
+            }}</span>
+          </div>
+          <div class="equipment-detail-row">
+            <span class="equipment-detail-label">Marca:</span>
+            <span class="equipment-detail-value">{{
+              savedEquipment.maker || "N/A"
+            }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        *ngIf="
+          isEditingEquipamiento &&
+          !selectedEquipment &&
+          !isLoadingEquipments &&
+          availableEquipments.length > 0
+        "
+        class="empty-state"
+      >
+        <p>Seleccione un equipo para ver sus datos.</p>
+      </div>
+
+      <div
+        *ngIf="!isEditingEquipamiento && !savedEquipment"
+        class="empty-state"
+      >
+        <p>No hay equipamiento guardado para este informe.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fases block -->
+  <div class="data-block">
+    <div class="block-header">
+      <h4>Resultados</h4>
+      <div class="block-actions">
+        <button
+          *ngIf="!isEditingResultados"
+          class="edit-btn"
+          (click)="toggleEditResultados()"
+        >
+          <i class="material-icons">edit</i>
+          Editar
+        </button>
+        <ng-container *ngIf="isEditingResultados">
+          <button class="save-btn" (click)="saveResultados()">
+            <i class="material-icons">save</i>
+            Guardar
+          </button>
+          <button class="cancel-btn" (click)="toggleEditResultados()">
+            <i class="material-icons">close</i>
+            Cancelar
+          </button>
+        </ng-container>
+      </div>
+    </div>
+    <div class="block-content">
+      <table class="phase-results-table">
+        <thead>
+          <tr>
+            <th rowspan="2" class="results-title-cell">Resultados</th>
+            <th>FASE A</th>
+            <th>FASE B</th>
+            <th>FASE C</th>
+          </tr>
+          <tr *ngIf="!isEditingResultados">
+            <td>{{ ieResults.fase1 || "—" }}</td>
+            <td>{{ ieResults.fase2 || "—" }}</td>
+            <td>{{ ieResults.fase3 || "—" }}</td>
+          </tr>
+          <tr *ngIf="isEditingResultados">
+            <td>
+              <select [(ngModel)]="ieResults.fase1" class="phase-result-select">
+                <option value="" disabled>Seleccione...</option>
+                <option
+                  *ngFor="let option of phaseResultOptions"
+                  [value]="option"
+                >
+                  {{ option }}
+                </option>
+              </select>
+            </td>
+            <td>
+              <select [(ngModel)]="ieResults.fase2" class="phase-result-select">
+                <option value="" disabled>Seleccione...</option>
+                <option
+                  *ngFor="let option of phaseResultOptions"
+                  [value]="option"
+                >
+                  {{ option }}
+                </option>
+              </select>
+            </td>
+            <td>
+              <select [(ngModel)]="ieResults.fase3" class="phase-result-select">
+                <option value="">Sin valor</option>
+                <option
+                  *ngFor="let option of phaseResultOptions"
+                  [value]="option"
+                >
+                  {{ option }}
+                </option>
+              </select>
+            </td>
+          </tr>
+        </thead>
+      </table>
+    </div>
+  </div>
+</div>

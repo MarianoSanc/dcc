@@ -15,146 +15,246 @@ import Swal from 'sweetalert2';
   styleUrls: ['./items.component.css'],
 })
 export class ItemsComponent implements OnInit, OnDestroy {
-  // ===== PROPIEDADES =====
-  items: any[] = [];
+  description: string = '';
+  itemsList: any[] = [];
   editingStates: { [key: string]: boolean } = {};
+  isEditingDescription: boolean = false;
+  isEditingItems: boolean = false;
+
   private subscription = new Subscription();
   private database: string = 'calibraciones';
-
-  // Variables para el control de edición del main item
-  isEditingMainItem: boolean = false;
-
   private loadedDccId: string = '';
+  private dccItemId: number | null = null;
 
   constructor(
     private dccDataService: DccDataService,
     private apiService: ApiService,
   ) {}
 
-  // ===== LIFECYCLE HOOKS =====
-  ngOnInit() {
+  ngOnInit(): void {
     this.loadDccData();
   }
 
-  ngOnDestroy() {
+  ngOnDestroy(): void {
     this.subscription.unsubscribe();
   }
 
-  // ===== MÉTODOS DE CARGA DE DATOS =====
-  private loadDccData() {
+  private loadDccData(): void {
     this.subscription.add(
       this.dccDataService.dccData$.subscribe((data) => {
         const newDccId =
           data.administrativeData?.core?.certificate_number || '';
-
         if (this.loadedDccId !== newDccId) {
           this.loadedDccId = newDccId;
-          this.items = data.items || [];
+          this.loadDescriptionAndItemsFromDB(newDccId);
         }
       }),
     );
   }
 
-  // ===== GETTERS =====
-  get mainItem() {
-    return this.items[0] || { subItems: [] };
+  private loadDescriptionAndItemsFromDB(dccId: string): void {
+    if (!dccId) {
+      this.description = '';
+      this.itemsList = [];
+      this.dccItemId = null;
+      return;
+    }
+
+    const getItem = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_item',
+      opts: {
+        where: {
+          id_dcc: dccId,
+          deleted: 0,
+        },
+      },
+    };
+
+    this.apiService.post(getItem, UrlClass.URLNuevo).subscribe({
+      next: (response: any) => {
+        if (response.result && response.result.length > 0) {
+          const item = response.result[0];
+          this.dccItemId = item.id;
+          this.description = item.description || '';
+          this.loadItemsFromDB(item.id, dccId);
+        } else {
+          this.dccItemId = null;
+          this.description = '';
+          this.itemsList = [];
+          // Actualizar el servicio con datos vacíos
+          this.dccDataService.updateItemsList([], '');
+        }
+      },
+      error: (error) => {
+        console.error('Error loading description:', error);
+        this.description = '';
+        this.itemsList = [];
+        this.dccDataService.updateItemsList([], '');
+      },
+    });
   }
 
-  // ===== MÉTODOS DE CONTROL DE EDICIÓN =====
+  private loadItemsFromDB(itemId: number, dccId: string): void {
+    const getItems = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_items',
+      opts: {
+        where: {
+          id_item: itemId,
+          id_dcc: dccId,
+          deleted: 0,
+        },
+        order_by: ['item_order', 'ASC'],
+      },
+    };
+
+    this.apiService.post(getItems, UrlClass.URLNuevo).subscribe({
+      next: (response: any) => {
+        if (response?.result && response.result.length > 0) {
+          this.itemsList = response.result;
+          this.autoAssignOrderIfNeeded();
+        } else {
+          this.loadItemsFromDBAlternative(dccId);
+          return;
+        }
+        this.dccDataService.updateItemsList(this.itemsList, this.description);
+      },
+      error: (error) => {
+        this.itemsList = [];
+        this.dccDataService.updateItemsList([], this.description);
+      },
+    });
+  }
+
+  private loadItemsFromDBAlternative(dccId: string): void {
+    const getItems = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_items',
+      opts: {
+        where: {
+          id_dcc: dccId,
+          deleted: 0,
+        },
+        order_by: ['item_order', 'ASC'],
+      },
+    };
+
+    this.apiService.post(getItems, UrlClass.URLNuevo).subscribe({
+      next: (response: any) => {
+        this.itemsList = response.result || [];
+        if (this.itemsList.length > 0) {
+          // Auto-asignar orden si todos los items tienen order = 0
+          this.autoAssignOrderIfNeeded();
+        }
+        // Actualizar el servicio global con itemsList y description
+        this.dccDataService.updateItemsList(this.itemsList, this.description);
+      },
+      error: (error) => {
+        this.itemsList = [];
+        this.dccDataService.updateItemsList([], this.description);
+      },
+    });
+  }
+
   isEditing(key: string): boolean {
     return this.editingStates[key] || false;
   }
 
-  toggleEdit(key: string) {
+  toggleEdit(key: string): void {
     this.editingStates[key] = !this.editingStates[key];
+  }
 
-    // Si estamos entrando en modo edición de subitems, cargar los identificadores desde la BD
-    if (key === 'subitems' && this.editingStates[key]) {
-      this.loadSubItemIdentifiersFromDB();
+  saveBlock(blockName: string): void {
+    if (blockName === 'description') {
+      this.saveDescription();
+    } else if (blockName === 'items') {
+      this.saveItems();
     }
   }
 
-  saveBlock(blockName: string) {
-    if (blockName === 'subitems') {
-      this.saveSubItems();
-    } else {
-      this.editingStates[blockName] = false;
-    }
-  }
-
-  cancelEdit(blockName: string) {
+  cancelEdit(blockName: string): void {
     this.loadDccData();
     this.editingStates[blockName] = false;
   }
 
-  // ===== MAIN ITEM - GESTIÓN =====
-  toggleEditMainItem() {
-    this.isEditingMainItem = !this.isEditingMainItem;
-    if (!this.isEditingMainItem) {
+  toggleEditDescription(): void {
+    this.isEditingDescription = !this.isEditingDescription;
+    if (!this.isEditingDescription) {
       this.loadDccData();
     }
   }
 
-  saveMainItem() {
+  saveDescription(): void {
     const currentData = this.dccDataService.getCurrentData();
-
-    if (!this.items || this.items.length === 0) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'No se encontraron datos del item para actualizar.',
-      });
-      return;
-    }
-
-    const mainItem = this.items[0];
     const dccId = currentData.administrativeData.core.certificate_number;
 
     if (!dccId) {
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'No se encontró el Certificate Number para actualizar.',
+        text: 'No se encontró el Certificate Number.',
       });
       return;
     }
 
     Swal.fire({
       title: 'Guardando...',
-      text: 'Actualizando información del main item',
+      text: 'Actualizando descripción',
       allowOutsideClick: false,
       didOpen: () => {
         Swal.showLoading();
       },
     });
 
-    const updateMainItem = {
-      action: 'update',
-      bd: this.database,
-      table: 'dcc_item',
-      opts: {
-        attributes: {
-          object: mainItem.name || '',
-          manufacturer: mainItem.manufacturer || '',
-          model: mainItem.model || '',
-          serial_number: mainItem.serialNumber || '',
-          costumer_asset: mainItem.customerAssetId || '',
-          comment: mainItem.comment || '',
-        },
-        where: { id_dcc: dccId },
-      },
-    };
+    let saveOperation;
 
-    this.apiService.post(updateMainItem, UrlClass.URLNuevo).subscribe({
+    if (this.dccItemId) {
+      const updateItem = {
+        action: 'update',
+        bd: this.database,
+        table: 'dcc_item',
+        opts: {
+          attributes: {
+            description: this.description || '',
+          },
+          where: { id: this.dccItemId },
+        },
+      };
+      saveOperation = this.apiService.post(updateItem, UrlClass.URLNuevo);
+    } else {
+      const createItem = {
+        action: 'create',
+        bd: this.database,
+        table: 'dcc_item',
+        opts: {
+          attributes: {
+            id_dcc: dccId,
+            description: this.description || '',
+            deleted: 0,
+          },
+        },
+      };
+      saveOperation = this.apiService.post(createItem, UrlClass.URLNuevo);
+    }
+
+    saveOperation.subscribe({
       next: (response: any) => {
         Swal.close();
         if (response.result) {
-          this.dccDataService.updateItems(this.items);
-          this.isEditingMainItem = false;
+          if (!this.dccItemId) {
+            this.dccItemId = response.result;
+          }
+          // ✅ Actualizar el servicio con la nueva descripción para que el PDF/Word use los datos actualizados
+          this.dccDataService.updateItemsList(this.itemsList, this.description);
+          this.isEditingDescription = false;
           Swal.fire({
             icon: 'success',
             title: '¡Guardado!',
-            text: 'El main item se ha actualizado correctamente.',
+            text: 'La descripción se ha actualizado correctamente.',
             timer: 2000,
             showConfirmButton: false,
             position: 'top-end',
@@ -163,232 +263,177 @@ export class ItemsComponent implements OnInit, OnDestroy {
           Swal.fire({
             icon: 'error',
             title: 'Error',
-            text: 'Hubo un problema al actualizar el main item.',
+            text: 'Hubo un problema al guardar la descripción.',
           });
         }
       },
       error: (error) => {
         Swal.close();
-        console.error('Error updating main item:', error);
+        console.error('Error saving description:', error);
         Swal.fire({
           icon: 'error',
           title: 'Error',
-          text: 'Ocurrió un error al actualizar el main item.',
+          text: 'Ocurrió un error al guardar la descripción.',
         });
       },
     });
   }
 
-  cancelMainItemEdit() {
-    this.isEditingMainItem = false;
-    this.loadDccData();
-  }
-
-  // ===== SUB ITEMS - GESTIÓN =====
-  addSubItem() {
-    const newSubItem = {
-      id: null, // null indica que es nuevo y no tiene ID en BD
-      dbId: null,
-      name: '',
-      model: '',
+  addItem(): void {
+    const newItem = {
+      id: null,
+      object: '',
       manufacturer: '',
-      identifiers: [], // Nueva estructura simplificada: {id, name, value}
+      model: '',
+      serial_number: '',
+      costumer_asset: '',
+      comment: '',
+      item_order: this.itemsList.length + 1,
     };
-
-    if (!this.mainItem.subItems) {
-      this.mainItem.subItems = [];
-    }
-    this.mainItem.subItems.push(newSubItem);
+    this.itemsList.push(newItem);
   }
 
-  removeSubItem(index: number) {
-    if (
-      this.mainItem.subItems &&
-      index >= 0 &&
-      index < this.mainItem.subItems.length
-    ) {
-      const subItem = this.mainItem.subItems[index];
+  moveItemUp(index: number): void {
+    if (index > 0) {
+      const temp = this.itemsList[index];
+      this.itemsList[index] = this.itemsList[index - 1];
+      this.itemsList[index - 1] = temp;
+    }
+  }
 
-      // Si tiene dbId, marcarlo para eliminación
-      if (subItem.dbId) {
-        subItem._markedForDeletion = true;
+  moveItemDown(index: number): void {
+    if (index < this.itemsList.length - 1) {
+      const temp = this.itemsList[index];
+      this.itemsList[index] = this.itemsList[index + 1];
+      this.itemsList[index + 1] = temp;
+    }
+  }
+
+  private autoAssignOrderIfNeeded(): void {
+    // Verificar si todos los items tienen item_order = 0 o undefined
+    const allZeroOrUndefined = this.itemsList.every(
+      (item) => !item.item_order || item.item_order === 0,
+    );
+
+    if (allZeroOrUndefined && this.itemsList.length > 0) {
+      this.itemsList.forEach((item, index) => {
+        item.item_order = index + 1;
+      });
+    } else if (this.itemsList.length > 0) {
+      // Si tienen orden asignado, ordenar por ese campo
+      this.itemsList.sort((a, b) => (a.item_order || 0) - (b.item_order || 0));
+    }
+  }
+
+  removeItem(index: number): void {
+    if (index >= 0 && index < this.itemsList.length) {
+      const item = this.itemsList[index];
+      if (item.id) {
+        item._markedForDeletion = true;
       } else {
-        // Si es nuevo (sin dbId), simplemente eliminarlo del array
-        this.mainItem.subItems.splice(index, 1);
+        this.itemsList.splice(index, 1);
       }
     }
   }
 
-  // ===== IDENTIFICADORES - GESTIÓN DINÁMICA =====
-  addIdentifier(subItemIndex: number) {
-    const subItem = this.mainItem.subItems[subItemIndex];
-    if (!subItem) return;
-
-    if (!subItem.identifiers) {
-      subItem.identifiers = [];
-    }
-
-    subItem.identifiers.push({
-      id: null, // null indica que es nuevo
-      name: '',
-      value: '',
-    });
-
-    this.items = [...this.items];
-  }
-
-  removeIdentifier(subItemIndex: number, identifierIndex: number) {
-    const subItem = this.mainItem.subItems[subItemIndex];
-    if (!subItem || !subItem.identifiers) return;
-
-    const identifier = subItem.identifiers[identifierIndex];
-
-    if (identifier.id) {
-      // Si tiene ID en BD, marcarlo para eliminación
-      identifier._markedForDeletion = true;
-    } else {
-      // Si es nuevo, eliminarlo directamente
-      subItem.identifiers.splice(identifierIndex, 1);
-    }
-
-    this.items = [...this.items];
-  }
-
-  // ===== GUARDAR SUBITEMS =====
-  saveSubItems() {
+  saveItems(): void {
     const currentData = this.dccDataService.getCurrentData();
     const dccId = currentData.administrativeData.core.certificate_number;
 
-    if (!dccId) {
+    if (!dccId || !this.dccItemId) {
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'No se encontró el Certificate Number para actualizar.',
+        text: 'No se encontraron los datos necesarios para guardar.',
       });
       return;
     }
 
-    if (!this.mainItem.subItems || this.mainItem.subItems.length === 0) {
+    if (this.itemsList.length === 0) {
       Swal.fire({
         icon: 'info',
-        title: 'Sin cambios',
-        text: 'No hay subitems para guardar.',
+        title: 'Sin items',
+        text: 'No hay items para guardar.',
       });
       return;
     }
 
     Swal.fire({
       title: 'Guardando...',
-      text: 'Actualizando subitems e identificadores',
+      text: 'Actualizando items',
       allowOutsideClick: false,
       didOpen: () => {
         Swal.showLoading();
       },
     });
 
-    this.processSubItemsSave(dccId);
+    this.processItemsSave(dccId);
   }
 
-  private async processSubItemsSave(dccId: string) {
+  private async processItemsSave(dccId: string): Promise<void> {
     try {
       const promises: Promise<any>[] = [];
 
-      for (let i = 0; i < this.mainItem.subItems.length; i++) {
-        const subItem = this.mainItem.subItems[i];
+      for (let i = 0; i < this.itemsList.length; i++) {
+        const item = this.itemsList[i];
+        item.item_order = i + 1; // Asignar número de orden secuencial
 
-        // Si está marcado para eliminación
-        if (subItem._markedForDeletion && subItem.dbId) {
-          promises.push(this.deleteSubItem(subItem.dbId));
+        if (item._markedForDeletion && item.id) {
+          promises.push(this.deleteItem(item.id));
           continue;
         }
 
-        // Crear o actualizar subitem
-        if (subItem.dbId) {
-          // Actualizar existente
-          promises.push(
-            this.updateSubItem(subItem).then((response: any) => {
-              if (response?.result) {
-                return this.saveIdentifiers(
-                  subItem.dbId,
-                  subItem.identifiers || [],
-                );
-              }
-              return response;
-            }),
-          );
+        if (item.id) {
+          promises.push(this.updateItem(item));
         } else {
-          // Crear nuevo
-          promises.push(
-            this.createSubItem(dccId, subItem, i + 1).then((response: any) => {
-              if (response?.result) {
-                const newSubItemId = response.result;
-                subItem.dbId = newSubItemId;
-                return this.saveIdentifiers(
-                  newSubItemId,
-                  subItem.identifiers || [],
-                );
-              }
-              return response;
-            }),
-          );
+          promises.push(this.createItem(dccId, item));
         }
       }
 
       await Promise.all(promises);
 
-      // Limpiar subitems eliminados del array
-      this.mainItem.subItems = this.mainItem.subItems.filter(
-        (s: any) => !s._markedForDeletion,
-      );
-
-      // Limpiar identificadores eliminados de cada subitem
-      this.mainItem.subItems.forEach((subItem: any) => {
-        if (subItem.identifiers) {
-          subItem.identifiers = subItem.identifiers.filter(
-            (id: any) => !id._markedForDeletion,
-          );
-        }
-      });
+      this.itemsList = this.itemsList.filter((i: any) => !i._markedForDeletion);
 
       Swal.close();
-      this.dccDataService.updateItems(this.items);
-      this.editingStates['subitems'] = false;
+      this.editingStates['items'] = false;
+      this.dccDataService.updateItemsList(this.itemsList, this.description);
 
       Swal.fire({
         icon: 'success',
         title: '¡Guardado!',
-        text: 'Los subitems se han actualizado correctamente.',
+        text: 'Los items se han actualizado correctamente.',
         timer: 2000,
         showConfirmButton: false,
         position: 'top-end',
       });
     } catch (error) {
       Swal.close();
-      console.error('Error saving subitems:', error);
+
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Ocurrió un error al guardar los subitems.',
+        text: 'Ocurrió un error al guardar los items.',
       });
     }
   }
 
-  private createSubItem(
-    dccId: string,
-    subItem: any,
-    idItem: number,
-  ): Promise<any> {
+  private createItem(dccId: string, item: any): Promise<any> {
     const createRequest = {
       action: 'create',
       bd: this.database,
-      table: 'dcc_subitem',
+      table: 'dcc_items',
       opts: {
         attributes: {
+          id_item: this.dccItemId,
           id_dcc: dccId,
-          id_item: idItem,
-          description: subItem.name || '',
-          manufacturer: subItem.manufacturer || '',
-          model: subItem.model || '',
+          object: item.object || '',
+          manufacturer: item.manufacturer || '',
+          model: item.model || '',
+          serial_number: item.serial_number || '',
+          costumer_asset: item.costumer_asset || '',
+          comment: item.comment || '',
+          item_order: item.item_order || 0,
+          deleted: 0,
         },
       },
     };
@@ -396,219 +441,39 @@ export class ItemsComponent implements OnInit, OnDestroy {
     return this.apiService.post(createRequest, UrlClass.URLNuevo).toPromise();
   }
 
-  private updateSubItem(subItem: any): Promise<any> {
+  private updateItem(item: any): Promise<any> {
     const updateRequest = {
       action: 'update',
       bd: this.database,
-      table: 'dcc_subitem',
+      table: 'dcc_items',
       opts: {
         attributes: {
-          description: subItem.name || '',
-          manufacturer: subItem.manufacturer || '',
-          model: subItem.model || '',
+          object: item.object || '',
+          manufacturer: item.manufacturer || '',
+          model: item.model || '',
+          serial_number: item.serial_number || '',
+          costumer_asset: item.costumer_asset || '',
+          comment: item.comment || '',
+          item_order: item.item_order || 0,
         },
-        where: { id: subItem.dbId },
+        where: { id: item.id },
       },
     };
 
     return this.apiService.post(updateRequest, UrlClass.URLNuevo).toPromise();
   }
 
-  private deleteSubItem(subItemId: number): Promise<any> {
+  private deleteItem(itemId: number): Promise<any> {
     const deleteRequest = {
       action: 'update',
       bd: this.database,
-      table: 'dcc_subitem',
+      table: 'dcc_items',
       opts: {
         attributes: { deleted: 1 },
-        where: { id: subItemId },
+        where: { id: itemId },
       },
     };
 
     return this.apiService.post(deleteRequest, UrlClass.URLNuevo).toPromise();
-  }
-
-  // ===== GUARDAR IDENTIFICADORES EN dcc_subitem_identificador =====
-  private async saveIdentifiers(
-    subItemId: number,
-    identifiers: any[],
-  ): Promise<void> {
-    const promises: Promise<any>[] = [];
-
-    for (const identifier of identifiers) {
-      // Si está marcado para eliminación
-      if (identifier._markedForDeletion && identifier.id) {
-        promises.push(this.deleteIdentifier(identifier.id));
-        continue;
-      }
-
-      // Solo guardar si tiene nombre
-      if (!identifier.name || identifier.name.trim() === '') {
-        continue;
-      }
-
-      if (identifier.id) {
-        // Actualizar existente
-        promises.push(this.updateIdentifierInDB(identifier));
-      } else {
-        // Crear nuevo
-        promises.push(this.createIdentifier(subItemId, identifier));
-      }
-    }
-
-    await Promise.all(promises);
-  }
-
-  private createIdentifier(subItemId: number, identifier: any): Promise<any> {
-    const createRequest = {
-      action: 'create',
-      bd: this.database,
-      table: 'dcc_subitem_identificador',
-      opts: {
-        attributes: {
-          id_subitem: subItemId,
-          name: identifier.name || '',
-          value: identifier.value || '',
-        },
-      },
-    };
-
-    return this.apiService
-      .post(createRequest, UrlClass.URLNuevo)
-      .toPromise()
-      .then((response: any) => {
-        if (response?.result) {
-          identifier.id = response.result;
-        }
-        return response;
-      });
-  }
-
-  private updateIdentifierInDB(identifier: any): Promise<any> {
-    const updateRequest = {
-      action: 'update',
-      bd: this.database,
-      table: 'dcc_subitem_identificador',
-      opts: {
-        attributes: {
-          name: identifier.name || '',
-          value: identifier.value || '',
-        },
-        where: { id: identifier.id },
-      },
-    };
-
-    return this.apiService.post(updateRequest, UrlClass.URLNuevo).toPromise();
-  }
-
-  private deleteIdentifier(identifierId: number): Promise<any> {
-    const deleteRequest = {
-      action: 'update',
-      bd: this.database,
-      table: 'dcc_subitem_identificador',
-      opts: {
-        attributes: { deleted: 1 },
-        where: { id: identifierId },
-      },
-    };
-
-    return this.apiService.post(deleteRequest, UrlClass.URLNuevo).toPromise();
-  }
-
-  // ===== CARGAR IDENTIFICADORES DESDE BD =====
-  private loadSubItemIdentifiersFromDB() {
-    const currentData = this.dccDataService.getCurrentData();
-    const dccId = currentData.administrativeData.core.certificate_number;
-
-    if (
-      !dccId ||
-      !this.mainItem.subItems ||
-      this.mainItem.subItems.length === 0
-    ) {
-      return;
-    }
-
-    // Primero obtener los subitems de la BD para tener sus IDs
-    this.checkExistingSubItems(dccId)
-      .then((existingSubItems) => {
-        // Mapear los dbId a los subitems locales
-        existingSubItems.forEach((dbSubItem: any, index: number) => {
-          if (this.mainItem.subItems[index]) {
-            this.mainItem.subItems[index].dbId = dbSubItem.id;
-
-            // Cargar identificadores para este subitem
-            this.loadIdentifiersForSubItem(dbSubItem.id, index);
-          }
-        });
-      })
-      .catch((error) => {
-        console.error('Error loading subitems:', error);
-      });
-  }
-
-  private loadIdentifiersForSubItem(subItemId: number, subItemIndex: number) {
-    const getIdentifiers = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_subitem_identificador',
-      opts: {
-        where: {
-          id_subitem: subItemId,
-          deleted: 0,
-        },
-        order_by: ['id', 'ASC'],
-      },
-    };
-
-    this.apiService.post(getIdentifiers, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        const identifiers = response.result || [];
-
-        if (this.mainItem.subItems[subItemIndex]) {
-          this.mainItem.subItems[subItemIndex].identifiers = identifiers.map(
-            (id: any) => ({
-              id: id.id,
-              name: id.name || '',
-              value: id.value || '',
-            }),
-          );
-
-          this.items = [...this.items];
-        }
-      },
-      error: (error) => {
-        console.error('Error loading identifiers:', error);
-      },
-    });
-  }
-
-  private checkExistingSubItems(dccId: string): Promise<any[]> {
-    const checkSubItems = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_subitem',
-      opts: {
-        where: {
-          id_dcc: dccId,
-          deleted: 0,
-        },
-        order_by: ['id', 'ASC'],
-      },
-    };
-
-    return this.apiService
-      .post(checkSubItems, UrlClass.URLNuevo)
-      .toPromise()
-      .then((response: any) => response?.result || []);
-  }
-
-  // ===== MÉTODOS AUXILIARES =====
-  private generateId(): string {
-    return `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  // ===== TRACKBY FUNCTIONS =====
-  trackByIndex(index: number, item: any): number {
-    return index;
   }
 }

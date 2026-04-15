@@ -1165,6 +1165,12 @@ ${this.generateResultDataXML(result.data)}
     // Preparar los datos para la plantilla
     const pdfData = this.preparePdfData();
 
+    console.log('[EXPORT] Payload final enviado a plantilla:', pdfData);
+    console.log(
+      '[EXPORT] Payload final enviado a plantilla (JSON):',
+      JSON.stringify(pdfData, null, 2),
+    );
+
     Swal.fire({
       title: 'Generando documento...',
       text: 'Por favor espere',
@@ -1448,6 +1454,44 @@ ${this.generateResultDataXML(result.data)}
       });
     }
 
+    // Items - Nuevo sistema (itemsList del nuevo dcc_items)
+    // Usar itemsList si existe, sino usar el sistema antiguo
+    let itemsList: any[] = [];
+    let itemDescription = data.itemDescription || ''; // Descripción del DCC
+
+    if (
+      data.itemsList &&
+      Array.isArray(data.itemsList) &&
+      data.itemsList.length > 0
+    ) {
+      // Nuevo sistema: usar itemsList directamente
+      // Ordenar por campo 'item_order' antes de mapear
+      const sortedItems = [...data.itemsList].sort(
+        (a: any, b: any) => (a.item_order || 0) - (b.item_order || 0),
+      );
+
+      itemsList = sortedItems.map((item: any) => ({
+        object: item.object || '',
+        manufacturer: item.manufacturer || '',
+        model: item.model || '',
+        serial_number: item.serial_number || '',
+        costumer_asset: item.costumer_asset || '',
+        comment: item.comment || '',
+        description: itemDescription, // Usar descripción del DCC
+      }));
+    } else if (Array.isArray(data.items) && data.items.length > 0) {
+      // Sistema antiguo: primer item + subitems
+      itemsList = data.items.map((item: any) => ({
+        object: item.name || '',
+        manufacturer: item.manufacturer || '',
+        model: item.model || '',
+        serial_number: item.serialNumber || '',
+        costumer_asset: item.customerAssetId || '',
+        comment: item.comment || '',
+        description: itemDescription, // Usar descripción del DCC
+      }));
+    }
+
     // Subitems: todos menos el principal (primer item)
     let subitems: any[] = [];
     if (Array.isArray(data.items) && data.items.length > 1) {
@@ -1475,9 +1519,15 @@ ${this.generateResultDataXML(result.data)}
       responsiblePersons = admin.responsiblePersons.map((person: any) => ({
         full_name: person.full_name || person.name || '',
         role: person.role || '',
+        email: person.email || '',
+        phone: person.phone || '',
         mainSigner: !!person.mainSigner,
+        doneBy: !!person.doneBy,
       }));
     }
+
+    const approvedBy = this.getApprovedByForIe(responsiblePersons);
+    const calibratedBy = this.getCalibratedByForIe(responsiblePersons);
 
     // Laboratory name and direction con salto de línea
     const labName = admin.laboratory?.name || '';
@@ -1489,17 +1539,17 @@ ${this.generateResultDataXML(result.data)}
       admin.core?.receipt_date_na || this.isDateNA(admin.core?.receipt_date)
         ? 'N/A'
         : admin.core?.receipt_date
-          ? this.formatDateForPdf(admin.core.receipt_date)
+          ? this.formatDateLongFormat(admin.core.receipt_date)
           : '';
 
     // PerformanceDate y rango
     const is_range_date = !!admin.core?.is_range_date;
-    const beginPerformanceDate = this.formatDateForPdf(
+    const beginPerformanceDate = this.formatDateLongFormat(
       admin.core?.performance_date,
     );
     const endPerformanceDate =
       is_range_date && admin.core?.end_performance_date
-        ? this.formatDateForPdf(admin.core?.end_performance_date)
+        ? this.formatDateLongFormat(admin.core?.end_performance_date)
         : '';
 
     // LOG FINAL DE DATOS PDF
@@ -1507,10 +1557,9 @@ ${this.generateResultDataXML(result.data)}
       pt,
       measuringEquipments,
       certificate_number: admin.core.certificate_number || '',
-      item_manufacturer: data.items?.[0]?.manufacturer || '',
-      item_name: data.items?.[0]?.name || '',
+      itemsList: itemsList,
+      itemDescription: itemDescription,
       measuringEquipmentsRaw: data.measuringEquipments,
-      subitems,
     });
 
     // Determinar performance location type y dirección del proyecto
@@ -1531,22 +1580,38 @@ ${this.generateResultDataXML(result.data)}
       this.isDateNA(admin.core?.next_calibration)
         ? 'N/A'
         : admin.core?.next_calibration
-          ? this.formatDateForPdf(admin.core.next_calibration)
+          ? this.formatDateLongFormat(admin.core.next_calibration)
           : '';
+
+    const technicalVerification = !!admin.core?.technical_verification;
+    const exportCertificateNumber = this.getExportCertificateNumber(
+      admin.core.certificate_number || '',
+      technicalVerification,
+    );
+    const isIeDocument = (admin.core?.certificate_number || '').includes(
+      ' IE ',
+    );
+    const ieNorma = isIeDocument
+      ? this.getIeNorma(data.usedMethods || [])
+      : undefined;
+    const ieResults = data.ieResults || null;
 
     return {
       pt,
       measuringEquipments,
       influenceConditions, // <-- Agregar condiciones de influencia
       // Core Data
-      certificate_number: admin.core.certificate_number || '',
-      issue_date: this.formatDateForPdf(admin.core.issue_date),
+      certificate_number: exportCertificateNumber,
+      issue_date: this.formatDateLongFormat(admin.core.issue_date),
       beginPerformanceDate,
       endPerformanceDate,
       performanceLocation,
       is_range_date,
-      accredited: !!admin.core?.accredited,
+      // Si hay patrones vencidos, forzar a usar plantilla NA (no acreditada)
+      accredited: data.hasExpiredPatrones ? false : !!admin.core?.accredited,
+      technical_verification: technicalVerification,
       next_calibration: nextCalibration,
+      circuito: isIeDocument ? admin.core?.circuito || '' : undefined,
 
       // Performance Location
       performance_location_type: performanceLocationType,
@@ -1557,6 +1622,24 @@ ${this.generateResultDataXML(result.data)}
       customer_direction: customerDirection,
       customer_email: customer.email || '',
       customer_phone: customer.phone || '',
+      customer_rep: isIeDocument ? admin.core?.customer_rep || '' : undefined,
+      customer_rep_tel: isIeDocument
+        ? admin.core?.customer_rep_tel || ''
+        : undefined,
+
+      // IE-only template variables
+      test_number: isIeDocument ? exportCertificateNumber : undefined,
+      PerformanceDate: isIeDocument ? beginPerformanceDate : undefined,
+      norma: ieNorma,
+      approved_by: isIeDocument ? approvedBy?.full_name || '' : undefined,
+      approved_by_role: isIeDocument ? approvedBy?.role || '' : undefined,
+      approved_by_email: isIeDocument ? approvedBy?.email || '' : undefined,
+      calibrated_by: isIeDocument ? calibratedBy?.full_name || '' : undefined,
+      calibrated_by_role: isIeDocument ? calibratedBy?.role || '' : undefined,
+      calibrated_by_email: isIeDocument ? calibratedBy?.email || '' : undefined,
+      faseA: isIeDocument ? ieResults?.fase1 || '' : undefined,
+      faseB: isIeDocument ? ieResults?.fase2 || '' : undefined,
+      faseC: isIeDocument ? ieResults?.fase3 || '' : undefined,
 
       // Laboratory Data
       laboratory_name: labName,
@@ -1575,9 +1658,84 @@ ${this.generateResultDataXML(result.data)}
       pt_description:
         this.getPtDescriptionFromUsedMethods(data.usedMethods, pt) || '',
       pt_method: this.getPtMethodFromUsedMethods(data.usedMethods, pt) || '',
+      descripcion_servicio:
+        this.getServiceNameFromUsedMethods(data.usedMethods) || '',
+      objeto_test: isIeDocument
+        ? admin.core?.test_object || ''
+        : itemDescription || '',
+      equipamiento: isIeDocument
+        ? this.buildIeEquipamientoParagraph(data.ieEquipment)
+        : this.buildEquipamientoParagraph(itemsList),
+
+      // Tested Material (IE only)
+      material_description: isIeDocument
+        ? data.testedMaterial?.material_description || ''
+        : undefined,
+      cable_fabricante: isIeDocument
+        ? data.testedMaterial?.cable_fabricante || ''
+        : undefined,
+      cable_modelo: isIeDocument
+        ? data.testedMaterial?.cable_modelo || ''
+        : undefined,
+      cable_metrajeA: isIeDocument
+        ? data.testedMaterial?.cable_metrajeA || ''
+        : undefined,
+      cable_metrajeB: isIeDocument
+        ? data.testedMaterial?.cable_metrajeB || ''
+        : undefined,
+      cable_metrajeC: isIeDocument
+        ? data.testedMaterial?.cable_metrajeC || ''
+        : undefined,
+      terminal1_fabricante: isIeDocument
+        ? data.testedMaterial?.terminal1_fabricante || ''
+        : undefined,
+      terminal1_modelo: isIeDocument
+        ? data.testedMaterial?.terminal1_modelo || ''
+        : undefined,
+      terminal1_snA: isIeDocument
+        ? data.testedMaterial?.terminal1_snA || ''
+        : undefined,
+      terminal1_snB: isIeDocument
+        ? data.testedMaterial?.terminal1_snB || ''
+        : undefined,
+      terminal1_snC: isIeDocument
+        ? data.testedMaterial?.terminal1_snC || ''
+        : undefined,
+      terminal2_fabricante: isIeDocument
+        ? data.testedMaterial?.terminal2_fabricante || ''
+        : undefined,
+      terminal2_modelo: isIeDocument
+        ? data.testedMaterial?.terminal2_modelo || ''
+        : undefined,
+      terminal2_snA: isIeDocument
+        ? data.testedMaterial?.terminal2_snA || ''
+        : undefined,
+      terminal2_snB: isIeDocument
+        ? data.testedMaterial?.terminal2_snB || ''
+        : undefined,
+      terminal2_snC: isIeDocument
+        ? data.testedMaterial?.terminal2_snC || ''
+        : undefined,
+      empalmes_fabricante: isIeDocument
+        ? data.testedMaterial?.empalmes_fabricante || ''
+        : undefined,
+      empalmes_modelo: isIeDocument
+        ? data.testedMaterial?.empalmes_modelo || ''
+        : undefined,
+      empalmes_metrajeA: isIeDocument
+        ? data.testedMaterial?.empalmes_metrajeA || ''
+        : undefined,
+      empalmes_metrajeB: isIeDocument
+        ? data.testedMaterial?.empalmes_metrajeB || ''
+        : undefined,
+      empalmes_metrajeC: isIeDocument
+        ? data.testedMaterial?.empalmes_metrajeC || ''
+        : undefined,
 
       // Metrological Traceability
-      metrologicalTraceability: data.metrologicalTraceability || [],
+      metrologicalTraceability: this.formatMetrologicalTraceabilityDates(
+        data.metrologicalTraceability || [],
+      ),
 
       // Responsible persons
       responsiblePersons,
@@ -1586,9 +1744,16 @@ ${this.generateResultDataXML(result.data)}
       date_receipt,
 
       // Template name
-      template_name: 'dcc_plantilla_general.docx',
+      template_name: isIeDocument
+        ? 'ie_plantilla_general.docx'
+        : technicalVerification
+          ? 'dcc_technical_verification.docx'
+          : 'dcc_plantilla_general.docx',
 
-      // Subitems para el backend
+      // Items - Nuevo sistema (por fila en el Word)
+      itemsList,
+
+      // Subitems para el backend (legacy)
       subitems,
 
       // Results
@@ -1629,6 +1794,22 @@ ${this.generateResultDataXML(result.data)}
     return parts.join(', ');
   }
 
+  private getApprovedByForIe(responsiblePersons: any[]): any | null {
+    return responsiblePersons.find((person) => person.mainSigner) || null;
+  }
+
+  private getCalibratedByForIe(responsiblePersons: any[]): any | null {
+    return responsiblePersons.find((person) => person.doneBy) || null;
+  }
+
+  private getIeNorma(usedMethods: any[]): string {
+    return (
+      usedMethods.find((method) => method?.norm)?.norm ||
+      usedMethods.find((method) => method?.reference)?.reference ||
+      ''
+    );
+  }
+
   /**
    * Formatea la fecha para mostrar en el PDF
    */
@@ -1665,6 +1846,60 @@ ${this.generateResultDataXML(result.data)}
     const year = date.getUTCFullYear();
 
     return `${day}/${month}/${year}`;
+  }
+
+  /**
+   * Formatea fecha al formato largo en inglés: "January 2, 2026"
+   */
+  private formatDateLongFormat(date: Date | string | undefined): string {
+    if (!date) return '';
+
+    let dateObj: Date;
+
+    if (typeof date === 'string') {
+      // Si es ISO (YYYY-MM-DD)
+      if (/^\d{4}-\d{2}-\d{2}/.test(date)) {
+        dateObj = new Date(date + 'T00:00:00Z');
+      } else {
+        dateObj = new Date(date);
+      }
+    } else {
+      dateObj = date;
+    }
+
+    if (isNaN(dateObj.getTime())) return '';
+
+    const monthNames = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+
+    const day = dateObj.getUTCDate();
+    const month = monthNames[dateObj.getUTCMonth()];
+    const year = dateObj.getUTCFullYear();
+
+    return `${month} ${day}, ${year}`;
+  }
+
+  /**
+   * Formatea las fechas de la tabla de Metrological Traceability a DD/MM/YYYY
+   * Se usa específicamente para la tabla, manteniendo otras fechas en formato largo
+   */
+  private formatMetrologicalTraceabilityDates(traceability: any[]): any[] {
+    return traceability.map((item) => ({
+      ...item,
+      tz_date: item.tz_date ? this.formatDateForPdf(item.tz_date) : '-',
+    }));
   }
 
   /**
@@ -1725,6 +1960,89 @@ ${this.generateResultDataXML(result.data)}
   }
 
   /**
+   * Obtiene el nombre del servicio desde usedMethods (dcc_usedmethod.name)
+   */
+  private getServiceNameFromUsedMethods(
+    usedMethods: any[] | undefined,
+  ): string {
+    if (!usedMethods || usedMethods.length === 0) {
+      return '';
+    }
+
+    const ptMethod = usedMethods.find(
+      (method: any) => method.refType === 'hv_method',
+    );
+
+    return ptMethod?.name || '';
+  }
+
+  /**
+   * Construye un parrafo en espanol para ${equipamiento} con uno o varios items.
+   * Omite campos vacios y conserva comentarios tal como fueron capturados.
+   */
+  private buildEquipamientoParagraph(itemsList: any[] | undefined): string {
+    if (!itemsList || itemsList.length === 0) {
+      return '';
+    }
+
+    const fragments = itemsList
+      .map((item: any) => {
+        const parts: string[] = [];
+        const objectName = String(item?.object || '').trim();
+        const assetId = String(item?.costumer_asset || '').trim();
+        const manufacturer = String(item?.manufacturer || '').trim();
+        const model = String(item?.model || '').trim();
+        const serialNumber = String(item?.serial_number || '').trim();
+        const comment = String(item?.comment || '').trim();
+
+        if (objectName) {
+          parts.push(`${objectName}.`);
+        }
+        if (assetId) {
+          parts.push(`No. de inventario / Identificacion: ${assetId}.`);
+        }
+        if (manufacturer) {
+          parts.push(`Marca: ${manufacturer}.`);
+        }
+        if (model) {
+          parts.push(`Modelo: ${model}.`);
+        }
+        if (serialNumber) {
+          parts.push(`No. de serie: ${serialNumber}.`);
+        }
+        if (comment) {
+          parts.push(this.ensureEndsWithPeriod(comment));
+        }
+
+        return parts.join(' ');
+      })
+      .filter((text: string) => text.trim() !== '');
+
+    return fragments.join(' ');
+  }
+
+  private buildIeEquipamientoParagraph(ieEquipment: any): string {
+    if (!ieEquipment) {
+      return '';
+    }
+
+    const name = String(ieEquipment?.name || '').trim();
+    const idEquipment = String(ieEquipment?.idequipment || '').trim();
+    const maker = String(ieEquipment?.maker || '').trim();
+    const model = String(ieEquipment?.model || '').trim();
+
+    if (!name && !idEquipment && !maker && !model) {
+      return '';
+    }
+
+    return `"${name}", N° de inventario / Identificación: "${idEquipment}". Marca: "${maker}", Modelo: "${model}".`;
+  }
+
+  private ensureEndsWithPeriod(text: string): string {
+    return /[.!?]$/.test(text) ? text : `${text}.`;
+  }
+
+  /**
    * Verifica si una fecha debe considerarse como N/A
    * Retorna true si la fecha es null, undefined, inválida, o representa 00/00/0000
    */
@@ -1760,5 +2078,20 @@ ${this.generateResultDataXML(result.data)}
     }
 
     return false;
+  }
+
+  private getExportCertificateNumber(
+    certificateNumber: string,
+    technicalVerification: boolean,
+  ): string {
+    if (!certificateNumber) {
+      return '';
+    }
+
+    if (!technicalVerification) {
+      return certificateNumber;
+    }
+
+    return certificateNumber.replace(' DCC ', ' TV ');
   }
 }

@@ -4,6 +4,8 @@ import { AdministrativeDataComponent } from '../administrative-data/administrati
 import { ItemsComponent } from '../items/items.component';
 import { StatementsComponent } from '../statements/statements.component';
 import { ResultsComponent } from '../results/results.component';
+import { TestedMaterialComponent } from '../tested-material/tested-material.component';
+import { IeResultsComponent } from '../ie-results/ie-results.component';
 import { PreviewComponent } from '../preview/preview.component';
 import { FormsModule } from '@angular/forms';
 import { NgMultiSelectDropDownModule } from 'ng-multiselect-dropdown';
@@ -30,6 +32,9 @@ import { UrlClass } from '../../shared/models/url.model';
   styleUrl: './dcc.component.css',
 })
 export class DccComponent implements OnInit {
+  readonly testedMaterialCmp = TestedMaterialComponent;
+  readonly ieResultsCmp = IeResultsComponent;
+
   // Variable para guardar el modo de operación actual
   operationMode: 'create' | 'load' | 'xml' | null = null;
   // Tipo de documento: 'DCC' o 'IE'
@@ -42,15 +47,26 @@ export class DccComponent implements OnInit {
   showUploadModal: boolean = false;
   // Tab activa en la interfaz principal
   activeTab: string = 'administrative-data';
+  // Tab máximo alcanzado (para progresión secuencial)
+  maxTabReached: number = 0; // 0 = administrative-data
 
-  // Definición de tabs disponibles
-  tabs = [
+  // Definición de tabs por tipo de documento
+  private readonly dccTabs = [
     { id: 'administrative-data', label: 'Administrative Data' },
     { id: 'items', label: 'Items' },
     { id: 'statements', label: 'Statements' },
     { id: 'results', label: 'Results' },
     { id: 'preview', label: 'Preview' },
   ];
+
+  private readonly ieTabs = [
+    { id: 'administrative-data', label: 'Administrative Data' },
+    { id: 'tested-material', label: 'Tested Material' },
+    { id: 'ie-results', label: 'Results' },
+    { id: 'preview', label: 'Preview' },
+  ];
+
+  tabs = [...this.dccTabs];
 
   // Selección de base de datos (pruebas o producción)
   isTesting: boolean = false; // Definir el entorno de pruebas
@@ -71,6 +87,8 @@ export class DccComponent implements OnInit {
   showCreateDccModal: boolean = false;
   // Controla la visualización del modal para crear un nuevo IE
   showCreateIeModal: boolean = false;
+  // Indica si el modal IE se abrió desde el botón IED (layout casi fullscreen)
+  isIedModal: boolean = false;
 
   // Variables para el modal de creación de DCC
   newDccProjectId: any = [];
@@ -83,6 +101,9 @@ export class DccComponent implements OnInit {
   newIePtId: string = '';
   newIeDutNumber: number | null = null;
   generatedIeCertificateNumber: string = '';
+  ieNameSuffix: string = ''; // Texto personalizado para el nombre del IE (solo para IE, no IED)
+  // Variables para el modal IED (circuitos)
+  iedCircuits: { circuito: number; customText: string }[] = []; // Circuitos detectados para IED
 
   // Variables comunes para fechas de DCC
   dccLocation: string = '';
@@ -91,6 +112,7 @@ export class DccComponent implements OnInit {
   dccCalibrationDate: string = '';
   dccIsRangeDate: boolean = false;
   dccEndDate: string = '';
+  dccCountryCode: string = 'MX'; // Country Code para los certificados DCC
 
   // Variables comunes para fechas de IE
   ieLocation: string = '';
@@ -99,6 +121,40 @@ export class DccComponent implements OnInit {
   ieTestDate: string = '';
   ieIsRangeDate: boolean = false;
   ieEndDate: string = '';
+  ieCountryCode: string = 'MX'; // Country Code para los certificados IE
+  ieCustomerRep: string = ''; // Responsible Customer (nombre)
+  ieCustomerRepTel: string = ''; // Responsible Customer (telefono)
+
+  // Variables para Tested Material en IED modal
+  activeIedTab: 'circuits' | 'dates' | 'material' = 'circuits'; // Pestaña activa
+  iedTabsCompleted: { circuits: boolean; dates: boolean; material: boolean } = {
+    circuits: false,
+    dates: false,
+    material: false,
+  };
+  iedTestedMaterial: any = {
+    material_description: '',
+    cable_fabricante: '',
+    cable_modelo: '',
+    cable_metrajeA: '',
+    cable_metrajeB: '',
+    cable_metrajeC: '',
+    terminal1_fabricante: '',
+    terminal1_modelo: '',
+    terminal1_snA: '',
+    terminal1_snB: '',
+    terminal1_snC: '',
+    terminal2_fabricante: '',
+    terminal2_modelo: '',
+    terminal2_snA: '',
+    terminal2_snB: '',
+    terminal2_snC: '',
+    empalmes_fabricante: '',
+    empalmes_modelo: '',
+    empalmes_metrajeA: '',
+    empalmes_metrajeB: '',
+    empalmes_metrajeC: '',
+  };
 
   ptOptions: string[] = [
     'PT-05',
@@ -130,6 +186,13 @@ export class DccComponent implements OnInit {
   ieSelectedCertificateIndex: number = -1; // Índice del certificado seleccionado para IE
   dccSelectedCertificate: any = null; // Certificado seleccionado para mostrar detalles (DCC)
   ieSelectedCertificate: any = null; // Certificado seleccionado para mostrar detalles (IE)
+  dccProjectDutServices: any[] = []; // DUT services del proyecto DCC seleccionado
+  ieProjectDutServices: any[] = []; // DUT services del proyecto IE seleccionado
+  dccPhaseOptions: number[] = []; // Fases disponibles en DCC (null => 0)
+  iePhaseOptions: number[] = []; // Fases disponibles en IE (null => 0)
+  selectedDccPhase: number | null = null; // Fase activa para crear DCC
+  selectedIePhase: number | null = null; // Fase activa para crear IE
+  ieFillFlowVersion: 'legacy' | 'v2' = 'v2'; // Permite separar el llenado de IE sin tocar DCC
 
   // Configuración para el multiselect de proyectos
   projectDropdownSettings = {
@@ -239,6 +302,7 @@ export class DccComponent implements OnInit {
   // Al iniciar el componente, carga la lista de DCCs existentes
   ngOnInit() {
     this.loadExistingDccList();
+    this.updateTabsForDocumentType();
     // Suscribirse a cambios en el certificate_number para detectar tipo automáticamente
     this.dccDataService.dccData$.subscribe((data) => {
       this.detectDocumentType(data.administrativeData.core.certificate_number);
@@ -253,11 +317,33 @@ export class DccComponent implements OnInit {
 
     if (certificateNumber.includes(' DCC ')) {
       this.documentType = 'DCC';
+    } else if (certificateNumber.includes(' TV ')) {
+      // Technical Verification también es tipo DCC
+      this.documentType = 'DCC';
     } else if (certificateNumber.includes(' IE ')) {
       this.documentType = 'IE';
     } else if (certificateNumber.includes(' CC ')) {
       // Formato antiguo CC también es DCC
       this.documentType = 'DCC';
+    }
+
+    this.updateTabsForDocumentType();
+  }
+
+  private updateTabsForDocumentType(): void {
+    this.tabs =
+      this.documentType === 'IE' ? [...this.ieTabs] : [...this.dccTabs];
+
+    const currentIndex = this.tabs.findIndex(
+      (tab) => tab.id === this.activeTab,
+    );
+    if (currentIndex === -1) {
+      this.activeTab = 'administrative-data';
+    }
+
+    const maxAllowed = this.tabs.length - 1;
+    if (this.maxTabReached > maxAllowed) {
+      this.maxTabReached = maxAllowed;
     }
   }
 
@@ -612,6 +698,9 @@ export class DccComponent implements OnInit {
           'pt',
           'country',
           'language',
+          'circuito',
+          'customer_rep',
+          'customer_rep_tel',
           'receipt_date',
           'date_calibration',
           'date_range',
@@ -620,6 +709,7 @@ export class DccComponent implements OnInit {
           'issue_date',
           'next_calibration',
           'accredited',
+          'technical_verification',
           'id_laboratory',
           'id_customer',
           'dcc_data',
@@ -790,7 +880,6 @@ export class DccComponent implements OnInit {
       opts: {
         where: {
           deleted: 0,
-          organizacion: 0,
         },
         order_by: ['first_name', 'ASC'],
       },
@@ -801,13 +890,17 @@ export class DccComponent implements OnInit {
       .toPromise()
       .then((response: any) => {
         const rawUsers = Array.isArray(response?.result) ? response.result : [];
+        const filteredUsers = rawUsers.filter((user: any) => {
+          const organizacion = Number(user?.organizacion);
+          return organizacion === 0 || organizacion === 2;
+        });
 
         // Mapear usuarios para tener el formato esperado
-        const users = rawUsers.map((user: any) => ({
+        const users = filteredUsers.map((user: any) => ({
           no_nomina: user.no_nomina,
           name: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
           email: user.email || '',
-          phone: user.telefono || '',
+          phone: user.telefono2 || '',
         }));
 
         // Mapear responsible persons con datos de usuarios
@@ -852,6 +945,15 @@ export class DccComponent implements OnInit {
         mergedData.administrativeData.core.country_code = dccData.country;
       if (dccData.language)
         mergedData.administrativeData.core.language = dccData.language;
+      if (dccData.object !== undefined)
+        mergedData.administrativeData.core.test_object = dccData.object || '';
+      if (dccData.circuito !== undefined)
+        mergedData.administrativeData.core.circuito = dccData.circuito;
+      if (dccData.customer_rep !== undefined)
+        mergedData.administrativeData.core.customer_rep = dccData.customer_rep;
+      if (dccData.customer_rep_tel !== undefined)
+        mergedData.administrativeData.core.customer_rep_tel =
+          dccData.customer_rep_tel;
       if (dccData.receipt_date)
         mergedData.administrativeData.core.receipt_date = dccData.receipt_date;
       if (dccData.date_calibration)
@@ -875,6 +977,10 @@ export class DccComponent implements OnInit {
       if (dccData.accredited !== undefined)
         mergedData.administrativeData.core.accredited = Boolean(
           dccData.accredited,
+        );
+      if (dccData.technical_verification !== undefined)
+        mergedData.administrativeData.core.technical_verification = Boolean(
+          dccData.technical_verification,
         );
 
       // Asignar datos del laboratorio si existen
@@ -929,6 +1035,7 @@ export class DccComponent implements OnInit {
               email: person.user_email || '',
               phone: person.user_phone || '',
               mainSigner: Boolean(person.main),
+              doneBy: Boolean(person.done_by),
               head: Boolean(person.head),
               coordinator: Boolean(person.coordinator),
             };
@@ -937,11 +1044,8 @@ export class DccComponent implements OnInit {
     }
 
     // Cargar todos los datos de items en paralelo
-    Promise.all([
-      this.loadMainItemData(dccData.id),
-      this.loadSubItems(dccData.id),
-    ])
-      .then(([mainItemData, subItems]) => {
+    Promise.all([this.loadMainItemData(dccData.id)])
+      .then(([mainItemData]) => {
         // Procesar Main Item Data
         if (mainItemData) {
           // Asegurar que el array de items existe
@@ -994,18 +1098,6 @@ export class DccComponent implements OnInit {
         // Procesar Object Identifications Groups
         // Eliminado: objectGroups y mergedData.objectIdentifications
 
-        // Procesar SubItems
-        if (subItems && subItems.length > 0) {
-          // Mapear SubItems desde la BD (sin identificadores)
-          mergedData.items[0].subItems = subItems.map((subItem: any) => ({
-            id: `subitem_${subItem.id}`,
-            dbId: subItem.id,
-            name: subItem.description || '',
-            manufacturer: subItem.manufacturer || '',
-            model: subItem.model || '',
-            identifiers: [],
-          }));
-        }
         // Cargar los datos (con o sin subitems)
         this.dccDataService.loadFromObject(mergedData);
         this.showInitialOptions = false;
@@ -1046,33 +1138,34 @@ export class DccComponent implements OnInit {
       });
   }
 
-  // Nuevo método para cargar SubItems
-  private loadSubItems(dccId: string): Promise<any[]> {
-    const getSubItems = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_subitem',
-      opts: {
-        where: { id_dcc: dccId },
-        order_by: ['id_item', 'ASC'],
-      },
-    };
+  // Cambia la tab activa (con progresión secuencial obligatoria)
+  selectTab(tabId: string) {
+    const targetIndex = this.tabs.findIndex((tab) => tab.id === tabId);
 
-    return this.apiService
-      .post(getSubItems, UrlClass.URLNuevo)
-      .toPromise()
-      .then((response: any) => {
-        return response?.result || [];
-      })
-      .catch((error) => {
-        console.error('❌ Error loading subitems:', error);
-        return [];
+    // Si el tab está más allá del máximo alcanzado + 1, no permitir acceso
+    if (targetIndex > this.maxTabReached + 1) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Acceso restringido',
+        text: 'Debes completar las pestañas en orden secuencial.',
+        confirmButtonText: 'Entendido',
+        timer: 3000,
       });
+      return;
+    }
+
+    // Permitir acceso y actualizar tab activo
+    this.activeTab = tabId;
+
+    // Actualizar el máximo alcanzado si es necesario
+    if (targetIndex > this.maxTabReached) {
+      this.maxTabReached = targetIndex;
+    }
   }
 
-  // Cambia la tab activa
-  selectTab(tabId: string) {
-    this.activeTab = tabId;
+  // Verifica si un tab está disponible para acceder
+  isTabAvailable(tabIndex: number): boolean {
+    return tabIndex <= this.maxTabReached + 1;
   }
 
   // Navega al siguiente step/tab
@@ -1082,6 +1175,10 @@ export class DccComponent implements OnInit {
     );
     if (currentIndex < this.tabs.length - 1) {
       this.activeTab = this.tabs[currentIndex + 1].id;
+      // Actualizar el máximo alcanzado
+      if (currentIndex + 1 > this.maxTabReached) {
+        this.maxTabReached = currentIndex + 1;
+      }
       // Scroll al inicio de la página
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -1123,6 +1220,7 @@ export class DccComponent implements OnInit {
         this.showMainInterface = false;
         this.showInitialOptions = true;
         this.activeTab = 'administrative-data';
+        this.maxTabReached = 0; // Resetear progreso de tabs
 
         // Mostrar mensaje de confirmación
         Swal.fire({
@@ -1160,6 +1258,9 @@ export class DccComponent implements OnInit {
     this.showCreateDccModal = false;
     this.showDccSelect = false;
     this.showUploadModal = false;
+
+    // Resetear progreso de tabs
+    this.maxTabReached = 0;
   }
 
   // Abre el modal para crear un nuevo DCC
@@ -1186,12 +1287,14 @@ export class DccComponent implements OnInit {
       }).then((result) => {
         if (result.isConfirmed) {
           this.documentType = 'DCC';
+          this.updateTabsForDocumentType();
           this.loadProjects('dcc');
           this.showCreateDccModal = true;
         }
       });
     } else {
       this.documentType = 'DCC';
+      this.updateTabsForDocumentType();
       this.loadProjects('dcc');
       this.showCreateDccModal = true;
     }
@@ -1208,6 +1311,9 @@ export class DccComponent implements OnInit {
     this.dccSelectedCertificateIndex = -1;
     this.dccCurrentDutService = null;
     this.dccSelectedCertificate = null;
+    this.dccProjectDutServices = [];
+    this.dccPhaseOptions = [];
+    this.selectedDccPhase = null;
     // Limpiar campos de fecha y location
     this.dccLocation = '';
     this.dccLocationAddress = '';
@@ -1215,10 +1321,15 @@ export class DccComponent implements OnInit {
     this.dccCalibrationDate = '';
     this.dccIsRangeDate = false;
     this.dccEndDate = '';
+    this.dccCountryCode = 'MX'; // Reset a valor por defecto
   }
 
-  // Abre el modal para crear un nuevo IE
-  openCreateIeModal(): void {
+  // Abre el modal para crear un nuevo IE/IED
+  openCreateIeModal(mode: 'IE' | 'IED' = 'IE'): void {
+    const isIedMode = mode === 'IED';
+    this.isIedModal = isIedMode;
+    const docLabel = isIedMode ? 'IED' : 'IE';
+
     // Si hay datos en el IE actual, mostrar confirmación
     const currentData = this.dccDataService.getCurrentData();
     const hasCurrentData =
@@ -1230,8 +1341,8 @@ export class DccComponent implements OnInit {
 
     if (hasCurrentData) {
       Swal.fire({
-        title: '¿Crear nuevo IE?',
-        text: 'Se perderán todos los cambios no guardados del IE actual.',
+        title: `¿Crear nuevo ${docLabel}?`,
+        text: `Se perderán todos los cambios no guardados del ${docLabel} actual.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#2196f3',
@@ -1241,28 +1352,66 @@ export class DccComponent implements OnInit {
       }).then((result) => {
         if (result.isConfirmed) {
           this.documentType = 'IE';
+          this.updateTabsForDocumentType();
           this.loadProjects('ie');
           this.showCreateIeModal = true;
         }
       });
     } else {
       this.documentType = 'IE';
+      this.updateTabsForDocumentType();
       this.loadProjects('ie');
       this.showCreateIeModal = true;
     }
   }
 
+  // IED reutiliza el flujo de IE, pero con layout casi fullscreen
+  openCreateIedModal(): void {
+    this.openCreateIeModal('IED');
+  }
+
   // Cierra el modal de creación de IE
   closeCreateIeModal() {
     this.showCreateIeModal = false;
+    this.isIedModal = false;
     this.newIeProjectId = [];
     this.newIePtId = '';
     this.newIeDutNumber = null;
     this.generatedIeCertificateNumber = '';
+    this.ieNameSuffix = ''; // Limpiar texto personalizado
+    this.iedCircuits = []; // Limpiar circuitos IED
+    this.activeIedTab = 'circuits';
+    this.iedTabsCompleted = { circuits: false, dates: false, material: false };
+    this.iedTestedMaterial = {
+      material_description: '',
+      cable_fabricante: '',
+      cable_modelo: '',
+      cable_metrajeA: '',
+      cable_metrajeB: '',
+      cable_metrajeC: '',
+      terminal1_fabricante: '',
+      terminal1_modelo: '',
+      terminal1_snA: '',
+      terminal1_snB: '',
+      terminal1_snC: '',
+      terminal2_fabricante: '',
+      terminal2_modelo: '',
+      terminal2_snA: '',
+      terminal2_snB: '',
+      terminal2_snC: '',
+      empalmes_fabricante: '',
+      empalmes_modelo: '',
+      empalmes_metrajeA: '',
+      empalmes_metrajeB: '',
+      empalmes_metrajeC: '',
+    };
     this.ieCertificatesList = [];
     this.ieSelectedCertificateIndex = -1;
     this.ieCurrentDutService = null;
     this.ieSelectedCertificate = null;
+    this.ieProjectDutServices = [];
+    this.iePhaseOptions = [];
+    this.selectedIePhase = null;
     // Limpiar campos de fecha y location
     this.ieLocation = '';
     this.ieLocationAddress = '';
@@ -1270,6 +1419,9 @@ export class DccComponent implements OnInit {
     this.ieTestDate = '';
     this.ieIsRangeDate = false;
     this.ieEndDate = '';
+    this.ieCountryCode = 'MX'; // Reset a valor por defecto
+    this.ieCustomerRep = '';
+    this.ieCustomerRepTel = '';
   }
 
   /**
@@ -1525,43 +1677,480 @@ export class DccComponent implements OnInit {
       const counter = (index + 1).toString().padStart(2, '0');
 
       // El PT puede tener múltiples valores separados por comas: "PT-24, PT-44"
-      // O puede tener otros valores que no sean PT-XX
-      const ptString = dut.pt || '';
+      // O puede venir como JSON array desde la BD: ["47"] o ["PT-24","PT-44"]
+      const ptRaw = dut.pt || '';
+      let ptString = ptRaw;
+      try {
+        const parsed = JSON.parse(ptRaw);
+        if (Array.isArray(parsed)) {
+          ptString = parsed.join(', ');
+        }
+      } catch (_) {
+        /* not JSON, use as-is */
+      }
       let ptList = ptString
         .split(',')
         .map((pt: string) => pt.trim())
         .filter((pt: string) => pt.length > 0);
 
+      // Detectar si es Technical Verification (solo aplica para DCC)
+      const isTv =
+        documentType === 'DCC' && Boolean(dut.technical_verification);
+      const docLabel = isTv ? 'TV' : documentType;
+
       // Si no hay PTs, crear certificado sin PT
       if (ptList.length === 0) {
         console.warn('⚠️ DUT SERVICE WITHOUT PT, CREATING WITHOUT PT:', dut);
-        const certificateName = `${projectId}-00 ${documentType} ${counter}`;
+        let certificateName = '';
+        if (documentType === 'IE') {
+          // Para IE: sin counter, usar sufijo personalizado
+          const suffix = this.ieNameSuffix ? ` ${this.ieNameSuffix}` : '';
+          certificateName = `${projectId}-00 ${documentType}${suffix}`;
+        } else {
+          // Para DCC/TV: con counter
+          certificateName = `${projectId}-00 ${docLabel} ${counter}`;
+        }
         certificates.push({
           name: certificateName,
           dutService: dut,
           pt: '',
           counter: counter,
+          isTechnicalVerification: isTv,
         });
         return;
       }
 
       // Crear un certificado por cada PT
       ptList.forEach((pt: string) => {
-        // Extraer el número: si es "PT-24" obtiene "24", si es "Calibración" obtiene "Calibración"
-        const ptNumber = pt.replace(/^PT-/, ''); // Remover "PT-" solo si existe
-        const certificateName = `${projectId}-00 ${documentType} ${ptNumber} ${counter}`;
+        const normalizedPt = this.normalizePtForStorage(pt);
+        // Extraer el número para mostrar en el nombre del certificado
+        const ptNumber = normalizedPt.replace(/^PT-/i, '');
+
+        let certificateName = '';
+        if (documentType === 'IE') {
+          // Para IE: sin counter de DUT, incluir texto personalizado
+          const suffix = this.ieNameSuffix ? ` ${this.ieNameSuffix}` : '';
+          certificateName = `${projectId}-00 ${documentType} ${ptNumber}${suffix}`;
+        } else {
+          // Para DCC/TV: mantener formato original con counter
+          certificateName = `${projectId}-00 ${docLabel} ${ptNumber} ${counter}`;
+        }
 
         certificates.push({
           name: certificateName,
           dutService: dut,
-          pt: pt,
+          pt: normalizedPt,
           counter: counter,
+          isTechnicalVerification: isTv,
         });
       });
     });
 
     console.log('✅ GENERATED CERTIFICATES:', certificates);
     return certificates;
+  }
+
+  private normalizePhase(phaseValue: any): number {
+    if (phaseValue === null || phaseValue === undefined || phaseValue === '') {
+      return 0;
+    }
+
+    const numericPhase = Number(phaseValue);
+    return Number.isFinite(numericPhase) ? numericPhase : 0;
+  }
+
+  private normalizePtForStorage(ptValue: any): string {
+    const raw = String(ptValue ?? '').trim();
+    if (!raw) {
+      return '';
+    }
+
+    const withoutPrefix = raw.replace(/^PT-/i, '').trim();
+    if (!withoutPrefix) {
+      return '';
+    }
+
+    return `PT-${withoutPrefix}`;
+  }
+
+  private isIedPt(ptValue: any): boolean {
+    const normalized = this.normalizePtForStorage(ptValue);
+    const numericPart = normalized.replace(/^PT-/i, '').trim();
+    const ptAsNumber = Number(numericPart);
+    return Number.isFinite(ptAsNumber) && [5, 12, 14].includes(ptAsNumber);
+  }
+
+  private extractPhaseOptions(dutServices: any[]): number[] {
+    const uniquePhases = new Set<number>();
+    (dutServices || []).forEach((dut) => {
+      uniquePhases.add(this.normalizePhase(dut?.fase));
+    });
+
+    return Array.from(uniquePhases).sort((a, b) => a - b);
+  }
+
+  private filterDutServicesByPhase(
+    dutServices: any[],
+    phase: number | null,
+  ): any[] {
+    if (phase === null || phase === undefined) {
+      return dutServices || [];
+    }
+
+    return (dutServices || []).filter(
+      (dut) => this.normalizePhase(dut?.fase) === phase,
+    );
+  }
+
+  private shouldUseIeV2Flow(): boolean {
+    return this.ieFillFlowVersion === 'v2';
+  }
+
+  private buildIeCreateAttributes(
+    certificateName: string,
+    ptNumber: string,
+  ): any {
+    const attributes: any = {
+      id: certificateName,
+      pt: ptNumber,
+      sw_name: 'IE Generator',
+      sw_version: '1.0.2',
+      sw_type: 'application',
+      country: this.ieCountryCode,
+      language: 'en',
+      id_laboratory: 1,
+    };
+
+    if (this.ieAccountId) {
+      attributes.id_customer = this.ieAccountId;
+    }
+
+    const createdBy = this.getUserIdFromUrl();
+    if (createdBy) {
+      attributes.created_by = createdBy;
+    }
+
+    if (this.ieLocation) {
+      attributes.location = this.ieLocation;
+    }
+    if (this.ieReceiptDate) {
+      attributes.receipt_date = this.ieReceiptDate;
+    }
+    if (this.ieTestDate) {
+      attributes.date_calibration = this.ieTestDate;
+    }
+
+    attributes.date_range = this.ieIsRangeDate ? 1 : 0;
+    if (this.ieEndDate && this.ieIsRangeDate) {
+      attributes.date_end = this.ieEndDate;
+    }
+
+    if (this.ieCustomerRep?.trim()) {
+      attributes.customer_rep = this.ieCustomerRep.trim();
+    }
+
+    if (this.ieCustomerRepTel?.trim()) {
+      attributes.customer_rep_tel = this.ieCustomerRepTel.trim();
+    }
+
+    return attributes;
+  }
+
+  private buildIeItemAttributes(certificateName: string, dutService: any): any {
+    return {
+      id_dcc: certificateName,
+      description: dutService?.description || '',
+    };
+  }
+
+  private prefillIeDraftData(certificate: any): void {
+    if (!this.shouldUseIeV2Flow()) {
+      return;
+    }
+
+    const currentData = this.dccDataService.getCurrentData();
+    const ieData = {
+      ...currentData,
+      administrativeData: {
+        ...currentData.administrativeData,
+        software: {
+          ...currentData.administrativeData.software,
+          name: 'IE Generator',
+          version: '1.0.2',
+          type: 'application',
+        },
+        core: {
+          ...currentData.administrativeData.core,
+          certificate_number: certificate?.name || '',
+          pt_id: certificate?.pt || '',
+          country_code: this.ieCountryCode,
+          language: 'en',
+          performance_localition: this.ieLocation || '',
+          receipt_date:
+            (this.ieReceiptDate as any) ||
+            currentData.administrativeData.core.receipt_date,
+          performance_date:
+            (this.ieTestDate as any) ||
+            currentData.administrativeData.core.performance_date,
+          is_range_date: this.ieIsRangeDate,
+          end_performance_date:
+            this.ieIsRangeDate && this.ieEndDate
+              ? (this.ieEndDate as any)
+              : currentData.administrativeData.core.end_performance_date,
+          next_calibration: '' as any,
+          accredited: false,
+          technical_verification: false,
+        },
+      },
+      items: [
+        {
+          id: 'main_item',
+          name: certificate?.dutService?.description || '',
+          manufacturer: '',
+          model: '',
+          serialNumber: certificate?.dutService?.serial_number || '',
+          customerAssetId: '',
+          comment: '',
+          identifications: [],
+          itemQuantities: [],
+          subItems: [],
+        },
+      ],
+    };
+
+    this.dccDataService.loadFromObject(ieData);
+  }
+
+  private regenerateDccCertificates(): void {
+    const projectId = this.newDccProjectId?.[0]?.id || '';
+    if (!projectId) {
+      this.dccCertificatesList = [];
+      this.dccSelectedCertificate = null;
+      return;
+    }
+
+    const filteredDutServices = this.filterDutServicesByPhase(
+      this.dccProjectDutServices,
+      this.selectedDccPhase,
+    );
+
+    this.dccCertificatesList = this.generateCertificatesFromDutServices(
+      projectId,
+      filteredDutServices,
+      'DCC',
+    );
+
+    this.dccSelectedCertificate = null;
+    this.dccSelectedCertificateIndex = -1;
+  }
+
+  private regenerateIeCertificates(): void {
+    if (this.isIedModal) {
+      this.regenerateIedCertificates();
+      return;
+    }
+
+    const projectId = this.newIeProjectId?.[0]?.id || '';
+    if (!projectId) {
+      this.ieCertificatesList = [];
+      this.ieSelectedCertificate = null;
+      return;
+    }
+
+    const filteredDutServices = this.filterDutServicesByPhase(
+      this.ieProjectDutServices,
+      this.selectedIePhase,
+    );
+
+    this.ieCertificatesList = this.generateCertificatesFromDutServices(
+      projectId,
+      filteredDutServices,
+      'IE',
+    );
+
+    this.ieSelectedCertificate = null;
+    this.ieSelectedCertificateIndex = -1;
+  }
+
+  /**
+   * Detecta los circuitos únicos a partir de dut_services con PT-05, PT-12 o PT-14
+   * y preserva los textos personalizados ya ingresados.
+   */
+  private setupIedCircuits(): void {
+    const filteredDuts = this.filterDutServicesByPhase(
+      this.ieProjectDutServices,
+      this.selectedIePhase,
+    );
+
+    const circuitNums = new Set<number>();
+
+    filteredDuts.forEach((dut) => {
+      const ptList = this.parsePtList(dut.pt);
+      const hasIedPt = ptList.some((pt) => this.isIedPt(pt));
+      if (hasIedPt && dut.circuito != null) {
+        circuitNums.add(Number(dut.circuito));
+      }
+    });
+
+    const sorted = Array.from(circuitNums).sort((a, b) => a - b);
+    this.iedCircuits = sorted.map((circuito) => {
+      const existing = this.iedCircuits.find((c) => c.circuito === circuito);
+      return { circuito, customText: existing?.customText ?? '' };
+    });
+
+    // Si hay DUTs con PT IED (05/12/14) pero sin circuito, avisar al usuario.
+    const hasIedPtWithoutCircuit = filteredDuts.some((dut) => {
+      const ptList = this.parsePtList(dut.pt);
+      const hasIedPt = ptList.some((pt) => this.isIedPt(pt));
+      return (
+        hasIedPt && (dut.circuito == null || String(dut.circuito).trim() === '')
+      );
+    });
+
+    if (hasIedPtWithoutCircuit) {
+      const projectId = this.newIeProjectId?.[0]?.id || 'PH';
+      Swal.fire({
+        icon: 'warning',
+        title: 'Informacion incompleta',
+        text: `No se tiene informacion de circuito en este ${projectId} favor de contactar al departamento de ventas para actualizar OS`,
+      });
+    }
+  }
+
+  /** Parsea el campo pt de un dut_service hacia un arreglo de strings limpios */
+  private parsePtList(ptRaw: any): string[] {
+    let ptString = String(ptRaw ?? '');
+    try {
+      const parsed = JSON.parse(ptString);
+      if (Array.isArray(parsed)) ptString = parsed.join(', ');
+    } catch (_) {}
+    return ptString
+      .split(',')
+      .map((p: string) => p.trim())
+      .filter((p: string) => p.length > 0);
+  }
+
+  /**
+   * Genera la lista de informes para IED agrupados por circuito.
+   * El nombre del informe usa el customText de cada circuito.
+   */
+  private regenerateIedCertificates(): void {
+    const projectId = this.newIeProjectId?.[0]?.id || '';
+    if (!projectId) {
+      this.ieCertificatesList = [];
+      this.ieSelectedCertificate = null;
+      return;
+    }
+
+    const filteredDuts = this.filterDutServicesByPhase(
+      this.ieProjectDutServices,
+      this.selectedIePhase,
+    );
+
+    const certificates: any[] = [];
+
+    this.iedCircuits.forEach((circuit) => {
+      const circuitDuts = filteredDuts.filter((dut) => {
+        if (Number(dut.circuito) !== circuit.circuito) return false;
+        const ptList = this.parsePtList(dut.pt);
+        return ptList.some((p) => this.isIedPt(p));
+      });
+
+      circuitDuts.forEach((dut) => {
+        const ptList = this.parsePtList(dut.pt);
+        const effectivePts = ptList.length > 0 ? ptList : [''];
+
+        effectivePts.forEach((pt: string) => {
+          const normalizedPt = pt ? this.normalizePtForStorage(pt) : '';
+          const ptNumber = normalizedPt.replace(/^PT-/i, '');
+          const suffix = circuit.customText ? ` ${circuit.customText}` : '';
+          const name = ptNumber
+            ? `${projectId}-00 IE ${ptNumber}${suffix}`
+            : `${projectId}-00 IE${suffix}`;
+
+          certificates.push({
+            name,
+            dutService: dut,
+            pt: normalizedPt,
+            counter: '',
+            circuito: circuit.circuito,
+            isTechnicalVerification: false,
+          });
+        });
+      });
+    });
+
+    this.ieCertificatesList = certificates;
+    this.ieSelectedCertificate = null;
+    this.ieSelectedCertificateIndex = -1;
+  }
+
+  /**
+   * Llamado desde el HTML cuando cambia el texto personalizado de un circuito IED
+   */
+  onIedCircuitTextChange(): void {
+    this.regenerateIedCertificates();
+    this.updateIedTabCompletion();
+  }
+
+  /** Devuelve los informes del circuito indicado (para preview en el modal IED) */
+  getReportsForCircuit(circuito: number): any[] {
+    return this.ieCertificatesList.filter((c) => c.circuito === circuito);
+  }
+
+  // ===== Métodos para gestionar pestañas IED =====
+  setIedTab(tab: 'circuits' | 'dates' | 'material'): void {
+    this.activeIedTab = tab;
+  }
+
+  isIedTabCompleted(tab: 'circuits' | 'dates' | 'material'): boolean {
+    if (tab === 'circuits') {
+      return this.iedCircuits.every((c) => c.customText && c.customText.trim());
+    }
+    if (tab === 'dates') {
+      return !!(
+        this.ieCountryCode &&
+        this.ieLocation &&
+        this.ieTestDate &&
+        this.ieCustomerRep?.trim() &&
+        this.ieCustomerRepTel?.trim()
+      );
+    }
+    if (tab === 'material') {
+      // Material: solo checar que material_description no esté vacío (al menos uno)
+      return !!(
+        this.iedTestedMaterial.material_description &&
+        this.iedTestedMaterial.material_description.trim()
+      );
+    }
+    return false;
+  }
+
+  updateIedTabCompletion(): void {
+    this.iedTabsCompleted.circuits = this.isIedTabCompleted('circuits');
+    this.iedTabsCompleted.dates = this.isIedTabCompleted('dates');
+    this.iedTabsCompleted.material = this.isIedTabCompleted('material');
+  }
+
+  canCreateIed(): boolean {
+    return (
+      this.iedTabsCompleted.circuits &&
+      this.iedTabsCompleted.dates &&
+      this.iedTabsCompleted.material &&
+      this.ieCertificatesList &&
+      this.ieCertificatesList.length > 0
+    );
+  }
+
+  onDccPhaseChange() {
+    this.regenerateDccCertificates();
+  }
+
+  onIePhaseChange() {
+    if (this.isIedModal) {
+      this.setupIedCircuits();
+    }
+    this.regenerateIeCertificates();
   }
 
   // Maneja la selección de proyecto
@@ -1584,12 +2173,14 @@ export class DccComponent implements OnInit {
           dutServices: data.dutServices,
         });
 
-        // Generar lista de certificados desde dutServices
-        this.dccCertificatesList = this.generateCertificatesFromDutServices(
-          item.id,
-          data.dutServices,
-          'DCC',
+        this.dccProjectDutServices = data.dutServices || [];
+        this.dccPhaseOptions = this.extractPhaseOptions(
+          this.dccProjectDutServices,
         );
+        this.selectedDccPhase =
+          this.dccPhaseOptions.length > 0 ? this.dccPhaseOptions[0] : null;
+
+        this.regenerateDccCertificates();
       },
       (error) => {
         console.error('❌ ERROR LOADING PROJECT DATA:', error);
@@ -1602,6 +2193,12 @@ export class DccComponent implements OnInit {
   // Maneja la deselección de proyecto
   onProjectDeselect(item: any) {
     this.newDccProjectId = [];
+    this.dccProjectDutServices = [];
+    this.dccPhaseOptions = [];
+    this.selectedDccPhase = null;
+    this.dccCertificatesList = [];
+    this.dccSelectedCertificate = null;
+    this.dccSelectedCertificateIndex = -1;
     this.updateCertificateNumber();
   }
 
@@ -1625,12 +2222,17 @@ export class DccComponent implements OnInit {
           dutServices: data.dutServices,
         });
 
-        // Generar lista de certificados desde dutServices
-        this.ieCertificatesList = this.generateCertificatesFromDutServices(
-          item.id,
-          data.dutServices,
-          'IE',
+        this.ieProjectDutServices = data.dutServices || [];
+        this.iePhaseOptions = this.extractPhaseOptions(
+          this.ieProjectDutServices,
         );
+        this.selectedIePhase =
+          this.iePhaseOptions.length > 0 ? this.iePhaseOptions[0] : null;
+
+        if (this.isIedModal) {
+          this.setupIedCircuits();
+        }
+        this.regenerateIeCertificates();
       },
       (error) => {
         console.error('❌ ERROR LOADING PROJECT DATA:', error);
@@ -1638,6 +2240,26 @@ export class DccComponent implements OnInit {
     );
 
     this.updateIeCertificateNumber();
+  }
+
+  /**
+   * Regenera los certificados IE cuando cambia el texto personalizado
+   */
+  onIeNameSuffixChange() {
+    const projectId =
+      this.newIeProjectId && this.newIeProjectId.length > 0
+        ? this.newIeProjectId[0].id
+        : '';
+
+    if (!projectId) {
+      return;
+    }
+
+    this.regenerateIeCertificates();
+    console.log(
+      '✅ IE CERTIFICATES REGENERATED WITH SUFFIX:',
+      this.ieNameSuffix,
+    );
   }
 
   /**
@@ -1687,6 +2309,7 @@ export class DccComponent implements OnInit {
 
     // Actualizar el nombre del certificado
     this.generatedIeCertificateNumber = certificate.name;
+    this.prefillIeDraftData(certificate);
     console.log('✅ IE CERTIFICATE DATA LOADED:', {
       name: certificate.name,
       pt: certificate.pt,
@@ -1698,6 +2321,12 @@ export class DccComponent implements OnInit {
   // Maneja la deselección de proyecto para IE
   onIeProjectDeselect(item: any) {
     this.newIeProjectId = [];
+    this.ieProjectDutServices = [];
+    this.iePhaseOptions = [];
+    this.selectedIePhase = null;
+    this.ieCertificatesList = [];
+    this.ieSelectedCertificate = null;
+    this.ieSelectedCertificateIndex = -1;
     this.updateIeCertificateNumber();
   }
 
@@ -1918,7 +2547,7 @@ export class DccComponent implements OnInit {
         certificate.name,
       );
 
-      const ptNumber = certificate.pt;
+      const ptNumber = this.normalizePtForStorage(certificate.pt);
       const dutService = certificate.dutService;
 
       // Usar el account_id cargado previamente desde opportunity_calpro
@@ -1934,9 +2563,10 @@ export class DccComponent implements OnInit {
         sw_name: 'DCC Generator', // Software name
         sw_version: '1.0.2', // Software version
         sw_type: 'application', // Software type
-        country: 'MX', // Country code
+        country: this.dccCountryCode, // Country code (seleccionado por usuario)
         language: 'en', // Language
         id_laboratory: 1, // Laboratory ID (fijo)
+        technical_verification: certificate.isTechnicalVerification ? 1 : 0, // TV flag
       };
 
       // Agregar id_customer si existe
@@ -2094,13 +2724,38 @@ export class DccComponent implements OnInit {
       return;
     }
 
-    this.dccDataService.resetData();
-    // Asigna PT ID y Certificate Number
-    const currentData = this.dccDataService.getCurrentData();
-    currentData.administrativeData.core.pt_id = this.newIePtId;
-    currentData.administrativeData.core.certificate_number =
-      this.generatedIeCertificateNumber;
-    this.dccDataService.loadFromObject(currentData);
+    // Validación: PT 5, 12 o 14 deben tener información de circuito
+    const pt = this.newIePtId?.replace('PT-', '') || '';
+    const requiresCircuito = this.isIedPt(this.newIePtId);
+    if (requiresCircuito && this.isIedModal) {
+      const hasCircuito = this.iedCircuits?.some((c) => c.circuito);
+      if (!hasCircuito) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Información incompleta',
+          html: `<p>Para el <strong>PT-${pt}</strong>, no se tiene información de circuito.</p><p>Favor de contactar al departamento de ventas para actualizar OS.</p>`,
+          confirmButtonText: 'Entendido',
+        });
+        return; // No crear el IE
+      }
+    }
+
+    const selectedCertificate =
+      this.ieSelectedCertificate ||
+      (this.ieCertificatesList || []).find(
+        (cert) => cert?.name === this.generatedIeCertificateNumber,
+      );
+
+    if (selectedCertificate && this.shouldUseIeV2Flow()) {
+      this.prefillIeDraftData(selectedCertificate);
+    } else {
+      this.dccDataService.resetData();
+      const currentData = this.dccDataService.getCurrentData();
+      currentData.administrativeData.core.pt_id = this.newIePtId;
+      currentData.administrativeData.core.certificate_number =
+        this.generatedIeCertificateNumber;
+      this.dccDataService.loadFromObject(currentData);
+    }
 
     // Mostrar loading mientras se crean los registros
     Swal.fire({
@@ -2112,11 +2767,11 @@ export class DccComponent implements OnInit {
       },
     });
 
-    // Prepara los atributos base para guardar en la base de datos
-    let attributes: any = {
-      id: this.generatedIeCertificateNumber,
-      pt: this.newIePtId,
-    };
+    const ptNumber = this.normalizePtForStorage(this.newIePtId);
+    const attributes = this.buildIeCreateAttributes(
+      this.generatedIeCertificateNumber,
+      ptNumber,
+    );
 
     const createIe = {
       action: 'create',
@@ -2132,9 +2787,10 @@ export class DccComponent implements OnInit {
       bd: this.database,
       table: 'dcc_item',
       opts: {
-        attributes: {
-          id_dcc: this.generatedIeCertificateNumber,
-        },
+        attributes: this.buildIeItemAttributes(
+          this.generatedIeCertificateNumber,
+          this.ieCurrentDutService,
+        ),
       },
     };
 
@@ -2227,9 +2883,10 @@ export class DccComponent implements OnInit {
       return;
     }
 
+    const iedLabel = this.isIedModal ? 'Informes' : 'IE';
     // Mostrar loading
     Swal.fire({
-      title: `Creando ${this.ieCertificatesList.length} IE...`,
+      title: `Creando ${this.ieCertificatesList.length} ${iedLabel}...`,
       text: 'Por favor espere',
       allowOutsideClick: false,
       didOpen: () => {
@@ -2258,56 +2915,34 @@ export class DccComponent implements OnInit {
         certificate.name,
       );
 
-      const ptNumber = certificate.pt;
+      const ptNumber = this.normalizePtForStorage(certificate.pt);
       const dutService = certificate.dutService;
+      const attributes = this.buildIeCreateAttributes(
+        certificate.name,
+        ptNumber,
+      );
 
-      // Usar el account_id cargado previamente desde opportunity
-      const idContact = this.ieAccountId;
-
-      // Obtener el user ID de la URL
-      const createdBy = this.getUserIdFromUrl();
-
-      // Datos que se guardarán para cada IE
-      const attributes: any = {
-        id: certificate.name, // Certificate Number
-        pt: ptNumber, // PT ID
-        sw_name: 'IE Generator', // Software name
-        sw_version: '1.0.2', // Software version
-        sw_type: 'application', // Software type
-        country: 'MX', // Country code
-        language: 'en', // Language
-        id_laboratory: 1, // Laboratory ID (fijo)
-      };
-
-      // Agregar id_customer si existe
-      if (idContact) {
-        attributes.id_customer = idContact;
+      // Validación: PT 5, 12 o 14 deben tener información de circuito
+      const pt = certificate.pt?.replace('PT-', '') || '';
+      const requiresCircuito = this.isIedPt(certificate.pt);
+      if (requiresCircuito && !certificate.circuito) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Información incompleta',
+          html: `<p>Para el <strong>PT-${pt}</strong>, no se tiene información de circuito.</p><p>Favor de contactar al departamento de ventas para actualizar OS.</p>`,
+          confirmButtonText: 'Entendido',
+        });
+        return; // Saltar este certificado
       }
 
-      // Agregar created_by si existe
-      if (createdBy) {
-        attributes.created_by = createdBy;
-      }
-
-      // Agregar location si está definido
-      if (this.ieLocation) {
-        attributes.location = this.ieLocation;
-      }
-      // Agregar campos de fecha si están definidos
-      if (this.ieReceiptDate) {
-        attributes.receipt_date = this.ieReceiptDate;
-      }
-      if (this.ieTestDate) {
-        attributes.date_calibration = this.ieTestDate;
-        // IE no tiene next_calibration (se guarda vacío)
-      }
-      if (this.ieIsRangeDate) {
-        attributes.date_range = 1;
-      } else {
-        attributes.date_range = 0;
-      }
-      if (this.ieEndDate && this.ieIsRangeDate) {
-        attributes.date_end = this.ieEndDate;
+      // Para IED: guardar el texto personalizado del circuito (no el número)
+      if (this.isIedModal && certificate.circuito != null) {
+        const circuitCustom = this.iedCircuits.find(
+          (c) => c.circuito === certificate.circuito,
+        );
+        if (circuitCustom?.customText) {
+          attributes.circuito = circuitCustom.customText;
+        }
       }
 
       console.log(`✅ Atributos para ${certificate.name}:`, {
@@ -2342,11 +2977,10 @@ export class DccComponent implements OnInit {
             bd: this.database,
             table: 'dcc_item',
             opts: {
-              attributes: {
-                id_dcc: certificate.name,
-                object: dutService.description || '',
-                serial_number: dutService.serial_number || '',
-              },
+              attributes: this.buildIeItemAttributes(
+                certificate.name,
+                dutService,
+              ),
             },
           };
 
@@ -2363,6 +2997,72 @@ export class DccComponent implements OnInit {
                 `✅ Item para IE ${certificate.name} creado exitosamente`,
               );
               console.log('Item Response:', itemResponse);
+
+              // Para IED: crear el ie_tested_material
+              if (
+                this.isIedModal &&
+                this.iedTestedMaterial.material_description
+              ) {
+                const testedMaterialAttributes = {
+                  id_ie: certificate.name,
+                  material_description:
+                    this.iedTestedMaterial.material_description || 'NV',
+                  cable_fabricante:
+                    this.iedTestedMaterial.cable_fabricante || 'NV',
+                  cable_modelo: this.iedTestedMaterial.cable_modelo || 'NV',
+                  cable_metrajeA: this.iedTestedMaterial.cable_metrajeA || 'NV',
+                  cable_metrajeB: this.iedTestedMaterial.cable_metrajeB || 'NV',
+                  cable_metrajeC: this.iedTestedMaterial.cable_metrajeC || 'NV',
+                  terminal1_fabricante:
+                    this.iedTestedMaterial.terminal1_fabricante || 'NV',
+                  terminal1_modelo:
+                    this.iedTestedMaterial.terminal1_modelo || 'NV',
+                  terminal1_snA: this.iedTestedMaterial.terminal1_snA || 'NV',
+                  terminal1_snB: this.iedTestedMaterial.terminal1_snB || 'NV',
+                  terminal1_snC: this.iedTestedMaterial.terminal1_snC || 'NV',
+                  terminal2_fabricante:
+                    this.iedTestedMaterial.terminal2_fabricante || 'NV',
+                  terminal2_modelo:
+                    this.iedTestedMaterial.terminal2_modelo || 'NV',
+                  terminal2_snA: this.iedTestedMaterial.terminal2_snA || 'NV',
+                  terminal2_snB: this.iedTestedMaterial.terminal2_snB || 'NV',
+                  terminal2_snC: this.iedTestedMaterial.terminal2_snC || 'NV',
+                  empalmes_fabricante:
+                    this.iedTestedMaterial.empalmes_fabricante || 'NV',
+                  empalmes_modelo:
+                    this.iedTestedMaterial.empalmes_modelo || 'NV',
+                  empalmes_metrajeA:
+                    this.iedTestedMaterial.empalmes_metrajeA || 'NV',
+                  empalmes_metrajeB:
+                    this.iedTestedMaterial.empalmes_metrajeB || 'NV',
+                  empalmes_metrajeC:
+                    this.iedTestedMaterial.empalmes_metrajeC || 'NV',
+                };
+
+                const createTestedMaterial = {
+                  action: 'create',
+                  bd: this.database,
+                  table: 'ie_tested_material',
+                  opts: {
+                    attributes: testedMaterialAttributes,
+                  },
+                };
+
+                return this.apiService
+                  .post(createTestedMaterial, UrlClass.URLNuevo)
+                  .toPromise()
+                  .then((materialResponse: any) => {
+                    console.log(
+                      `✅ Tested Material para IE ${certificate.name} creado`,
+                    );
+                    return {
+                      ie: ieResponse,
+                      item: itemResponse,
+                      material: materialResponse,
+                    };
+                  });
+              }
+
               return { ie: ieResponse, item: itemResponse };
             })
             .catch((itemError: any) => {
@@ -2390,8 +3090,8 @@ export class DccComponent implements OnInit {
 
         Swal.fire({
           icon: 'success',
-          title: '¡IE Creados!',
-          text: `Se han creado ${this.ieCertificatesList.length} IE correctamente`,
+          title: this.isIedModal ? '¡Informes Creados!' : '¡IE Creados!',
+          text: `Se han creado ${this.ieCertificatesList.length} ${iedLabel} correctamente`,
           timer: 2500,
           showConfirmButton: false,
         });

@@ -1,4 +1,4 @@
-<div class="dcc-container">
+﻿<div class="dcc-container">
   <!-- Initial Options Screen -->
   <div *ngIf="showInitialOptions" class="initial-options">
     <div class="options-content">
@@ -10,9 +10,16 @@
           <i class="material-icons">add_circle</i>
           <span>Crear DCC</span>
         </button>
-        <button class="option-btn create-btn" (click)="openCreateIeModal()">
+        <!-- <button class="option-btn create-btn" (click)="openCreateIeModal()">
           <i class="material-icons">add_circle</i>
           <span>Crear IE</span>
+        </button> -->
+        <button
+          class="option-btn create-ied-btn"
+          (click)="openCreateIedModal()"
+        >
+          <i class="material-icons">add_circle</i>
+          <span>Crear IED</span>
         </button>
         <button class="option-btn load-dcc-btn" (click)="openDccSelectModal()">
           <i class="material-icons">folder_open</i>
@@ -59,6 +66,26 @@
             (ngModelChange)="updateCertificateNumber()"
           >
           </ng-multiselect-dropdown>
+        </div>
+        <div
+          class="form-group full-width"
+          *ngIf="
+            newDccProjectId &&
+            newDccProjectId.length > 0 &&
+            dccPhaseOptions.length > 0
+          "
+        >
+          <label for="dccPhaseSelect">Fase (OS):</label>
+          <select
+            id="dccPhaseSelect"
+            [(ngModel)]="selectedDccPhase"
+            (ngModelChange)="onDccPhaseChange()"
+            class="form-control"
+          >
+            <option *ngFor="let phase of dccPhaseOptions" [ngValue]="phase">
+              Fase {{ phase }}{{ phase === 0 ? " (sin fase)" : "" }}
+            </option>
+          </select>
         </div>
         <div
           class="form-group full-width"
@@ -113,6 +140,26 @@
           class="form-fields-grid"
           *ngIf="dccCertificatesList && dccCertificatesList.length > 0"
         >
+          <div class="form-group">
+            <label for="dccCountryCode">Country Code:</label>
+            <select
+              id="dccCountryCode"
+              [(ngModel)]="dccCountryCode"
+              class="form-control"
+            >
+              <option value="MX">MX - México</option>
+              <option value="US">US - United States</option>
+              <option value="CA">CA - Canada</option>
+              <option value="CN">CN - China</option>
+              <option value="DE">DE - Germany</option>
+              <option value="JP">JP - Japan</option>
+              <option value="GB">GB - United Kingdom</option>
+              <option value="FR">FR - France</option>
+              <option value="BR">BR - Brazil</option>
+              <option value="IN">IN - India</option>
+              <option value="ES">ES - Spain</option>
+            </select>
+          </div>
           <div class="form-group">
             <label for="dccLocation">Performance Location:</label>
             <select
@@ -194,149 +241,755 @@
   >
     <div
       class="modal-content create-dcc-modal"
+      [class.create-ied-fullscreen]="isIedModal"
       (click)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h3>Crear nuevo IE</h3>
+        <h3>Crear nuevo {{ isIedModal ? "IED" : "IE" }}</h3>
         <button class="close-btn" (click)="closeCreateIeModal()">
           <i class="material-icons">close</i>
         </button>
       </div>
-      <div class="modal-body">
-        <div class="form-group full-width">
-          <label for="ieProjectId">Proyecto:</label>
-          <ng-multiselect-dropdown
-            id="ieProjectId"
-            [settings]="projectDropdownSettings"
-            [data]="projects"
-            [(ngModel)]="newIeProjectId"
-            (onSelect)="onIeProjectSelect($event)"
-            (onDeSelect)="onIeProjectDeselect($event)"
-            (ngModelChange)="updateIeCertificateNumber()"
-          >
-          </ng-multiselect-dropdown>
-        </div>
-        <div
-          class="form-group full-width"
-          *ngIf="ieCertificatesList && ieCertificatesList.length > 0"
-        >
-          <label>Certificados a crear:</label>
-          <div class="certificates-list">
-            <div
-              *ngFor="let cert of ieCertificatesList; let i = index"
-              class="certificate-item"
-              [class.selected]="ieSelectedCertificate === cert"
-              (click)="onIeCertificateSelect(i)"
-              type="button"
-            >
-              {{ cert.name }}
-            </div>
-          </div>
-          <!-- Mostrar descripción del certificado seleccionado -->
-          <div class="certificate-details" *ngIf="ieSelectedCertificate">
-            <h4>Detalles del DUT</h4>
-            <div class="detail-row">
-              <strong>Descripción:</strong>
-              <span>{{
-                ieSelectedCertificate.dutService?.description || "No disponible"
-              }}</span>
-            </div>
-            <div
-              class="detail-row"
-              *ngIf="ieSelectedCertificate.dutService?.serial_number"
-            >
-              <strong>Serial Number:</strong>
-              <span>{{ ieSelectedCertificate.dutService.serial_number }}</span>
-            </div>
-            <div
-              class="detail-row"
-              *ngIf="ieSelectedCertificate.dutService?.calibration_interval"
-            >
-              <strong>Calibration Interval:</strong>
-              <span
-                >{{
-                  ieSelectedCertificate.dutService.calibration_interval
-                }}
-                months</span
-              >
-            </div>
-          </div>
-        </div>
 
-        <!-- Grid de 2 columnas para los campos de fecha -->
-        <div
-          class="form-fields-grid"
-          *ngIf="ieCertificatesList && ieCertificatesList.length > 0"
+      <!-- Navegación de pestañas (solo para IED) -->
+      <div class="ied-tabs-nav" *ngIf="isIedModal">
+        <button
+          class="tab-button"
+          [class.active]="activeIedTab === 'circuits'"
+          [class.completed]="iedTabsCompleted.circuits"
+          (click)="setIedTab('circuits')"
         >
-          <div class="form-group">
-            <label for="ieLocation">Performance Location:</label>
+          <span class="tab-title">1. Circuitos</span>
+          <span class="tab-check" *ngIf="iedTabsCompleted.circuits">✓</span>
+        </button>
+        <button
+          class="tab-button"
+          [class.active]="activeIedTab === 'dates'"
+          [class.completed]="iedTabsCompleted.dates"
+          (click)="setIedTab('dates')"
+        >
+          <span class="tab-title">2. Datos administrativos</span>
+          <span class="tab-check" *ngIf="iedTabsCompleted.dates">✓</span>
+        </button>
+        <button
+          class="tab-button"
+          [class.active]="activeIedTab === 'material'"
+          [class.completed]="iedTabsCompleted.material"
+          (click)="setIedTab('material')"
+        >
+          <span class="tab-title">3. Material de Prueba</span>
+          <span class="tab-check" *ngIf="iedTabsCompleted.material">✓</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <!-- ===== IE NORMAL (sin pestañas) ===== -->
+        <ng-container *ngIf="!isIedModal">
+          <div class="form-group full-width">
+            <label for="ieProjectId">Proyecto:</label>
+            <ng-multiselect-dropdown
+              id="ieProjectId"
+              [settings]="projectDropdownSettings"
+              [data]="projects"
+              [(ngModel)]="newIeProjectId"
+              (onSelect)="onIeProjectSelect($event)"
+              (onDeSelect)="onIeProjectDeselect($event)"
+              (ngModelChange)="updateIeCertificateNumber()"
+            >
+            </ng-multiselect-dropdown>
+          </div>
+          <div
+            class="form-group full-width"
+            *ngIf="
+              newIeProjectId &&
+              newIeProjectId.length > 0 &&
+              iePhaseOptions.length > 0
+            "
+          >
+            <label for="iePhaseSelect">Fase (OS):</label>
             <select
-              id="ieLocation"
-              [(ngModel)]="ieLocation"
-              (ngModelChange)="onIeLocationChange()"
+              id="iePhaseSelect"
+              [(ngModel)]="selectedIePhase"
+              (ngModelChange)="onIePhaseChange()"
               class="form-control"
             >
-              <option value="">Seleccione una opción</option>
-              <option value="Customer">Customer (Dirección Fiscal)</option>
-              <option value="Laboratory">Laboratory (HVTest)</option>
-              <option value="Other">Other (Dirección en sitio - CRM)</option>
+              <option *ngFor="let phase of iePhaseOptions" [ngValue]="phase">
+                Fase {{ phase }}{{ phase === 0 ? " (sin fase)" : "" }}
+              </option>
             </select>
           </div>
-          <div class="form-group" *ngIf="ieLocation">
-            <label>Dirección:</label>
-            <div class="location-address-display">
-              {{ ieLocationAddress || "Cargando dirección..." }}
+
+          <!-- Campo de texto personalizado para IE (solo modo IE, no IED) -->
+          <div
+            class="form-group full-width"
+            *ngIf="newIeProjectId && newIeProjectId.length > 0"
+          >
+            <label for="ieNameSuffix"
+              >Texto personalizado para el nombre del IE:</label
+            >
+            <input
+              type="text"
+              id="ieNameSuffix"
+              [(ngModel)]="ieNameSuffix"
+              (ngModelChange)="onIeNameSuffixChange()"
+              placeholder="Ej: KOHUNLICH CIRCUITO 2"
+              class="form-control"
+            />
+            <small class="form-text">
+              Ejemplo: PH2562-00 IE 12
+              <strong>{{ ieNameSuffix || "KOHUNLICH CIRCUITO 2" }}</strong>
+            </small>
+          </div>
+
+          <!-- Lista de certificados (solo modo IE) -->
+          <div
+            class="form-group full-width"
+            *ngIf="ieCertificatesList && ieCertificatesList.length > 0"
+          >
+            <label>Informes a crear:</label>
+            <div class="certificates-list">
+              <div
+                *ngFor="let cert of ieCertificatesList; let i = index"
+                class="certificate-item"
+                [class.selected]="ieSelectedCertificate === cert"
+                (click)="onIeCertificateSelect(i)"
+                type="button"
+              >
+                {{ cert.name }}
+              </div>
+            </div>
+            <!-- Mostrar descripción del certificado seleccionado -->
+            <div class="certificate-details" *ngIf="ieSelectedCertificate">
+              <h4>Detalles del DUT</h4>
+              <div class="detail-row">
+                <strong>Descripción:</strong>
+                <span>{{
+                  ieSelectedCertificate.dutService?.description ||
+                    "No disponible"
+                }}</span>
+              </div>
+              <div
+                class="detail-row"
+                *ngIf="ieSelectedCertificate.dutService?.serial_number"
+              >
+                <strong>Serial Number:</strong>
+                <span>{{
+                  ieSelectedCertificate.dutService.serial_number
+                }}</span>
+              </div>
+              <div
+                class="detail-row"
+                *ngIf="ieSelectedCertificate.dutService?.calibration_interval"
+              >
+                <strong>Calibration Interval:</strong>
+                <span
+                  >{{
+                    ieSelectedCertificate.dutService.calibration_interval
+                  }}
+                  months</span
+                >
+              </div>
             </div>
           </div>
-          <div class="form-group" *ngIf="ieLocation === 'Laboratory'">
-            <label for="ieReceiptDate">Receipt Date:</label>
-            <input
-              type="date"
-              id="ieReceiptDate"
-              [(ngModel)]="ieReceiptDate"
-              class="form-control"
-            />
-          </div>
-          <div class="form-group">
-            <label for="ieTestDate">Date of Test:</label>
-            <input
-              type="date"
-              id="ieTestDate"
-              [(ngModel)]="ieTestDate"
-              class="form-control"
-            />
-          </div>
-          <div class="form-group" *ngIf="ieIsRangeDate">
-            <label for="ieEndDate">End Test Date:</label>
-            <input
-              type="date"
-              id="ieEndDate"
-              [(ngModel)]="ieEndDate"
-              class="form-control"
-            />
-          </div>
-          <div class="form-group full-width">
-            <label>
-              <input type="checkbox" [(ngModel)]="ieIsRangeDate" />
-              Is Range Date
-            </label>
-          </div>
-        </div>
 
-        <div class="form-actions" style="margin-top: 20px">
-          <button
-            class="save-btn"
-            [disabled]="
-              !newIeProjectId ||
-              newIeProjectId.length === 0 ||
-              !ieCertificatesList ||
-              ieCertificatesList.length === 0
-            "
-            (click)="startNewIeMultiple()"
+          <!-- Grid de 2 columnas para los campos de fecha (IE normal) -->
+          <div
+            class="form-fields-grid"
+            *ngIf="ieCertificatesList && ieCertificatesList.length > 0"
           >
-            Crear {{ ieCertificatesList?.length || 0 }} Certificados
-          </button>
-        </div>
+            <div class="form-group">
+              <label for="ieCountryCode">Country Code:</label>
+              <select
+                id="ieCountryCode"
+                [(ngModel)]="ieCountryCode"
+                class="form-control"
+              >
+                <option value="MX">MX - México</option>
+                <option value="US">US - United States</option>
+                <option value="CA">CA - Canada</option>
+                <option value="CN">CN - China</option>
+                <option value="DE">DE - Germany</option>
+                <option value="JP">JP - Japan</option>
+                <option value="GB">GB - United Kingdom</option>
+                <option value="FR">FR - France</option>
+                <option value="BR">BR - Brazil</option>
+                <option value="IN">IN - India</option>
+                <option value="ES">ES - Spain</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="ieLocation">Performance Location:</label>
+              <select
+                id="ieLocation"
+                [(ngModel)]="ieLocation"
+                (ngModelChange)="onIeLocationChange()"
+                class="form-control"
+              >
+                <option value="">Seleccione una opción</option>
+                <option value="Customer">Customer (Dirección Fiscal)</option>
+                <option value="Laboratory">Laboratory (HVTest)</option>
+                <option value="Other">Other (Dirección en sitio - CRM)</option>
+              </select>
+            </div>
+            <div class="form-group" *ngIf="ieLocation">
+              <label>Dirección:</label>
+              <div class="location-address-display">
+                {{ ieLocationAddress || "Cargando dirección..." }}
+              </div>
+            </div>
+            <div class="form-group" *ngIf="ieLocation === 'Laboratory'">
+              <label for="ieReceiptDate">Receipt Date:</label>
+              <input
+                type="date"
+                id="ieReceiptDate"
+                [(ngModel)]="ieReceiptDate"
+                class="form-control"
+              />
+            </div>
+            <div class="form-group">
+              <label for="ieTestDate">Date of Test:</label>
+              <input
+                type="date"
+                id="ieTestDate"
+                [(ngModel)]="ieTestDate"
+                class="form-control"
+              />
+            </div>
+            <div class="form-group" *ngIf="ieIsRangeDate">
+              <label for="ieEndDate">End Test Date:</label>
+              <input
+                type="date"
+                id="ieEndDate"
+                [(ngModel)]="ieEndDate"
+                class="form-control"
+              />
+            </div>
+            <div class="form-group full-width">
+              <label>
+                <input type="checkbox" [(ngModel)]="ieIsRangeDate" />
+                Is Range Date
+              </label>
+            </div>
+          </div>
+
+          <div class="form-actions" style="margin-top: 20px">
+            <button
+              class="save-btn"
+              [disabled]="
+                !newIeProjectId ||
+                newIeProjectId.length === 0 ||
+                !ieCertificatesList ||
+                ieCertificatesList.length === 0
+              "
+              (click)="startNewIeMultiple()"
+            >
+              Crear {{ ieCertificatesList?.length || 0 }} Certificados
+            </button>
+          </div>
+        </ng-container>
+
+        <!-- ===== IED CON PESTAÑAS ===== -->
+        <ng-container *ngIf="isIedModal">
+          <!-- PESTAÑA 1: Circuitos -->
+          <div *ngIf="activeIedTab === 'circuits'" class="ied-tab-content">
+            <div class="form-group full-width">
+              <label for="ieProjectId">Proyecto:</label>
+              <ng-multiselect-dropdown
+                id="ieProjectId"
+                [settings]="projectDropdownSettings"
+                [data]="projects"
+                [(ngModel)]="newIeProjectId"
+                (onSelect)="onIeProjectSelect($event)"
+                (onDeSelect)="onIeProjectDeselect($event)"
+                (ngModelChange)="updateIeCertificateNumber()"
+              >
+              </ng-multiselect-dropdown>
+            </div>
+            <div
+              class="form-group full-width"
+              *ngIf="
+                newIeProjectId &&
+                newIeProjectId.length > 0 &&
+                iePhaseOptions.length > 0
+              "
+            >
+              <label for="iePhaseSelect">Fase (OS):</label>
+              <select
+                id="iePhaseSelect"
+                [(ngModel)]="selectedIePhase"
+                (ngModelChange)="onIePhaseChange()"
+                class="form-control"
+              >
+                <option *ngFor="let phase of iePhaseOptions" [ngValue]="phase">
+                  Fase {{ phase }}{{ phase === 0 ? " (sin fase)" : "" }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Circuitos IED -->
+            <div
+              class="ied-circuits-section"
+              *ngIf="
+                newIeProjectId &&
+                newIeProjectId.length > 0 &&
+                iedCircuits.length > 0
+              "
+            >
+              <label class="section-label">Nombre de los circuitos:</label>
+              <div
+                *ngFor="let circuit of iedCircuits"
+                class="ied-circuit-block"
+              >
+                <div class="circuit-header">
+                  <span class="circuit-label"
+                    >Circuito {{ circuit.circuito }}:</span
+                  >
+                  <input
+                    type="text"
+                    [(ngModel)]="circuit.customText"
+                    (ngModelChange)="onIedCircuitTextChange()"
+                    placeholder="Ej: KEKEN"
+                    class="form-control circuit-text-input"
+                  />
+                </div>
+                <div class="circuit-reports-preview">
+                  <div
+                    *ngFor="
+                      let report of getReportsForCircuit(circuit.circuito)
+                    "
+                    class="circuit-report-name"
+                  >
+                    {{ report.name }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Resumen de informes -->
+            <div
+              class="form-group full-width"
+              *ngIf="ieCertificatesList && ieCertificatesList.length > 0"
+              style="margin-top: 20px"
+            >
+              <label>Informes a crear ({{ ieCertificatesList.length }}):</label>
+              <div class="certificates-list ied-reports-summary">
+                <div
+                  *ngFor="let report of ieCertificatesList"
+                  class="certificate-item"
+                >
+                  {{ report.name }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PESTAÑA 2: Datos administrativos -->
+          <div *ngIf="activeIedTab === 'dates'" class="ied-tab-content">
+            <div class="form-fields-grid" style="margin-top: 10px">
+              <div class="form-group">
+                <label for="ieCountryCode">Country Code:</label>
+                <select
+                  id="ieCountryCode"
+                  [(ngModel)]="ieCountryCode"
+                  (ngModelChange)="updateIedTabCompletion()"
+                  class="form-control"
+                >
+                  <option value="">Seleccione...</option>
+                  <option value="MX">MX - México</option>
+                  <option value="US">US - United States</option>
+                  <option value="CA">CA - Canada</option>
+                  <option value="CN">CN - China</option>
+                  <option value="DE">DE - Germany</option>
+                  <option value="JP">JP - Japan</option>
+                  <option value="GB">GB - United Kingdom</option>
+                  <option value="FR">FR - France</option>
+                  <option value="BR">BR - Brazil</option>
+                  <option value="IN">IN - India</option>
+                  <option value="ES">ES - Spain</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="ieLocation">Performance Location:</label>
+                <select
+                  id="ieLocation"
+                  [(ngModel)]="ieLocation"
+                  (ngModelChange)="
+                    onIeLocationChange(); updateIedTabCompletion()
+                  "
+                  class="form-control"
+                >
+                  <option value="">Seleccione una opción</option>
+                  <option value="Customer">Customer (Dirección Fiscal)</option>
+                  <option value="Laboratory">Laboratory (HVTest)</option>
+                  <option value="Other">
+                    Other (Dirección en sitio - CRM)
+                  </option>
+                </select>
+              </div>
+              <div class="form-group" *ngIf="ieLocation">
+                <label>Dirección:</label>
+                <div class="location-address-display">
+                  {{ ieLocationAddress || "Cargando dirección..." }}
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="ieCustomerRep"
+                  >Responsible Customer (Nombre):</label
+                >
+                <input
+                  type="text"
+                  id="ieCustomerRep"
+                  [(ngModel)]="ieCustomerRep"
+                  (ngModelChange)="updateIedTabCompletion()"
+                  class="form-control"
+                  placeholder="Nombre del responsable del cliente"
+                />
+              </div>
+              <div class="form-group">
+                <label for="ieCustomerRepTel"
+                  >Responsible Customer (Numero):</label
+                >
+                <input
+                  type="text"
+                  id="ieCustomerRepTel"
+                  [(ngModel)]="ieCustomerRepTel"
+                  (ngModelChange)="updateIedTabCompletion()"
+                  class="form-control"
+                  placeholder="Numero de contacto"
+                />
+              </div>
+              <div class="form-group" *ngIf="ieLocation === 'Laboratory'">
+                <label for="ieReceiptDate">Receipt Date:</label>
+                <input
+                  type="date"
+                  id="ieReceiptDate"
+                  [(ngModel)]="ieReceiptDate"
+                  class="form-control"
+                />
+              </div>
+              <div class="form-group">
+                <label for="ieTestDate">Date of Test:</label>
+                <input
+                  type="date"
+                  id="ieTestDate"
+                  [(ngModel)]="ieTestDate"
+                  (ngModelChange)="updateIedTabCompletion()"
+                  class="form-control"
+                />
+              </div>
+              <div class="form-group" *ngIf="ieIsRangeDate">
+                <label for="ieEndDate">End Test Date:</label>
+                <input
+                  type="date"
+                  id="ieEndDate"
+                  [(ngModel)]="ieEndDate"
+                  class="form-control"
+                />
+              </div>
+              <div class="form-group full-width">
+                <label>
+                  <input type="checkbox" [(ngModel)]="ieIsRangeDate" />
+                  Is Range Date
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- PESTAÑA 3: Tested Material -->
+          <div *ngIf="activeIedTab === 'material'" class="ied-tab-content">
+            <div class="tested-material-form" style="margin-top: 10px">
+              <div class="form-group full-width">
+                <label for="ied_material_description"
+                  >Material Description:</label
+                >
+                <div class="description-template-wrapper">
+                  <span class="description-affix">Circuito formado por</span>
+                  <input
+                    type="text"
+                    id="ied_material_description"
+                    [(ngModel)]="iedTestedMaterial.material_description"
+                    (ngModelChange)="updateIedTabCompletion()"
+                    placeholder="ej. tres sistemas de cable de alta tensión para 115 kV"
+                    class="form-control description-variable"
+                  />
+                  <span class="description-affix"
+                    >, las características principales se indican a continuación
+                    (información proporcionada por el cliente):</span
+                  >
+                </div>
+              </div>
+
+              <table class="tm-table ied-tm-edit-table">
+                <tbody>
+                  <tr class="tm-section-header">
+                    <td colspan="4"><strong>Cable:</strong></td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Fabricante:</td>
+                    <td colspan="3">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.cable_fabricante"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Tipo/Designación/Modelo:</td>
+                    <td colspan="3">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.cable_modelo"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Metraje:</td>
+                    <td class="tm-phase-label">Fase A:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.cable_metrajeA"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td class="tm-phase-label">Fase B:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.cable_metrajeB"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td class="tm-phase-label">Fase C:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.cable_metrajeC"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+
+                <tbody>
+                  <tr class="tm-section-header">
+                    <td colspan="4">
+                      <strong>Terminal Cercana (Figura 1):</strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Fabricante:</td>
+                    <td colspan="3">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.terminal1_fabricante"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Tipo/Designación/Modelo:</td>
+                    <td colspan="3">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.terminal1_modelo"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Numero de Serie:</td>
+                    <td class="tm-phase-label">Fase A:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.terminal1_snA"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td class="tm-phase-label">Fase B:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.terminal1_snB"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td class="tm-phase-label">Fase C:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.terminal1_snC"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+
+                <tbody>
+                  <tr class="tm-section-header">
+                    <td colspan="4">
+                      <strong>Terminal Lejana (Figura 2):</strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Fabricante:</td>
+                    <td colspan="3">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.terminal2_fabricante"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Tipo/Designación/Modelo:</td>
+                    <td colspan="3">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.terminal2_modelo"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Numero de Serie:</td>
+                    <td class="tm-phase-label">Fase A:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.terminal2_snA"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td class="tm-phase-label">Fase B:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.terminal2_snB"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td class="tm-phase-label">Fase C:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.terminal2_snC"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+
+                <tbody>
+                  <tr class="tm-section-header">
+                    <td colspan="4"><strong>Empalmes:</strong></td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Fabricante:</td>
+                    <td colspan="3">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.empalmes_fabricante"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Tipo/Designación/Modelo:</td>
+                    <td colspan="3">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.empalmes_modelo"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="tm-label">Numero de Serie:</td>
+                    <td class="tm-phase-label">Fase A:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.empalmes_metrajeA"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td class="tm-phase-label">Fase B:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.empalmes_metrajeB"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td class="tm-phase-label">Fase C:</td>
+                    <td colspan="2">
+                      <input
+                        type="text"
+                        [(ngModel)]="iedTestedMaterial.empalmes_metrajeC"
+                        class="tm-inline-input"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Botones de navegación y crear (IED) -->
+          <div class="ied-actions" style="margin-top: 20px">
+            <button
+              class="nav-btn"
+              *ngIf="activeIedTab !== 'circuits'"
+              (click)="setIedTab('circuits')"
+            >
+              ← Anterior
+            </button>
+            <button
+              class="nav-btn"
+              *ngIf="activeIedTab !== 'material'"
+              (click)="
+                setIedTab(activeIedTab === 'circuits' ? 'dates' : 'material')
+              "
+            >
+              Siguiente →
+            </button>
+            <button
+              class="save-btn"
+              [disabled]="!canCreateIed()"
+              (click)="startNewIeMultiple()"
+            >
+              Crear {{ ieCertificatesList?.length || 0 }} Informes
+            </button>
+          </div>
+        </ng-container>
       </div>
     </div>
   </div>
@@ -471,9 +1124,13 @@
     <div class="tab-navigation">
       <div class="tabs-container">
         <button
-          *ngFor="let tab of tabs"
+          *ngFor="let tab of tabs; let i = index"
           class="tab-btn"
           [class.active]="activeTab === tab.id"
+          [class.disabled]="!isTabAvailable(i)"
+          [attr.title]="
+            !isTabAvailable(i) ? 'Completa las pestañas anteriores primero' : ''
+          "
           (click)="selectTab(tab.id)"
         >
           {{ tab.label }}
@@ -514,6 +1171,22 @@
         </div>
       </div>
 
+      <!-- Tested Material Tab (IE/IED only) -->
+      <div *ngIf="activeTab === 'tested-material'" class="tab-panel">
+        <ng-container *ngComponentOutlet="testedMaterialCmp"></ng-container>
+        <!-- Navigation Buttons -->
+        <div class="step-navigation">
+          <button class="previous-step-btn" (click)="previousStep()">
+            <i class="material-icons">arrow_back</i>
+            <span>Previous Step</span>
+          </button>
+          <button class="next-step-btn" (click)="nextStep()">
+            <span>Next Step</span>
+            <i class="material-icons">arrow_forward</i>
+          </button>
+        </div>
+      </div>
+
       <!-- Statements Tab -->
       <div *ngIf="activeTab === 'statements'" class="tab-panel">
         <app-statements></app-statements>
@@ -533,6 +1206,22 @@
       <!-- Results Tab -->
       <div *ngIf="activeTab === 'results'" class="tab-panel">
         <app-results [operationMode]="operationMode"></app-results>
+        <!-- Navigation Buttons -->
+        <div class="step-navigation">
+          <button class="previous-step-btn" (click)="previousStep()">
+            <i class="material-icons">arrow_back</i>
+            <span>Previous Step</span>
+          </button>
+          <button class="next-step-btn" (click)="nextStep()">
+            <span>Next Step</span>
+            <i class="material-icons">arrow_forward</i>
+          </button>
+        </div>
+      </div>
+
+      <!-- IE Results Tab -->
+      <div *ngIf="activeTab === 'ie-results'" class="tab-panel">
+        <ng-container *ngComponentOutlet="ieResultsCmp"></ng-container>
         <!-- Navigation Buttons -->
         <div class="step-navigation">
           <button class="previous-step-btn" (click)="previousStep()">

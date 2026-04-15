@@ -12,6 +12,41 @@ function logtxt($msg) {
     file_put_contents(__DIR__ . '/log.txt', date('Y-m-d H:i:s') . " | " . $msg . "\n", FILE_APPEND);
 }
 
+function sanitizeForDocx($value) {
+    if (is_array($value)) {
+        foreach ($value as $k => $v) {
+            $value[$k] = sanitizeForDocx($v);
+        }
+        return $value;
+    }
+
+    if (is_string($value)) {
+        // Normalizae line endings first
+        $text = str_replace(["\r\n", "\r"], "\n", $value);
+        
+        // Remove control characters (but keep \n for line breaks)
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text);
+
+        // Ensure valid UTF-8
+        $utf8 = @iconv('UTF-8', 'UTF-8//IGNORE', $text);
+        if ($utf8 !== false) {
+            $text = $utf8;
+        }
+
+        // CRITICAL: Escape XML entities to prevent parsing errors in Word
+        // & must be escaped FIRST before other entities
+        $text = str_replace('&', '&amp;', $text);    // & -> &amp;
+        $text = str_replace('<', '&lt;', $text);     // < -> &lt;
+        $text = str_replace('>', '&gt;', $text);     // > -> &gt;
+        $text = str_replace('"', '&quot;', $text);   // " -> &quot;
+        $text = str_replace("'", '&apos;', $text);   // ' -> &apos;
+
+        return $text;
+    }
+
+    return $value;
+}
+
 logtxt("=== NUEVA PETICIÓN ===");
 
 // ================================================
@@ -69,6 +104,9 @@ if (!is_array($inputData)) {
     exit();
 }
 
+// Sanitizar payload para evitar corrupción de DOCX por caracteres inválidos XML/UTF-8
+$inputData = sanitizeForDocx($inputData);
+
 // ================================================
 // RUTAS
 // ================================================
@@ -78,12 +116,37 @@ $attachmentsDir = $baseDir . '/attachments/';
 
 if (!is_dir($attachmentsDir)) mkdir($attachmentsDir, 0755, true);
 
-// Seleccionar plantilla según si es acreditado o no
+// Seleccionar plantilla: technical_verification tiene prioridad
+$requestedTemplateName = $inputData['template_name'] ?? '';
+$isIeDocument = preg_match('/\bIE\b/i', $inputData['certificate_number'] ?? '') === 1;
 $isAccredited = $inputData['accredited'] ?? false;
-$templateName = $isAccredited ? 'dcc_plantilla_general.docx' : 'dcc_plantilla_general_na.docx';
-$templatePath = $templatesDir . $templateName;
+$rawTechnicalVerification = $inputData['technical_verification'] ?? false;
+$isTechnicalVerification = (
+    $rawTechnicalVerification === true ||
+    $rawTechnicalVerification === 1 ||
+    $rawTechnicalVerification === '1' ||
+    strtolower((string)$rawTechnicalVerification) === 'true'
+);
 
-logtxt("Plantilla seleccionada: $templateName (accredited: " . ($isAccredited ? 'true' : 'false') . ")");
+if ($isIeDocument && $requestedTemplateName === 'ie_plantilla_general.docx') {
+    $templateName = 'ie_plantilla_general.docx';
+    $templatePath = $templatesDir . $templateName;
+} elseif ($isTechnicalVerification) {
+    $templateName = 'dcc_technical_verification.docx';
+    $templatePath = $templatesDir . $templateName;
+
+    // Fallback por si la plantilla técnica no está desplegada
+    if (!file_exists($templatePath)) {
+        logtxt("⚠️ Plantilla técnica no encontrada ($templatePath), aplicando fallback a plantilla general");
+        $templateName = $isAccredited ? 'dcc_plantilla_general.docx' : 'dcc_plantilla_general_na.docx';
+        $templatePath = $templatesDir . $templateName;
+    }
+} else {
+    $templateName = $isAccredited ? 'dcc_plantilla_general.docx' : 'dcc_plantilla_general_na.docx';
+    $templatePath = $templatesDir . $templateName;
+}
+
+logtxt("Plantilla seleccionada: $templateName (requested: $requestedTemplateName, is_ie: " . ($isIeDocument ? 'true' : 'false') . ", accredited: " . ($isAccredited ? 'true' : 'false') . ", technical_verification: " . ($isTechnicalVerification ? 'true' : 'false') . ")");
 
 if (!file_exists($templatePath)) {
     logtxt("❌ Error: No existe la plantilla $templatePath");
@@ -114,8 +177,12 @@ try {
     // logtxt("Plantilla cargada: $templatePath");
 
     // ========== PT ========== //
-    $tp->setValue('pt', $inputData['pt'] ?? '');
-    logtxt('Set pt = ' . ($inputData['pt'] ?? ''));
+    try {
+        $tp->setValue('pt', $inputData['pt'] ?? '');
+        logtxt('Set pt = ' . ($inputData['pt'] ?? ''));
+    } catch (Exception $e) {
+        logtxt("⚠️ WARNING: No se pudo establecer 'pt': " . $e->getMessage());
+    }
 
     // ========== INFLUENCE CONDITIONS ========== //
     $temperature = '';
@@ -135,13 +202,20 @@ try {
         }
     }
 }
-    $tp->setValue('temperature', $temperature);
-    $tp->setValue('humidity', $humidity);
-    $tp->setValue('pressure', $pressure);
+    try {
+        $tp->setValue('temperature', $temperature);
+        $tp->setValue('humidity', $humidity);
+        $tp->setValue('pressure', $pressure);
 
-    logtxt("Set temperature = $temperature");
-    logtxt("Set humidity = $humidity");
-    logtxt("Set pressure = $pressure");
+        logtxt("Set temperature = $temperature");
+        logtxt("Set humidity = $humidity");
+        logtxt("Set pressure = $pressure");
+    } catch (Exception $e) {
+        logtxt("⚠️ WARNING: No se pudo establecer influence conditions: " . $e->getMessage());
+        try { $tp->setValue('temperature', $temperature); } catch (Exception $e1) {}
+        try { $tp->setValue('humidity', $humidity); } catch (Exception $e1) {}
+        try { $tp->setValue('pressure', $pressure); } catch (Exception $e1) {}
+    }
 
     
 
@@ -166,24 +240,65 @@ try {
 
 
     if (count($equipos) > 0) {
-        $tp->cloneRow('id_patron', count($equipos));
-        foreach ($equipos as $idx => $eq) {
-            $n = $idx + 1;
-            $tp->setValue("id_patron#{$n}", $eq['id_patron']);
-            $tp->setValue("name_patron#{$n}", $eq['name_patron']);
-            $tp->setValue("manufacturer_patron#{$n}", $eq['manufacturer_patron']);
-            $tp->setValue("model_patron#{$n}", $eq['model_patron']);
-            $tp->setValue("sn_patron#{$n}", $eq['sn_patron']);
-            $tp->setValue("interval_patron#{$n}", $eq['interval_patron']);
-            logtxt("Set id_patron#{$n} = {$eq['id_patron']}, name_patron#{$n} = {$eq['name_patron']}, manufacturer_patron#{$n} = {$eq['manufacturer_patron']}, model_patron#{$n} = {$eq['model_patron']}, sn_patron#{$n} = {$eq['sn_patron']}, interval_patron#{$n} = {$eq['interval_patron']}");
+        if (count($equipos) === 1) {
+            $eq = $equipos[0];
+            try {
+                $tp->setValue('id_patron', $eq['id_patron']);
+                $tp->setValue('name_patron', $eq['name_patron']);
+                $tp->setValue('manufacturer_patron', $eq['manufacturer_patron']);
+                $tp->setValue('model_patron', $eq['model_patron']);
+                $tp->setValue('sn_patron', $eq['sn_patron']);
+                $tp->setValue('interval_patron', $eq['interval_patron']);
+                logtxt("Set id_patron = {$eq['id_patron']}, name_patron = {$eq['name_patron']}, manufacturer_patron = {$eq['manufacturer_patron']}, model_patron = {$eq['model_patron']}, sn_patron = {$eq['sn_patron']}, interval_patron = {$eq['interval_patron']}");
+            } catch (Exception $e) {
+                logtxt("⚠️ WARNING: No se pudo establecer valores de measuring equipment (single): " . $e->getMessage());
+                try { $tp->setValue('id_patron', $eq['id_patron']); } catch (Exception $e1) {}
+                try { $tp->setValue('name_patron', $eq['name_patron']); } catch (Exception $e1) {}
+                try { $tp->setValue('manufacturer_patron', $eq['manufacturer_patron']); } catch (Exception $e1) {}
+                try { $tp->setValue('model_patron', $eq['model_patron']); } catch (Exception $e1) {}
+                try { $tp->setValue('sn_patron', $eq['sn_patron']); } catch (Exception $e1) {}
+                try { $tp->setValue('interval_patron', $eq['interval_patron']); } catch (Exception $e1) {}
+            }
+        } else {
+            try {
+                $tp->cloneRow('id_patron', count($equipos));
+                foreach ($equipos as $idx => $eq) {
+                    $n = $idx + 1;
+                    $tp->setValue("id_patron#{$n}", $eq['id_patron']);
+                    $tp->setValue("name_patron#{$n}", $eq['name_patron']);
+                    $tp->setValue("manufacturer_patron#{$n}", $eq['manufacturer_patron']);
+                    $tp->setValue("model_patron#{$n}", $eq['model_patron']);
+                    $tp->setValue("sn_patron#{$n}", $eq['sn_patron']);
+                    $tp->setValue("interval_patron#{$n}", $eq['interval_patron']);
+                    logtxt("Set id_patron#{$n} = {$eq['id_patron']}, name_patron#{$n} = {$eq['name_patron']}, manufacturer_patron#{$n} = {$eq['manufacturer_patron']}, model_patron#{$n} = {$eq['model_patron']}, sn_patron#{$n} = {$eq['sn_patron']}, interval_patron#{$n} = {$eq['interval_patron']}");
+                }
+            } catch (Exception $e) {
+                logtxt("⚠️ WARNING: No se pudo clonar filas de measuring equipment (multiple): " . $e->getMessage());
+                // Fallback: establecer el primer equipo
+                try {
+                    $eq = $equipos[0];
+                    $tp->setValue('id_patron', $eq['id_patron']);
+                    $tp->setValue('name_patron', $eq['name_patron']);
+                    $tp->setValue('manufacturer_patron', $eq['manufacturer_patron']);
+                    $tp->setValue('model_patron', $eq['model_patron']);
+                    $tp->setValue('sn_patron', $eq['sn_patron']);
+                    $tp->setValue('interval_patron', $eq['interval_patron']);
+                } catch (Exception $e2) {
+                    logtxt("⚠️ WARNING: No se pudo establecer fallback de measuring equipment: " . $e2->getMessage());
+                }
+            }
         }
     } else {
-        $tp->setValue('id_patron', '');
-        $tp->setValue('name_patron', '');
-        $tp->setValue('manufacturer_patron', '');
-        $tp->setValue('model_patron', '');
-        $tp->setValue('sn_patron', '');
-        $tp->setValue('interval_patron', '');
+        try {
+            $tp->setValue('id_patron', '');
+            $tp->setValue('name_patron', '');
+            $tp->setValue('manufacturer_patron', '');
+            $tp->setValue('model_patron', '');
+            $tp->setValue('sn_patron', '');
+            $tp->setValue('interval_patron', '');
+        } catch (Exception $e) {
+            logtxt("⚠️ WARNING: No se pudo limpiar marcadores de measuring equipment: " . $e->getMessage());
+        }
     }
 
 
@@ -196,27 +311,46 @@ try {
         $metroTraceability = $inputData['metrologicalTraceability'];
     }
     
-    // Clonar filas para Metrological Traceability si existen
+    // Procesar filas para Metrological Traceability si existen
     if (count($metroTraceability) > 0) {
-        $tp->cloneRow('id_patron', count($metroTraceability));
-        foreach ($metroTraceability as $idx => $tz) {
-            $n = $idx + 1;
-            $tp->setValue("id_patron#{$n}", $tz['id_patron'] ?? '');
-            $tp->setValue("tz_name#{$n}", $tz['tz_name'] ?? '');
-            $tp->setValue("tz_by#{$n}", $tz['tz_by'] ?? '');
-            $tp->setValue("tz_date#{$n}", $tz['tz_date'] ?? '');
-            $tp->setValue("tz_quantity#{$n}", $tz['tz_quantity'] ?? '');
-            $tp->setValue("tz_comm#{$n}", $tz['tz_comm'] ?? '');
-            logtxt("Set metrological traceability#{$n}: id_patron={$tz['id_patron']}, tz_by={$tz['tz_by']}, tz_date={$tz['tz_date']}");
+        try {
+            if (count($metroTraceability) === 1) {
+                $tz = $metroTraceability[0];
+                $tp->setValue('tz_id', $tz['id_patron'] ?? '');
+                $tp->setValue('tz_name', $tz['tz_name'] ?? '');
+                $tp->setValue('tz_by', $tz['tz_by'] ?? '');
+                $tp->setValue('tz_date', $tz['tz_date'] ?? '');
+                $tp->setValue('tz_quantity', $tz['tz_quantity'] ?? '');
+                $tp->setValue('tz_comm', $tz['tz_comm'] ?? '');
+                logtxt("Set metrological traceability: id={$tz['id_patron']}, by={$tz['tz_by']}, date={$tz['tz_date']}");
+            } else {
+                $tp->cloneRow('tz_id', count($metroTraceability));
+                foreach ($metroTraceability as $idx => $tz) {
+                    $n = $idx + 1;
+                    $tp->setValue("tz_id#{$n}", $tz['id_patron'] ?? '');
+                    $tp->setValue("tz_name#{$n}", $tz['tz_name'] ?? '');
+                    $tp->setValue("tz_by#{$n}", $tz['tz_by'] ?? '');
+                    $tp->setValue("tz_date#{$n}", $tz['tz_date'] ?? '');
+                    $tp->setValue("tz_quantity#{$n}", $tz['tz_quantity'] ?? '');
+                    $tp->setValue("tz_comm#{$n}", $tz['tz_comm'] ?? '');
+                    logtxt("Set metrological traceability#{$n}: id={$tz['id_patron']}, by={$tz['tz_by']}, date={$tz['tz_date']}");
+                }
+            }
+        } catch (Exception $e) {
+            logtxt("⚠️ WARNING: No se pudo procesar metrological traceability: " . $e->getMessage());
         }
     } else {
-        // Limpiar marcadores si no hay traceability
-        $tp->setValue('id_patron', '');
-        $tp->setValue('tz_name', '');
-        $tp->setValue('tz_by', '');
-        $tp->setValue('tz_date', '');
-        $tp->setValue('tz_quantity', '');
-        $tp->setValue('tz_comm', '');
+        // Limpiar marcadores si no hay traceability (solo si existen en la plantilla)
+        try {
+            $tp->setValue('tz_id', '');
+            $tp->setValue('tz_name', '');
+            $tp->setValue('tz_by', '');
+            $tp->setValue('tz_date', '');
+            $tp->setValue('tz_quantity', '');
+            $tp->setValue('tz_comm', '');
+        } catch (Exception $e) {
+            // Ignorar si no existen estos placeholders
+        }
     }
 
 
@@ -225,56 +359,178 @@ try {
     // logtxt('Valor recibido de item_manufacturer: ' . ($inputData['item_manufacturer'] ?? '[NO RECIBIDO]'));
 
     $items = [];
-    // Item principal
-    if (!empty($inputData['item_name'])) {
-        $items[] = [
-            'name' => $inputData['item_name'] ?? '',
-            'manufacturer' => $inputData['item_manufacturer'] ?? '',
-            'model' => $inputData['item_model'] ?? '',
-            'sn' => $inputData['item_serial_number'] ?? '',
-            'id' => $inputData['item_customer_asset_id'] ?? '',
-            'comment' => $inputData['item_comment'] ?? '',
-        ];
-    }
-    // Subitems (esperados en inputData['subitems'] como array de objetos)
-    if (!empty($inputData['subitems']) && is_array($inputData['subitems'])) {
-        foreach ($inputData['subitems'] as $sub) {
+    
+    // Nuevo sistema: usar itemsList si existe (array de items del nuevo dcc_items)
+    if (!empty($inputData['itemsList']) && is_array($inputData['itemsList'])) {
+        logtxt('📦 Usando itemsList (nuevo sistema): ' . count($inputData['itemsList']) . ' items');
+        foreach ($inputData['itemsList'] as $item) {
             $items[] = [
-                'name' => $sub['name'] ?? '',
-                'manufacturer' => $sub['manufacturer'] ?? '',
-                'model' => $sub['model'] ?? '',
-                'sn' => $sub['serialNumber'] ?? '',
-                'id' => $sub['customerAssetId'] ?? '',
-                'comment' => $sub['comment'] ?? '',
+                'name' => $item['object'] ?? '',
+                'manufacturer' => $item['manufacturer'] ?? '',
+                'model' => $item['model'] ?? '',
+                'sn' => $item['serial_number'] ?? '',
+                'id' => $item['costumer_asset'] ?? '',
+                'comment' => $item['comment'] ?? '',
+                'description' => $item['description'] ?? '',
             ];
         }
+    } else {
+        // Sistema antiguo: item principal + subitems
+        logtxt('📦 Usando sistema antiguo (item_name + subitems)');
+        // Item principal
+        if (!empty($inputData['item_name'])) {
+            $items[] = [
+                'name' => $inputData['item_name'] ?? '',
+                'manufacturer' => $inputData['item_manufacturer'] ?? '',
+                'model' => $inputData['item_model'] ?? '',
+                'sn' => $inputData['item_serial_number'] ?? '',
+                'id' => $inputData['item_customer_asset_id'] ?? '',
+                'comment' => $inputData['item_comment'] ?? '',
+                'description' => '',
+            ];
+        }
+        // Subitems (esperados en inputData['subitems'] como array de objetos)
+        if (!empty($inputData['subitems']) && is_array($inputData['subitems'])) {
+            foreach ($inputData['subitems'] as $sub) {
+                $items[] = [
+                    'name' => $sub['name'] ?? '',
+                    'manufacturer' => $sub['manufacturer'] ?? '',
+                    'model' => $sub['model'] ?? '',
+                    'sn' => $sub['serialNumber'] ?? '',
+                    'id' => $sub['customerAssetId'] ?? '',
+                    'comment' => $sub['comment'] ?? '',
+                    'description' => '',
+                ];
+            }
+        }
     }
+    
     // Loguear el array completo de items para depuración
+    logtxt('📋 Items para plantilla: ' . count($items) . ' items procesados');
     // logtxt('ITEMS PARA PLANTILLA: ' . print_r($items, true));
+
+    // Obtener la descripción (es la misma para todos los items del DCC)
+    $itemDescription = '';
+    if (count($items) > 0 && !empty($items[0]['description'])) {
+        $itemDescription = $items[0]['description'];
+    }
+    
+    // Establecer la descripción una sola vez (aplica a todos los items)
+    try {
+        $tp->setValue('item_description', $itemDescription);
+        logtxt('📝 Descripción de items establecida: ' . ($itemDescription ? 'OK' : 'vacía'));
+    } catch (Exception $e) {
+        logtxt("⚠️ WARNING: No se pudo establecer item_description: " . $e->getMessage());
+    }
+
+    // Variable explícita para plantilla IE
+    $objetoTest = $inputData['objeto_test'] ?? $itemDescription;
+    try {
+        $tp->setValue('objeto_test', $objetoTest);
+        logtxt('Set objeto_test = ' . $objetoTest);
+    } catch (Exception $e) {
+        logtxt("⚠️ WARNING: No se pudo establecer objeto_test: " . $e->getMessage());
+    }
+
+    // Variable explícita para plantilla IE/DCC: descripción de equipamiento
+    $equipamiento = trim((string)($inputData['equipamiento'] ?? ''));
+    if ($equipamiento === '' && count($items) > 0) {
+        $equipamientoParts = [];
+        foreach ($items as $itemRow) {
+            $rowParts = [];
+            $nameVal = trim((string)($itemRow['name'] ?? ''));
+            $idVal = trim((string)($itemRow['id'] ?? ''));
+            $manufacturerVal = trim((string)($itemRow['manufacturer'] ?? ''));
+            $modelVal = trim((string)($itemRow['model'] ?? ''));
+            $snVal = trim((string)($itemRow['sn'] ?? ''));
+            $commentVal = trim((string)($itemRow['comment'] ?? ''));
+
+            if ($nameVal !== '') {
+                $rowParts[] = $nameVal . '.';
+            }
+            if ($idVal !== '') {
+                $rowParts[] = 'No. de inventario / Identificacion: ' . $idVal . '.';
+            }
+            if ($manufacturerVal !== '') {
+                $rowParts[] = 'Marca: ' . $manufacturerVal . '.';
+            }
+            if ($modelVal !== '') {
+                $rowParts[] = 'Modelo: ' . $modelVal . '.';
+            }
+            if ($snVal !== '') {
+                $rowParts[] = 'No. de serie: ' . $snVal . '.';
+            }
+            if ($commentVal !== '') {
+                if (!preg_match('/[.!?]$/u', $commentVal)) {
+                    $commentVal .= '.';
+                }
+                $rowParts[] = $commentVal;
+            }
+
+            $rowText = trim(implode(' ', $rowParts));
+            if ($rowText !== '') {
+                $equipamientoParts[] = $rowText;
+            }
+        }
+        $equipamiento = implode(' ', $equipamientoParts);
+    }
+
+    // Unificar valor para que también entre por el bloque de variables simples
+    $inputData['equipamiento'] = $equipamiento;
+    try {
+        $tp->setValue('equipamiento', $equipamiento);
+        logtxt('Set equipamiento = ' . $equipamiento);
+    } catch (Exception $e) {
+        logtxt("⚠️ WARNING: No se pudo establecer equipamiento: " . $e->getMessage());
+    }
 
     // Clonar filas en la plantilla para cada item
     if (count($items) > 0) {
-        $tp->cloneRow('item', count($items));
-        foreach ($items as $idx => $item) {
-            $n = $idx + 1;
-            $tp->setValue("item#{$n}", $n);
-            $tp->setValue("name_item#{$n}", $item['name']);
-            $tp->setValue("manufacturer_item#{$n}", $item['manufacturer']);
-            $tp->setValue("model_item#{$n}", $item['model']);
-            $tp->setValue("sn_item#{$n}", $item['sn']);
-            $tp->setValue("id_item#{$n}", $item['id']);
-            $tp->setValue("id_comm#{$n}", $item['comment']);
-            // logtxt("Set item#{$n} = $n, name_item#{$n} = {$item['name']}, manufacturer_item#{$n} = {$item['manufacturer']}, model_item#{$n} = {$item['model']}, sn_item#{$n} = {$item['sn']}, id_item#{$n} = {$item['id']}, id_comm#{$n} = {$item['comment']}");
+        logtxt('🔄 Clonando ' . count($items) . ' filas de items');
+        try {
+            $tp->cloneRow('item', count($items));
+            foreach ($items as $idx => $item) {
+                $n = $idx + 1;
+                $tp->setValue("item#{$n}", $n);
+                $tp->setValue("name_item#{$n}", $item['name']);
+                $tp->setValue("manufacturer_item#{$n}", $item['manufacturer']);
+                $tp->setValue("model_item#{$n}", $item['model']);
+                $tp->setValue("sn_item#{$n}", $item['sn']);
+                $tp->setValue("id_item#{$n}", $item['id']);
+                $tp->setValue("id_comm#{$n}", $item['comment']);
+                logtxt("✅ Set item#{$n}: name={$item['name']}, manufacturer={$item['manufacturer']}, model={$item['model']}, sn={$item['sn']}, id={$item['id']}, comment={$item['comment']}");
+            }
+        } catch (Exception $e) {
+            logtxt("⚠️ WARNING: No se pudo clonar filas de items (plantilla no tiene marcador 'item'): " . $e->getMessage());
+            // Para IE y otras plantillas sin estructura de items, establecer valores simples
+            try {
+                $item = $items[0];
+                $tp->setValue('item', '');
+                $tp->setValue('name_item', $item['name']);
+                $tp->setValue('manufacturer_item', $item['manufacturer']);
+                $tp->setValue('model_item', $item['model']);
+                $tp->setValue('sn_item', $item['sn']);
+                $tp->setValue('id_item', $item['id']);
+                $tp->setValue('id_comm', $item['comment']);
+            } catch (Exception $e2) {
+                logtxt("⚠️ WARNING: No se pudo establecer valores simples de items: " . $e2->getMessage());
+            }
         }
     } else {
         // Si no hay items, limpiar marcadores simples
-        $tp->setValue('item', '');
-        $tp->setValue('name_item', '');
-        $tp->setValue('manufacturer_item', '');
-        $tp->setValue('model_item', '');
-        $tp->setValue('sn_item', '');
-        $tp->setValue('id_item', '');
-        $tp->setValue('id_comm', '');
+        logtxt('⚠️ No hay items, limpiando marcadores');
+        try {
+            $tp->setValue('item', '');
+            $tp->setValue('name_item', '');
+            $tp->setValue('manufacturer_item', '');
+            $tp->setValue('model_item', '');
+            $tp->setValue('sn_item', '');
+            $tp->setValue('id_item', '');
+            $tp->setValue('id_comm', '');
+            $tp->setValue('item_description', '');
+        } catch (Exception $e) {
+            logtxt("⚠️ WARNING: No se pudo limpiar marcadores de items: " . $e->getMessage());
+        }
     }
 
     // ========== PERFORMANCE LOCATION: nombre y dirección según tipo ========== //
@@ -311,7 +567,11 @@ try {
     } else {
         $performanceDate = $begin;
     }
-    $tp->setValue('PerformanceDate', $performanceDate);
+    try {
+        $tp->setValue('PerformanceDate', $performanceDate);
+    } catch (Exception $e) {
+        logtxt("⚠️ WARNING: No se pudo establecer PerformanceDate: " . $e->getMessage());
+    }
     // logtxt("Set PerformanceDate = $performanceDate");
 
     // ========== RESPONSIBLES ========== //
@@ -319,57 +579,141 @@ try {
     $calibrated_roles = [];
     $approved = '';
     $approved_role = '';
-    // logtxt('responsiblePersons: ' . print_r($inputData['responsiblePersons'] ?? null, true));
-    if (isset($inputData['responsiblePersons']) && is_array($inputData['responsiblePersons'])) {
-        foreach ($inputData['responsiblePersons'] as $p) {
-            $name = trim($p['full_name'] ?? $p['name'] ?? '');
-            $role = trim($p['role'] ?? '');
-            $main = !empty($p['mainSigner']) || (!empty($p['main_sign']) && $p['main_sign']);
-            if ($main) {
-                $approved = $name;
-                $approved_role = $role;
-            } else {
-                if ($name !== '') $calibrated[] = $name;
-                if ($role !== '') $calibrated_roles[] = $role;
-            }
-        }
-    }
-    // logtxt('calibrated: ' . print_r($calibrated, true));
-    // logtxt('calibrated_roles: ' . print_r($calibrated_roles, true));
-    // logtxt('approved: ' . $approved);
-    // logtxt('approved_role: ' . $approved_role);
+    $approved_email = '';
+    $calibrated_email = '';
 
-    if (count($calibrated) > 0) {
-        $n = count($calibrated);
-        $tp->cloneRow('calibrated_by', $n);
-        for ($i = 1; $i <= $n; $i++) {
-            $tp->setValue("calibrated_by#{$i}", $calibrated[$i-1]);
-            $roleVal = $calibrated_roles[$i-1] ?? '';
-            $tp->setValue("calibrated_by_role#{$i}", $roleVal);
-            logtxt("Set calibrated_by#{$i} = " . ($calibrated[$i-1] ?? ''));
-            logtxt("Set calibrated_by_role#{$i} = " . ($roleVal));
+    if ($isIeDocument) {
+        $approved = $inputData['approved_by'] ?? '';
+        $approved_role = $inputData['approved_by_role'] ?? '';
+        $approved_email = $inputData['approved_by_email'] ?? '';
+        $calibratedSingle = $inputData['calibrated_by'] ?? '';
+        $calibratedSingleRole = $inputData['calibrated_by_role'] ?? '';
+        $calibrated_email = $inputData['calibrated_by_email'] ?? '';
+
+        try {
+            $tp->setValue('calibrated_by', $calibratedSingle);
+            $tp->setValue('calibrated_by_role', $calibratedSingleRole);
+            $tp->setValue('calibrated_by_email', $calibrated_email);
+            $tp->setValue('approved_by', $approved);
+            $tp->setValue('approved_by_role', $approved_role);
+            $tp->setValue('approved_by_email', $approved_email);
+    
+            logtxt("Set calibrated_by = $calibratedSingle");
+            logtxt("Set calibrated_by_role = $calibratedSingleRole");
+            logtxt("Set calibrated_by_email = $calibrated_email");
+            logtxt("Set approved_by = $approved");
+            logtxt("Set approved_by_role = $approved_role");
+            logtxt("Set approved_by_email = $approved_email");
+        } catch (Exception $e) {
+            logtxt("⚠️ WARNING: No se pudo establecer algunos valores de responsables IE: " . $e->getMessage());
+            // Intentar establecer solo los que existan
+            try { $tp->setValue('approved_by', $approved); } catch (Exception $e1) {}
+            try { $tp->setValue('approved_by_role', $approved_role); } catch (Exception $e1) {}
+            try { $tp->setValue('approved_by_email', $approved_email); } catch (Exception $e1) {}
+            try { $tp->setValue('calibrated_by', $calibratedSingle); } catch (Exception $e1) {}
+            try { $tp->setValue('calibrated_by_role', $calibratedSingleRole); } catch (Exception $e1) {}
+            try { $tp->setValue('calibrated_by_email', $calibrated_email); } catch (Exception $e1) {}
         }
     } else {
-        $tp->setValue('calibrated_by', '');
-        $tp->setValue('calibrated_by_role', '');
+        // logtxt('responsiblePersons: ' . print_r($inputData['responsiblePersons'] ?? null, true));
+        if (isset($inputData['responsiblePersons']) && is_array($inputData['responsiblePersons'])) {
+            foreach ($inputData['responsiblePersons'] as $p) {
+                $name = trim($p['full_name'] ?? $p['name'] ?? '');
+                $role = trim($p['role'] ?? '');
+                $main = !empty($p['mainSigner']) || (!empty($p['main_sign']) && $p['main_sign']);
+                if ($main) {
+                    $approved = $name;
+                    $approved_role = $role;
+                } else {
+                    if ($name !== '') $calibrated[] = $name;
+                    if ($role !== '') $calibrated_roles[] = $role;
+                }
+            }
+        }
+
+        if (count($calibrated) > 0) {
+            $n = count($calibrated);
+            try {
+                $tp->cloneRow('calibrated_by', $n);
+                for ($i = 1; $i <= $n; $i++) {
+                    $tp->setValue("calibrated_by#{$i}", $calibrated[$i-1]);
+                    $roleVal = $calibrated_roles[$i-1] ?? '';
+                    $tp->setValue("calibrated_by_role#{$i}", $roleVal);
+                    logtxt("Set calibrated_by#{$i} = " . ($calibrated[$i-1] ?? ''));
+                    logtxt("Set calibrated_by_role#{$i} = " . ($roleVal));
+                }
+            } catch (Exception $e) {
+                logtxt("⚠️ WARNING: No se pudo clonar filas de calibrated_by: " . $e->getMessage());
+                // Fallback: establecer el primer calibrado en el valor simple
+                $tp->setValue('calibrated_by', $calibrated[0] ?? '');
+                $tp->setValue('calibrated_by_role', $calibrated_roles[0] ?? '');
+            }
+        } else {
+            $tp->setValue('calibrated_by', '');
+            $tp->setValue('calibrated_by_role', '');
+        }
+        try {
+            $tp->setValue('approved_by', $approved);
+            $tp->setValue('approved_by_role', $approved_role);
+            logtxt("Set approved_by = $approved");
+            logtxt("Set approved_by_role = $approved_role");
+        } catch (Exception $e) {
+            logtxt("⚠️ WARNING: No se pudo establecer approved_by DCC: " . $e->getMessage());
+            try { $tp->setValue('approved_by', $approved); } catch (Exception $e1) {}
+            try { $tp->setValue('approved_by_role', $approved_role); } catch (Exception $e1) {}
+        }
     }
-    $tp->setValue('approved_by', $approved);
-    $tp->setValue('approved_by_role', $approved_role);
-    logtxt("Set approved_by = $approved");
-    logtxt("Set approved_by_role = $approved_role");
 
     // ========== OTRAS VARIABLES SIMPLES ========== //
 
     $variables = [
         'certificate_number','issue_date','customer_name','customer_direction','customer_email',
-        'customer_phone','laboratory_name','laboratory_direction','laboratory_phone',
+        'customer_phone','customer_rep','customer_rep_tel','laboratory_name','laboratory_direction','laboratory_phone',
         'item_name','item_manufacturer','item_model','item_serial_number','item_comment','date_receipt',
-        'next_calibration','pt_description','pt_method'
+        'next_calibration','pt_description','pt_method','test_number','circuito','norma',
+        'faseA','faseB','faseC',
+        'descripcion_servicio','objeto_test','equipamiento',
+        'material_description',
+        'cable_fabricante','cable_modelo','cable_metrajeA','cable_metrajeB','cable_metrajeC',
+        'terminal1_fabricante','terminal1_modelo','terminal1_snA','terminal1_snB','terminal1_snC',
+        'terminal2_fabricante','terminal2_modelo','terminal2_snA','terminal2_snB','terminal2_snC',
+        'empalmes_fabricante','empalmes_modelo','empalmes_metrajeA','empalmes_metrajeB','empalmes_metrajeC'
     ];
     foreach ($variables as $var) {
         $val = $inputData[$var] ?? '';
-        $tp->setValue($var, $val);
+        
+        // Si date_receipt es N/A, agregar texto adicional
+        if ($var === 'date_receipt' && trim(strtoupper($val)) === 'N/A') {
+            $val = 'N/A, on site calibration';
+        }
+        
+        try {
+            $tp->setValue($var, $val);
+        } catch (Exception $e) {
+            logtxt("⚠️ WARNING: No se pudo establecer variable simple '$var' (plantilla no tiene este marcador): " . $e->getMessage());
+        }
         // logtxt("Set $var = " . substr($val, 0, 200));
+    }
+
+    // Fallback: descripción_servicio desde nombre de método hv_method
+    if (empty($inputData['descripcion_servicio'])) {
+        $descripcionServicioFallback = trim((string)($inputData['pt_method'] ?? ''));
+        if ($descripcionServicioFallback !== '') {
+            // Quitar prefijo PT-XX cuando venga en pt_method (ej: "PT-05 NOMBRE")
+            $descripcionServicioFallback = preg_replace('/^PT-\d+\s+/i', '', $descripcionServicioFallback);
+        }
+
+        try {
+            $tp->setValue('descripcion_servicio', $descripcionServicioFallback);
+            // Intentar variante con acento si la plantilla la usa así
+            try { $tp->setValue('descripción_servicio', $descripcionServicioFallback); } catch (Exception $e1) {}
+            logtxt('Set descripcion_servicio (fallback) = ' . $descripcionServicioFallback);
+        } catch (Exception $e) {
+            logtxt("⚠️ WARNING: No se pudo establecer descripcion_servicio (fallback): " . $e->getMessage());
+        }
+    } else {
+        // Intentar variante con acento si la plantilla la usa así
+        try { $tp->setValue('descripción_servicio', $inputData['descripcion_servicio']); } catch (Exception $e1) {}
     }
 
     // ========== RESULTADOS: TABLA Y INDIVIDUALES ========== //
@@ -388,15 +732,30 @@ try {
 
         $nRows = count($rangeArr);
         if ($nRows > 0) {
-            $tp->cloneRow('range', $nRows);
-            for ($i = 1; $i <= $nRows; $i++) {
-                $tp->setValue("range#{$i}", $rangeArr[$i-1] ?? '');
-                $tp->setValue("voltaje_m#{$i}", $voltajeMArr[$i-1] ?? '');
-                $tp->setValue("ref_v#{$i}", $refVArr[$i-1] ?? '');
-                $tp->setValue("voltaje_e#{$i}", $voltajeEArr[$i-1] ?? '');
-                $tp->setValue("sf_ob#{$i}", $sfObArr[$i-1] ?? '');
-                $tp->setValue("expanded_u#{$i}", $expandedUArr[$i-1] ?? '');
-                // logtxt("Set fila tabla resultado #{$i}: range={$rangeArr[$i-1]}, voltaje_m={$voltajeMArr[$i-1]}, ref_v={$refVArr[$i-1]}, voltaje_e={$voltajeEArr[$i-1]}, sf_ob={$sfObArr[$i-1]}, expanded_u={$expandedUArr[$i-1]}");
+            try {
+                $tp->cloneRow('range', $nRows);
+                for ($i = 1; $i <= $nRows; $i++) {
+                    $tp->setValue("range#{$i}", $rangeArr[$i-1] ?? '');
+                    $tp->setValue("voltaje_m#{$i}", $voltajeMArr[$i-1] ?? '');
+                    $tp->setValue("ref_v#{$i}", $refVArr[$i-1] ?? '');
+                    $tp->setValue("voltaje_e#{$i}", $voltajeEArr[$i-1] ?? '');
+                    $tp->setValue("sf_ob#{$i}", $sfObArr[$i-1] ?? '');
+                    $tp->setValue("expanded_u#{$i}", $expandedUArr[$i-1] ?? '');
+                    // logtxt("Set fila tabla resultado #{$i}: range={$rangeArr[$i-1]}, voltaje_m={$voltajeMArr[$i-1]}, ref_v={$refVArr[$i-1]}, voltaje_e={$voltajeEArr[$i-1]}, sf_ob={$sfObArr[$i-1]}, expanded_u={$expandedUArr[$i-1]}");
+                }
+            } catch (Exception $e) {
+                logtxt("⚠️ WARNING: No se pudo clonar filas de resultados tabla (plantilla no tiene marcador 'range'): " . $e->getMessage());
+                // Para plantillas sin tabla de resultados, establecer valores simples si es posible
+                try {
+                    $tp->setValue('range', $rangeArr[0] ?? '');
+                    $tp->setValue('voltaje_m', $voltajeMArr[0] ?? '');
+                    $tp->setValue('ref_v', $refVArr[0] ?? '');
+                    $tp->setValue('voltaje_e', $voltajeEArr[0] ?? '');
+                    $tp->setValue('sf_ob', $sfObArr[0] ?? '');
+                    $tp->setValue('expanded_u', $expandedUArr[0] ?? '');
+                } catch (Exception $e2) {
+                    logtxt("⚠️ WARNING: No se pudo establecer valores simples de resultados tabla: " . $e2->getMessage());
+                }
             }
         }
     }
@@ -404,8 +763,12 @@ try {
     // Procesar resultados individuales
     $meanValue = $results[1]['mean_sf_obtained'] ?? '';
     $linearityValue = $results[2]['linearity_sf_obtained'] ?? '';
-    $tp->setValue('result_mean_value', $meanValue);
-    $tp->setValue('result_vd', $linearityValue);
+    try {
+        $tp->setValue('result_mean_value', $meanValue);
+        $tp->setValue('result_vd', $linearityValue);
+    } catch (Exception $e) {
+        logtxt("⚠️ WARNING: No se pudo establecer resultados individuales: " . $e->getMessage());
+    }
     // logtxt("Set result_mean_value = $meanValue");
     // logtxt("Set result_vd = $linearityValue");
 

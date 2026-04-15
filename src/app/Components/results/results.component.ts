@@ -1,5 +1,3 @@
-import { ViewChild } from '@angular/core';
-import { Pt23ResultsComponent } from './pt23-results/pt23-results.component';
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -17,12 +15,7 @@ import Swal from 'sweetalert2';
 @Component({
   selector: 'app-results',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    Pt23ResultsComponent,
-    NgMultiSelectDropDownModule,
-  ],
+  imports: [CommonModule, FormsModule, NgMultiSelectDropDownModule],
   templateUrl: './results.component.html',
   styleUrl: './results.component.css',
 })
@@ -30,8 +23,6 @@ export class ResultsComponent implements OnInit, OnDestroy {
   logResults() {
     return '';
   }
-  @ViewChild('pt23ResultsComponent')
-  pt23ResultsComponent?: Pt23ResultsComponent;
   /**
    * Mapea el bloque de Results desde el XML al formato esperado por el componente
    * @param xmlData Objeto parseado del XML
@@ -237,6 +228,8 @@ export class ResultsComponent implements OnInit, OnDestroy {
   influenceConditions: any[] = [];
   measuringEquipments: any[] = [];
   metrologicalTraceability: any[] = []; // Nuevo: Metrological Traceability
+  calibrationStatus: any[] = []; // Estado de calibración de cada patrón
+  hasExpiredPatrones: boolean = false; // Flag para saber si hay patrones vencidos
   results: any[] = [];
   editingBlocks: { [key: string]: boolean } = {};
   private subscription: Subscription = new Subscription();
@@ -252,6 +245,19 @@ export class ResultsComponent implements OnInit, OnDestroy {
   editingMeasurementUncertainty: boolean = false; // NUEVO: modo edición exclusivo
   isEditingMeasurementResult: boolean = false; // Modo edición del nombre
   measurementResultName: string = ''; // Nombre editable
+
+  get showMainResultsBlocks(): boolean {
+    return true;
+  }
+
+  get showTestedMaterialBlock(): boolean {
+    return false;
+  }
+
+  // Tested Material (IE only)
+  testedMaterial: any = {};
+  testedMaterialBackup: any = {};
+  isEditingTestedMaterial: boolean = false;
 
   // Propiedades para Measuring Equipments con multiselect
   isEditingMeasuringEquipments: boolean = false;
@@ -281,23 +287,26 @@ export class ResultsComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    // Cargar coreData una sola vez del observable solo para obtener el certificate_number
+    // Cargar coreData del observable y recargar BD solo cuando cambie el certificado
     this.subscription.add(
       this.dccDataService.dccData$.subscribe((data) => {
         const certificateNumber =
           data.administrativeData?.core?.certificate_number;
         const ptId = data.administrativeData?.core?.pt_id;
+        const technicalVerification =
+          data.administrativeData?.core?.technical_verification;
 
-        // Solo actualizar coreData si cambió el certificado
-        if (
-          certificateNumber &&
-          certificateNumber !== this.coreData?.certificate_number
-        ) {
-          this.coreData = {
-            certificate_number: certificateNumber,
-            pt_id: ptId,
-          };
+        const previousCertificate = this.coreData?.certificate_number;
 
+        this.coreData = {
+          ...this.coreData,
+          certificate_number: certificateNumber,
+          pt_id: ptId,
+          technical_verification: Boolean(technicalVerification),
+        };
+
+        // Solo recargar de BD si cambió el certificado
+        if (certificateNumber && certificateNumber !== previousCertificate) {
           // Si el modo es xml, cargar desde XML
           if (this.operationMode === 'xml' && data.xmlData) {
             this.loadInfluenceConditionsFromXml(data.xmlData);
@@ -339,16 +348,34 @@ export class ResultsComponent implements OnInit, OnDestroy {
   // Nuevo método para cargar used methods desde BD
   private loadUsedMethodsFromDB(dccId: string) {
     const ptId = this.coreData?.pt_id;
+    const isIeCertificate = this.isTestCertificate(
+      this.coreData?.certificate_number,
+    );
     this.dccDataService
       .getAllUsedMethodsFromDatabase(this.database, ptId)
       .subscribe({
         next: (methods) => {
-          this.usedMethods = methods.map((method) => {
+          const filteredMethods = isIeCertificate
+            ? methods.filter((method) => method.refType !== 'basic_uncertainty')
+            : methods;
+
+          this.usedMethods = filteredMethods.map((method) => {
             if (ptId && method.refType === 'hv_method' && method.description) {
               method.description = method.description.replace(
                 /PT-\d{2}/g,
                 ptId,
               );
+            }
+
+            // Concatenar norm con el name del primer usedMethodQuantity
+            if (
+              method.norm &&
+              method.usedMethodQuantities &&
+              method.usedMethodQuantities.length > 0
+            ) {
+              const quantityName = method.usedMethodQuantities[0].name;
+              method.norm = method.norm + ': ' + quantityName;
+            } else {
             }
             return method;
           });
@@ -356,7 +383,11 @@ export class ResultsComponent implements OnInit, OnDestroy {
           this.dccDataService.updateUsedMethods(this.usedMethods);
         },
         error: () => {
-          this.usedMethods = this.getDefaultUsedMethods();
+          console.log('❌ Error loading methods, using defaults');
+          this.usedMethods = this.getDefaultUsedMethods().filter(
+            (method) =>
+              !isIeCertificate || method.refType !== 'basic_uncertainty',
+          );
           // Actualizar el observable global con los defaults
           this.dccDataService.updateUsedMethods(this.usedMethods);
         },
@@ -452,6 +483,24 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
   get isDccCertificate(): boolean {
     return !this.isTestCertificate(this.coreData?.certificate_number);
+  }
+
+  get isTechnicalVerificationActive(): boolean {
+    return (
+      this.isDccCertificate && Boolean(this.coreData?.technical_verification)
+    );
+  }
+
+  get hasPtId(): boolean {
+    return Boolean(String(this.coreData?.pt_id || '').trim());
+  }
+
+  private getPatronFilterPtId(): string | null {
+    const normalizedPtId = String(this.coreData?.pt_id || '')
+      .trim()
+      .toUpperCase();
+
+    return /^PT-\d{2}$/.test(normalizedPtId) ? normalizedPtId : null;
   }
 
   private pushMeasurementResultName(name: string) {
@@ -1346,23 +1395,22 @@ export class ResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Cargar patrones disponibles desde calibraciones.patron filtrados por PT
+  // Cargar patrones disponibles desde calibraciones.patron
+  // Si hay PT, filtra por PT; si no hay PT, carga todos
   private loadAvailablePatrones() {
-    const ptId = this.coreData?.pt_id;
-    if (!ptId) {
-      console.warn('No PT ID available to filter patrones');
-      return;
-    }
+    const ptId = this.getPatronFilterPtId();
 
     const query = {
       action: 'get',
       bd: this.database,
       table: 'patron',
-      opts: {
-        where: {
-          pt: ptId,
-        },
-      },
+      opts: ptId
+        ? {
+            where: {
+              pt: ptId,
+            },
+          }
+        : {},
     };
 
     this.apiService.post(query, UrlClass.URLNuevo).subscribe({
@@ -1481,6 +1529,20 @@ export class ResultsComponent implements OnInit, OnDestroy {
           where: {
             idequipment: item.assetId,
           },
+          attributes: [
+            'idequipment',
+            'name',
+            'Name',
+            'Description',
+            'description',
+            'maker',
+            'Maker',
+            'model',
+            'Model',
+            'serial_number',
+            'Serial_number',
+            'months',
+          ],
         },
       };
 
@@ -1490,13 +1552,17 @@ export class ResultsComponent implements OnInit, OnDestroy {
         .then((response: any) => {
           if (response?.result && response.result.length > 0) {
             const eq = response.result[0];
+            // Prioridad: name > Name > Description > description
+            const equipmentName =
+              eq.name || eq.Name || eq.Description || eq.description || '';
+
             return {
               assetId: item.assetId,
               patronId: item.patronId,
               patronName: item.patronName,
-              calibrationInterval: item.calibrationInterval,
+              calibrationInterval: eq.months || item.calibrationInterval,
               idEquipment: eq.idequipment,
-              name: eq.Description || eq.description || '',
+              name: equipmentName,
               manufacturer: eq.maker || eq.Maker || '',
               model: eq.model || eq.Model || '',
               serialNumber: eq.serial_number || eq.Serial_number || '',
@@ -1714,10 +1780,12 @@ export class ResultsComponent implements OnInit, OnDestroy {
           this.loadTraceabilityFromEquipmentCatalog(patrones, dccId);
         } else {
           this.metrologicalTraceability = [];
+          this.calculateCalibrationStatus();
         }
       },
       error: () => {
         this.metrologicalTraceability = [];
+        this.calculateCalibrationStatus();
       },
     });
   }
@@ -1740,12 +1808,15 @@ export class ResultsComponent implements OnInit, OnDestroy {
         tz_date: '',
         tz_quantity: '', // Por agregar
         tz_comm: '', // Por agregar
+        calibration_interval: 0, // Sin intervalo sin equipmentIds
         orden: idx + 1,
       }));
       // Actualizar el observable global
       this.dccDataService.updateMetrologicalTraceability(
         this.metrologicalTraceability,
       );
+      // Calcular estado de calibración también sin equipmentIds
+      this.calculateCalibrationStatus();
       return;
     }
 
@@ -1757,7 +1828,15 @@ export class ResultsComponent implements OnInit, OnDestroy {
         table: 'equipment_catalog',
         opts: {
           where: { idequipment: assetId },
-          attributes: ['idequipment', 'calibratedby', 'last_calibration'],
+          attributes: [
+            'idequipment',
+            'calibratedby',
+            'last_calibration',
+            'tzname',
+            'tzquantity',
+            'tzcomm',
+            'months', // Agregar intervalo de calibración
+          ],
         },
       };
 
@@ -1782,11 +1861,12 @@ export class ResultsComponent implements OnInit, OnDestroy {
             id_dcc: dccId,
             id_patron: eq.asset_id || '', // asset_id es el idequipment
             name_patron: eq.name || '',
-            tz_name: '', // Por agregar (no existe en equipment_catalog)
+            tz_name: catalogRecord?.tzname || '',
             tz_by: catalogRecord?.calibratedby || '',
             tz_date: catalogRecord?.last_calibration || '',
-            tz_quantity: '', // Por agregar (no existe en equipment_catalog)
-            tz_comm: '', // Por agregar (no existe en equipment_catalog)
+            tz_quantity: catalogRecord?.tzquantity || '',
+            tz_comm: catalogRecord?.tzcomm || '',
+            calibration_interval: catalogRecord?.months || 0, // Intervalo de calibración en meses
             orden: idx + 1,
           };
         });
@@ -1794,6 +1874,8 @@ export class ResultsComponent implements OnInit, OnDestroy {
         this.dccDataService.updateMetrologicalTraceability(
           this.metrologicalTraceability,
         );
+        // Calcular estado de calibración
+        this.calculateCalibrationStatus();
       })
       .catch((error) => {
         console.error('Error loading from equipment_catalog:', error);
@@ -1809,6 +1891,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
             tz_date: '',
             tz_quantity: '',
             tz_comm: '',
+            calibration_interval: 0, // Sin intervalo en fallback
             orden: idx + 1,
           }),
         );
@@ -1816,7 +1899,279 @@ export class ResultsComponent implements OnInit, OnDestroy {
         this.dccDataService.updateMetrologicalTraceability(
           this.metrologicalTraceability,
         );
+        // Calcular estado de calibración también en el catch
+        this.calculateCalibrationStatus();
       });
+  }
+
+  // Calcular el estado de calibración de cada patrón
+  private calculateCalibrationStatus() {
+    this.calibrationStatus = [];
+    this.hasExpiredPatrones = false;
+
+    this.metrologicalTraceability.forEach((patron) => {
+      const status = this.getCalibrationStatus(patron);
+      this.calibrationStatus.push(status);
+
+      // Solo contar como vencido si tiene información completa pero está vencido
+      if (!status.isValid && status.hasCompleteInfo) {
+        this.hasExpiredPatrones = true;
+      }
+    });
+
+    // Actualizar el servicio con el estado de patrones vencidos
+    this.dccDataService.updateHasExpiredPatrones(this.hasExpiredPatrones);
+  }
+
+  // ========== TESTED MATERIAL (IE only) ==========
+
+  private getEmptyTestedMaterial(): any {
+    return {
+      id: null,
+      material_description: '',
+      cable_fabricante: '',
+      cable_modelo: '',
+      cable_metrajeA: '',
+      cable_metrajeB: '',
+      cable_metrajeC: '',
+      terminal1_fabricante: '',
+      terminal1_modelo: '',
+      terminal1_snA: '',
+      terminal1_snB: '',
+      terminal1_snC: '',
+      terminal2_fabricante: '',
+      terminal2_modelo: '',
+      terminal2_snA: '',
+      terminal2_snB: '',
+      terminal2_snC: '',
+      empalmes_fabricante: '',
+      empalmes_modelo: '',
+      empalmes_metrajeA: '',
+      empalmes_metrajeB: '',
+      empalmes_metrajeC: '',
+    };
+  }
+
+  private loadTestedMaterialFromDB(dccId: string) {
+    const query = {
+      action: 'get',
+      bd: this.database,
+      table: 'ie_tested_material',
+      opts: {
+        where: { id_dcc: dccId, deleted: 0 },
+      },
+    };
+
+    this.dccDataService.post(query).subscribe({
+      next: (response: any) => {
+        const row = response?.result?.[0];
+        if (row) {
+          this.testedMaterial = {
+            id: row.id,
+            material_description: row.material_description || '',
+            cable_fabricante: row.cable_fabricante || '',
+            cable_modelo: row.cable_modelo || '',
+            cable_metrajeA: row.cable_metrajeA || '',
+            cable_metrajeB: row.cable_metrajeB || '',
+            cable_metrajeC: row.cable_metrajeC || '',
+            terminal1_fabricante: row.terminal1_fabricante || '',
+            terminal1_modelo: row.terminal1_modelo || '',
+            terminal1_snA: row.terminal1_snA || '',
+            terminal1_snB: row.terminal1_snB || '',
+            terminal1_snC: row.terminal1_snC || '',
+            terminal2_fabricante: row.terminal2_fabricante || '',
+            terminal2_modelo: row.terminal2_modelo || '',
+            terminal2_snA: row.terminal2_snA || '',
+            terminal2_snB: row.terminal2_snB || '',
+            terminal2_snC: row.terminal2_snC || '',
+            empalmes_fabricante: row.empalmes_fabricante || '',
+            empalmes_modelo: row.empalmes_modelo || '',
+            empalmes_metrajeA: row.empalmes_metrajeA || '',
+            empalmes_metrajeB: row.empalmes_metrajeB || '',
+            empalmes_metrajeC: row.empalmes_metrajeC || '',
+          };
+        } else {
+          this.testedMaterial = this.getEmptyTestedMaterial();
+        }
+        this.dccDataService.updateTestedMaterial(this.testedMaterial);
+      },
+      error: () => {
+        this.testedMaterial = this.getEmptyTestedMaterial();
+        this.dccDataService.updateTestedMaterial(this.testedMaterial);
+      },
+    });
+  }
+
+  toggleEditTestedMaterial() {
+    if (this.isEditingTestedMaterial) {
+      // Cancel
+      this.testedMaterial = JSON.parse(
+        JSON.stringify(this.testedMaterialBackup),
+      );
+      this.isEditingTestedMaterial = false;
+    } else {
+      this.testedMaterialBackup = JSON.parse(
+        JSON.stringify(this.testedMaterial),
+      );
+      this.isEditingTestedMaterial = true;
+    }
+  }
+
+  saveTestedMaterial() {
+    const dccId = this.coreData?.certificate_number;
+    if (!dccId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'No hay un certificado cargado.',
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'Guardando...',
+      text: 'Guardando material de prueba',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    const attributes = {
+      id_dcc: dccId,
+      material_description: this.testedMaterial.material_description || '',
+      cable_fabricante: this.testedMaterial.cable_fabricante || '',
+      cable_modelo: this.testedMaterial.cable_modelo || '',
+      cable_metrajeA: this.testedMaterial.cable_metrajeA || '',
+      cable_metrajeB: this.testedMaterial.cable_metrajeB || '',
+      cable_metrajeC: this.testedMaterial.cable_metrajeC || '',
+      terminal1_fabricante: this.testedMaterial.terminal1_fabricante || '',
+      terminal1_modelo: this.testedMaterial.terminal1_modelo || '',
+      terminal1_snA: this.testedMaterial.terminal1_snA || '',
+      terminal1_snB: this.testedMaterial.terminal1_snB || '',
+      terminal1_snC: this.testedMaterial.terminal1_snC || '',
+      terminal2_fabricante: this.testedMaterial.terminal2_fabricante || '',
+      terminal2_modelo: this.testedMaterial.terminal2_modelo || '',
+      terminal2_snA: this.testedMaterial.terminal2_snA || '',
+      terminal2_snB: this.testedMaterial.terminal2_snB || '',
+      terminal2_snC: this.testedMaterial.terminal2_snC || '',
+      empalmes_fabricante: this.testedMaterial.empalmes_fabricante || '',
+      empalmes_modelo: this.testedMaterial.empalmes_modelo || '',
+      empalmes_metrajeA: this.testedMaterial.empalmes_metrajeA || '',
+      empalmes_metrajeB: this.testedMaterial.empalmes_metrajeB || '',
+      empalmes_metrajeC: this.testedMaterial.empalmes_metrajeC || '',
+    };
+
+    const existingId = this.testedMaterial.id;
+
+    if (existingId) {
+      const updateQuery = {
+        action: 'update',
+        bd: this.database,
+        table: 'ie_tested_material',
+        opts: { attributes, where: { id: existingId } },
+      };
+      this.dccDataService.post(updateQuery).subscribe({
+        next: () => this.onTestedMaterialSaved(),
+        error: () => this.onTestedMaterialSaveError(),
+      });
+    } else {
+      const createQuery = {
+        action: 'create',
+        bd: this.database,
+        table: 'ie_tested_material',
+        opts: { attributes },
+      };
+      this.dccDataService.post(createQuery).subscribe({
+        next: (response: any) => {
+          const insertedId =
+            response?.result?.insertId || response?.insertId || null;
+          if (insertedId) {
+            this.testedMaterial.id = insertedId;
+          }
+          this.onTestedMaterialSaved();
+        },
+        error: () => this.onTestedMaterialSaveError(),
+      });
+    }
+  }
+
+  private onTestedMaterialSaved() {
+    Swal.close();
+    this.isEditingTestedMaterial = false;
+    this.dccDataService.updateTestedMaterial(this.testedMaterial);
+    Swal.fire({
+      icon: 'success',
+      title: '¡Guardado!',
+      text: 'El material de prueba se ha guardado correctamente.',
+      timer: 2000,
+      showConfirmButton: false,
+      position: 'top-end',
+    });
+  }
+
+  private onTestedMaterialSaveError() {
+    Swal.close();
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'No se pudo guardar el material de prueba.',
+    });
+  }
+
+  // Obtener el estado de calibración de un patrón específico
+  private getCalibrationStatus(patron: any): any {
+    const calibrationDate = patron.tz_date;
+    const intervalMonths = patron.calibration_interval || 0;
+
+    if (!calibrationDate || !intervalMonths) {
+      return {
+        id_patron: patron.id_patron,
+        isValid: false,
+        hasCompleteInfo: false, // No tiene información completa
+        message: `⚠️ El patrón con ID "${patron.id_patron}" no tiene información de calibración completa.`,
+        remainingDays: null,
+        expirationDate: null,
+      };
+    }
+
+    // Calcular fecha de vencimiento
+    const calDate = new Date(calibrationDate);
+    const expirationDate = new Date(calDate);
+    expirationDate.setMonth(expirationDate.getMonth() + intervalMonths);
+
+    // Calcular días restantes
+    const today = new Date();
+    const diffTime = expirationDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    const isValid = diffDays > 0;
+
+    let message = '';
+    if (isValid) {
+      const years = Math.floor(diffDays / 365);
+      const months = Math.floor((diffDays % 365) / 30);
+      const days = diffDays % 30;
+
+      let timeRemaining = '';
+      if (years > 0) timeRemaining += `${years} año${years > 1 ? 's' : ''} `;
+      if (months > 0)
+        timeRemaining += `${months} mes${months > 1 ? 'es' : ''} `;
+      if (days > 0 || !timeRemaining)
+        timeRemaining += `${days} día${days !== 1 ? 's' : ''}`;
+
+      message = `✅ El patrón con ID "${patron.id_patron}" se encuentra calibrado. Tiempo restante: ${timeRemaining.trim()}`;
+    } else {
+      const daysExpired = Math.abs(diffDays);
+      message = `⚠️ El patrón con ID "${patron.id_patron}" está vencido desde hace ${daysExpired} día${daysExpired !== 1 ? 's' : ''}. Venció el: ${expirationDate.toLocaleDateString()}`;
+    }
+
+    return {
+      id_patron: patron.id_patron,
+      isValid,
+      hasCompleteInfo: true, // Tiene información completa
+      message,
+      remainingDays: diffDays,
+      expirationDate: expirationDate.toISOString(),
+    };
   }
 }
 

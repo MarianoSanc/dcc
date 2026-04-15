@@ -72,6 +72,12 @@
 .option-btn.create-ie-btn:hover {
   background: #7b1fa2;
 }
+.option-btn.create-ied-btn {
+  background: #00897b;
+}
+.option-btn.create-ied-btn:hover {
+  background: #00695c;
+}
 .option-btn.load-dcc-btn {
   background: #ff9800;
 }
@@ -105,7 +111,7 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   max-width: 500px;
   width: 90%;
-  max-height: 90vh;
+  max-height: calc(100vh - 40px);
   overflow: hidden;
 }
 
@@ -280,6 +286,18 @@
   color: #2196f3;
   border-bottom-color: #2196f3;
   background: #f8fbff;
+}
+
+.tab-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: #999;
+  pointer-events: none;
+}
+
+.tab-btn.disabled:hover {
+  background: none;
+  color: #999;
 }
 
 /* Tab Content */
@@ -477,9 +495,13 @@
   top: 0;
   left: 0;
   width: 100vw;
-  height: 120vh;
-  background: rgba(0, 0, 0, 0.3);
+  height: 100vh;
+  background: rgba(33, 33, 33, 0.25);
   z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
 }
 
 .modal-content {
@@ -594,8 +616,8 @@
 }
 .dcc-select-modal .modal-body {
   padding: 24px;
-  overflow-y: auto;
   flex: 1;
+  overflow-y: visible !important;
 }
 
 /* Estilos para el modal de creación de DCC */
@@ -611,6 +633,26 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.create-dcc-modal.create-ied-fullscreen {
+  position: fixed !important;
+  top: 10px !important;
+  left: 10px !important;
+  right: 10px !important;
+  bottom: 10px !important;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: auto !important;
+  margin: 0 !important;
+  border-radius: 8px !important;
+}
+
+/* Asegurar que ocupe todo el espacio */
+.create-dcc-modal.create-ied-fullscreen {
+  z-index: 1101;
 }
 
 .create-dcc-modal .modal-header {
@@ -675,6 +717,14 @@
   margin-bottom: 18px;
 }
 
+.create-dcc-modal .form-text {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.85em;
+  color: #666;
+  font-style: italic;
+}
+
 .create-dcc-modal label {
   display: block;
   margin-bottom: 7px;
@@ -684,6 +734,7 @@
 }
 
 .create-dcc-modal input[type="date"],
+.create-dcc-modal input[type="text"].form-control,
 .create-dcc-modal select.form-control {
   width: 100%;
   padding: 10px;
@@ -695,6 +746,7 @@
 }
 
 .create-dcc-modal input[type="date"]:focus,
+.create-dcc-modal input[type="text"].form-control:focus,
 .create-dcc-modal select.form-control:focus {
   outline: none;
   border-color: #2196f3;
@@ -883,6 +935,234 @@
   background: #cccccc;
 }
 
+/* === IED: sección de circuitos === */
+.ied-circuits-section {
+  margin-top: 16px;
+  width: 100%;
+}
+
+.ied-circuits-section .section-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #333;
+  font-size: 0.95em;
+}
+
+.ied-circuit-block {
+  border: 1px solid #dce3ea;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  background: #f7f9fc;
+}
+
+.circuit-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.circuit-label {
+  font-weight: 600;
+  color: #2196f3;
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+.circuit-text-input {
+  flex: 1;
+}
+
+.circuit-reports-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.circuit-report-name {
+  padding: 5px 10px;
+  background: white;
+  border: 1px solid #c8d8e8;
+  border-radius: 3px;
+  font-family: "Courier New", monospace;
+  font-size: 0.85em;
+  color: #444;
+}
+
+.ied-reports-summary {
+  pointer-events: none;
+  cursor: default;
+}
+
+/* === IED TAB NAVIGATION === */
+.ied-tabs-nav {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #eef2f7 100%);
+  border-bottom: 2px solid #dce3ea;
+  overflow: auto;
+}
+
+.tab-button {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  background: white;
+  border: 2px solid #dce3ea;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #555;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab-button:hover {
+  border-color: #2196f3;
+  background: #f0f7ff;
+}
+
+.tab-button.active {
+  background: #2196f3;
+  border-color: #2196f3;
+  color: white;
+}
+
+.tab-button.completed {
+  border-color: #4caf50;
+  color: #4caf50;
+}
+
+.tab-button.active.completed {
+  background: #4caf50;
+  border-color: #4caf50;
+  color: white;
+}
+
+.tab-title {
+  font-size: 0.9em;
+}
+
+.tab-check {
+  font-weight: bold;
+  margin-left: 4px;
+}
+
+/* === IED TAB CONTENT === */
+.ied-tab-content {
+  animation: fadeIn 0.3s ease;
+}
+
+/* === IED ACTIONS === */
+.ied-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.nav-btn {
+  padding: 10px 20px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+  background: #e0e0e0;
+  border-color: #999;
+}
+
+/* === TESTED MATERIAL FORM === */
+.tested-material-form {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.material-section-title {
+  margin-top: 16px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #2196f3;
+  color: #2196f3;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.description-template-wrapper {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.description-affix {
+  color: #555;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.description-variable {
+  flex: 1;
+  min-width: 220px;
+}
+
+.ied-tm-edit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.ied-tm-edit-table td {
+  padding: 4px 8px;
+  border: 1px solid #e0e0e0;
+  vertical-align: middle;
+}
+
+.ied-tm-edit-table .tm-section-header td {
+  background: #f0f4f8;
+  font-weight: 600;
+  color: #2c3e50;
+  padding: 8px 10px;
+}
+
+.ied-tm-edit-table .tm-label {
+  font-weight: 500;
+  color: #555;
+  width: 220px;
+  background: #fafafa;
+}
+
+.ied-tm-edit-table .tm-phase-label {
+  color: #666;
+  width: 80px;
+  background: #fafafa;
+}
+
+.tm-inline-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d6d9de;
+  border-radius: 3px;
+  font-size: 0.9em;
+  box-sizing: border-box;
+}
+
+.tm-inline-input:focus {
+  outline: none;
+  border-color: #6aa9e9;
+  box-shadow: 0 0 0 2px rgba(106, 169, 233, 0.15);
+}
+
 /* Estilos específicos para el multiselect de proyectos */
 .form-group ng-multiselect-dropdown {
   display: block;
@@ -918,7 +1198,7 @@
 
 .form-group ng-multiselect-dropdown ::ng-deep .dropdown-list {
   width: 100% !important;
-  max-height: 200px !important;
+  max-height: 300px !important;
   overflow-y: auto !important;
   position: absolute;
   z-index: 9999;
@@ -933,6 +1213,18 @@
   margin: 0;
   padding: 0;
   list-style: none;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-list .list-area {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.form-group ng-multiselect-dropdown ::ng-deep .dropdown-list .item-container {
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 .form-group ng-multiselect-dropdown ::ng-deep .dropdown-list li {

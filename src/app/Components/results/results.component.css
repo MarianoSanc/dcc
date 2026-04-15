@@ -1203,6 +1203,88 @@
   border-radius: 8px;
 }
 
+/* ===== TESTED MATERIAL (IE only) ===== */
+.tested-material-view {
+  padding: 16px;
+}
+
+.tm-description-row {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.tm-description-label {
+  font-weight: 600;
+  color: #555;
+  min-width: 110px;
+}
+
+.tm-description-value {
+  color: #333;
+}
+
+.tm-empty {
+  color: #aaa;
+  font-style: italic;
+}
+
+.tm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.tm-table td {
+  padding: 6px 10px;
+  border: 1px solid #e0e0e0;
+  vertical-align: middle;
+}
+
+.tm-section-header td {
+  background: #f0f4f8;
+  font-weight: 600;
+  color: #2c3e50;
+  padding: 8px 10px;
+}
+
+.tm-label {
+  font-weight: 500;
+  color: #555;
+  width: 220px;
+  background: #fafafa;
+}
+
+.tm-phase-label {
+  color: #666;
+  width: 80px;
+  background: #fafafa;
+}
+
+/* Edit mode */
+.tested-material-edit {
+  padding: 16px;
+}
+
+.tm-section-title {
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 16px 0 8px 0;
+  padding: 6px 10px;
+  background: #f0f4f8;
+  border-left: 4px solid #3498db;
+  border-radius: 0 4px 4px 0;
+}
+
+.tm-full-row {
+  grid-column: 1 / -1;
+}
+
+.form-grid.tm-three-cols {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .uncertainty-section h6 {
   margin: 0 0 12px 0;
   color: #495057;
@@ -1359,4 +1441,59 @@
   padding: 12px;
   color: #999;
   font-style: italic;
+}
+
+/* Calibration Alerts Styles */
+.calibration-alerts {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.calibration-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 15px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  font-size: 0.95em;
+  line-height: 1.5;
+}
+
+.calibration-alert:last-child {
+  margin-bottom: 0;
+}
+
+.calibration-alert.alert-success {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.calibration-alert.alert-danger {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+.calibration-alert.alert-critical {
+  background: #fff3cd;
+  border: 2px solid #ffc107;
+  color: #856404;
+  font-weight: 500;
+}
+
+.alert-icon {
+  font-size: 1.3em;
+  flex-shrink: 0;
+}
+
+.alert-message {
+  flex: 1;
+}
+
+.alert-message strong {
+  font-weight: 700;
 }

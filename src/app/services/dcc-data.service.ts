@@ -15,6 +15,10 @@ export interface DCCData {
       pt_id: string;
       country_code: string;
       language: string;
+      circuito?: string;
+      test_object?: string;
+      customer_rep?: string;
+      customer_rep_tel?: string;
       certificate_number: string;
       receipt_date: Date;
       is_range_date: boolean;
@@ -24,6 +28,7 @@ export interface DCCData {
       performance_localition: string;
       next_calibration: Date;
       accredited: boolean;
+      technical_verification?: boolean;
       receipt_date_na?: boolean;
       next_calibration_na?: boolean;
     };
@@ -48,6 +53,7 @@ export interface DCCData {
       email: string;
       phone: string;
       mainSigner?: boolean; // Nueva propiedad para identificar al responsable principal
+      doneBy?: boolean; // Propiedad para Realizado por
       head?: boolean; // Propiedad para Head of Service
       coordinator?: boolean; // Propiedad para Coordinator
     }>;
@@ -210,6 +216,31 @@ export interface DCCData {
       };
     }>;
   }>;
+  itemsList?: Array<{
+    id?: number;
+    object?: string;
+    manufacturer?: string;
+    model?: string;
+    serial_number?: string;
+    costumer_asset?: string;
+    comment?: string;
+    deleted?: number;
+  }>;
+  itemDescription?: string; // Descripción única para todos los items del DCC
+  hasExpiredPatrones?: boolean; // Indica si hay patrones vencidos
+  testedMaterial?: any; // Material de prueba (IE only)
+  ieEquipment?: {
+    idequipment?: string;
+    name?: string;
+    maker?: string;
+    model?: string;
+  } | null;
+  ieResults?: {
+    id?: number | null;
+    fase1?: string;
+    fase2?: string;
+    fase3?: string;
+  } | null;
   /**
    * Objeto JSON parseado del XML, solo presente si se cargó desde XML
    */
@@ -269,6 +300,10 @@ export class DccDataService {
           pt_id: 'PT-23',
           country_code: 'MX',
           language: 'en',
+          circuito: '',
+          test_object: '',
+          customer_rep: '',
+          customer_rep_tel: '',
           certificate_number: '',
           receipt_date: new Date(),
           is_range_date: false,
@@ -278,6 +313,7 @@ export class DccDataService {
           performance_localition: '',
           next_calibration: new Date(),
           accredited: false,
+          technical_verification: false,
         },
         laboratory: {
           name: 'HV Test S.A. de C.V.',
@@ -299,6 +335,7 @@ export class DccDataService {
             email: '',
             phone: '',
             mainSigner: false,
+            doneBy: false,
             head: false,
             coordinator: false,
           },
@@ -308,6 +345,7 @@ export class DccDataService {
             email: '',
             phone: '',
             mainSigner: false,
+            doneBy: false,
             head: false,
             coordinator: false,
           },
@@ -554,6 +592,8 @@ export class DccDataService {
         },
       ],
       results: [],
+      ieEquipment: null,
+      ieResults: null,
     };
   }
 
@@ -589,6 +629,13 @@ export class DccDataService {
   updateItems(items: any[]): void {
     const currentData = this.getCurrentData();
     currentData.items = items;
+    this.dccDataSubject.next(currentData);
+  }
+
+  updateItemsList(itemsList: any[], description?: string): void {
+    const currentData = this.getCurrentData();
+    currentData.itemsList = itemsList;
+    currentData.itemDescription = description || '';
     this.dccDataSubject.next(currentData);
   }
 
@@ -637,6 +684,30 @@ export class DccDataService {
   updateMetrologicalTraceability(metrologicalTraceability: any[]): void {
     const currentData = this.getCurrentData();
     currentData.metrologicalTraceability = metrologicalTraceability;
+    this.dccDataSubject.next(currentData);
+  }
+
+  updateHasExpiredPatrones(hasExpired: boolean): void {
+    const currentData = this.getCurrentData();
+    currentData.hasExpiredPatrones = hasExpired;
+    this.dccDataSubject.next(currentData);
+  }
+
+  updateTestedMaterial(testedMaterial: any): void {
+    const currentData = this.getCurrentData();
+    currentData.testedMaterial = testedMaterial;
+    this.dccDataSubject.next(currentData);
+  }
+
+  updateIeEquipment(ieEquipment: any): void {
+    const currentData = this.getCurrentData();
+    currentData.ieEquipment = ieEquipment;
+    this.dccDataSubject.next(currentData);
+  }
+
+  updateIeResults(ieResults: any): void {
+    const currentData = this.getCurrentData();
+    currentData.ieResults = ieResults;
     this.dccDataSubject.next(currentData);
   }
 
