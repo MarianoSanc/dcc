@@ -75,7 +75,7 @@
             dccPhaseOptions.length > 0
           "
         >
-          <label for="dccPhaseSelect">Fase (OS):</label>
+          <label for="dccPhaseSelect">Etapa (OS):</label>
           <select
             id="dccPhaseSelect"
             [(ngModel)]="selectedDccPhase"
@@ -83,7 +83,7 @@
             class="form-control"
           >
             <option *ngFor="let phase of dccPhaseOptions" [ngValue]="phase">
-              Fase {{ phase }}{{ phase === 0 ? " (sin fase)" : "" }}
+              Etapa {{ phase }}{{ phase === 0 ? " (sin etapa)" : "" }}
             </option>
           </select>
         </div>
@@ -306,7 +306,7 @@
               iePhaseOptions.length > 0
             "
           >
-            <label for="iePhaseSelect">Fase (OS):</label>
+            <label for="iePhaseSelect">Etapa (OS):</label>
             <select
               id="iePhaseSelect"
               [(ngModel)]="selectedIePhase"
@@ -314,7 +314,7 @@
               class="form-control"
             >
               <option *ngFor="let phase of iePhaseOptions" [ngValue]="phase">
-                Fase {{ phase }}{{ phase === 0 ? " (sin fase)" : "" }}
+                Etapa {{ phase }}{{ phase === 0 ? " (sin etapa)" : "" }}
               </option>
             </select>
           </div>
@@ -513,7 +513,7 @@
                 iePhaseOptions.length > 0
               "
             >
-              <label for="iePhaseSelect">Fase (OS):</label>
+              <label for="iePhaseSelect">Etapa (OS):</label>
               <select
                 id="iePhaseSelect"
                 [(ngModel)]="selectedIePhase"
@@ -521,7 +521,7 @@
                 class="form-control"
               >
                 <option *ngFor="let phase of iePhaseOptions" [ngValue]="phase">
-                  Fase {{ phase }}{{ phase === 0 ? " (sin fase)" : "" }}
+                  Etapa {{ phase }}{{ phase === 0 ? " (sin etapa)" : "" }}
                 </option>
               </select>
             </div>
@@ -698,6 +698,40 @@
           <!-- PESTAÑA 3: Tested Material -->
           <div *ngIf="activeIedTab === 'material'" class="ied-tab-content">
             <div class="tested-material-form" style="margin-top: 10px">
+              <div class="form-group full-width" *ngIf="iedCircuits.length > 0">
+                <label for="ied_circuit_material_select"
+                  >Circuito a llenar:</label
+                >
+                <select
+                  id="ied_circuit_material_select"
+                  class="form-control"
+                  [ngModel]="selectedIedCircuit"
+                  (ngModelChange)="onIedMaterialCircuitChange($event)"
+                >
+                  <option
+                    *ngFor="let circuit of iedCircuits"
+                    [ngValue]="circuit.circuito"
+                  >
+                    Circuito {{ circuit.circuito
+                    }}{{ circuit.customText ? " - " + circuit.customText : "" }}
+                  </option>
+                </select>
+                <small class="text-muted"
+                  >Los datos capturados se aplican a todos los informes de este
+                  circuito.</small
+                >
+              </div>
+
+              <div
+                class="form-group full-width"
+                *ngIf="iedCircuits.length === 0"
+              >
+                <div class="location-address-display">
+                  No hay circuitos disponibles para capturar Material
+                  Description.
+                </div>
+              </div>
+
               <div class="form-group full-width">
                 <label for="ied_material_description"
                   >Material Description:</label
@@ -708,7 +742,7 @@
                     type="text"
                     id="ied_material_description"
                     [(ngModel)]="iedTestedMaterial.material_description"
-                    (ngModelChange)="updateIedTabCompletion()"
+                    (ngModelChange)="onIedMaterialDescriptionChange()"
                     placeholder="ej. tres sistemas de cable de alta tensión para 115 kV"
                     class="form-control description-variable"
                   />

@@ -132,29 +132,9 @@ export class DccComponent implements OnInit {
     dates: false,
     material: false,
   };
-  iedTestedMaterial: any = {
-    material_description: '',
-    cable_fabricante: '',
-    cable_modelo: '',
-    cable_metrajeA: '',
-    cable_metrajeB: '',
-    cable_metrajeC: '',
-    terminal1_fabricante: '',
-    terminal1_modelo: '',
-    terminal1_snA: '',
-    terminal1_snB: '',
-    terminal1_snC: '',
-    terminal2_fabricante: '',
-    terminal2_modelo: '',
-    terminal2_snA: '',
-    terminal2_snB: '',
-    terminal2_snC: '',
-    empalmes_fabricante: '',
-    empalmes_modelo: '',
-    empalmes_metrajeA: '',
-    empalmes_metrajeB: '',
-    empalmes_metrajeC: '',
-  };
+  selectedIedCircuit: number | null = null;
+  iedTestedMaterialByCircuit: { [circuito: number]: any } = {};
+  iedTestedMaterial: any = this.createEmptyIedTestedMaterial();
 
   ptOptions: string[] = [
     'PT-05',
@@ -1382,29 +1362,9 @@ export class DccComponent implements OnInit {
     this.iedCircuits = []; // Limpiar circuitos IED
     this.activeIedTab = 'circuits';
     this.iedTabsCompleted = { circuits: false, dates: false, material: false };
-    this.iedTestedMaterial = {
-      material_description: '',
-      cable_fabricante: '',
-      cable_modelo: '',
-      cable_metrajeA: '',
-      cable_metrajeB: '',
-      cable_metrajeC: '',
-      terminal1_fabricante: '',
-      terminal1_modelo: '',
-      terminal1_snA: '',
-      terminal1_snB: '',
-      terminal1_snC: '',
-      terminal2_fabricante: '',
-      terminal2_modelo: '',
-      terminal2_snA: '',
-      terminal2_snB: '',
-      terminal2_snC: '',
-      empalmes_fabricante: '',
-      empalmes_modelo: '',
-      empalmes_metrajeA: '',
-      empalmes_metrajeB: '',
-      empalmes_metrajeC: '',
-    };
+    this.selectedIedCircuit = null;
+    this.iedTestedMaterialByCircuit = {};
+    this.iedTestedMaterial = this.createEmptyIedTestedMaterial();
     this.ieCertificatesList = [];
     this.ieSelectedCertificateIndex = -1;
     this.ieCurrentDutService = null;
@@ -1993,10 +1953,35 @@ export class DccComponent implements OnInit {
     });
 
     const sorted = Array.from(circuitNums).sort((a, b) => a - b);
+    const previousCircuitMap = { ...this.iedTestedMaterialByCircuit };
+    const previousSelectedCircuit = this.selectedIedCircuit;
+
     this.iedCircuits = sorted.map((circuito) => {
       const existing = this.iedCircuits.find((c) => c.circuito === circuito);
       return { circuito, customText: existing?.customText ?? '' };
     });
+
+    const rebuiltMap: { [circuito: number]: any } = {};
+    this.iedCircuits.forEach((circuit) => {
+      const existingMaterial = previousCircuitMap[circuit.circuito];
+      rebuiltMap[circuit.circuito] = existingMaterial
+        ? { ...existingMaterial }
+        : this.createEmptyIedTestedMaterial();
+    });
+    this.iedTestedMaterialByCircuit = rebuiltMap;
+
+    if (this.iedCircuits.length > 0) {
+      const selectedCircuitExists = this.iedCircuits.some(
+        (c) => c.circuito === previousSelectedCircuit,
+      );
+      const nextCircuit = selectedCircuitExists
+        ? (previousSelectedCircuit as number)
+        : this.iedCircuits[0].circuito;
+      this.selectIedMaterialCircuit(nextCircuit);
+    } else {
+      this.selectedIedCircuit = null;
+      this.iedTestedMaterial = this.createEmptyIedTestedMaterial();
+    }
 
     // Si hay DUTs con PT IED (05/12/14) pero sin circuito, avisar al usuario.
     const hasIedPtWithoutCircuit = filteredDuts.some((dut) => {
@@ -2093,6 +2078,16 @@ export class DccComponent implements OnInit {
     this.updateIedTabCompletion();
   }
 
+  onIedMaterialCircuitChange(circuito: number): void {
+    this.selectIedMaterialCircuit(Number(circuito));
+    this.updateIedTabCompletion();
+  }
+
+  onIedMaterialDescriptionChange(): void {
+    this.saveCurrentIedMaterialDraft();
+    this.updateIedTabCompletion();
+  }
+
   /** Devuelve los informes del circuito indicado (para preview en el modal IED) */
   getReportsForCircuit(circuito: number): any[] {
     return this.ieCertificatesList.filter((c) => c.circuito === circuito);
@@ -2117,11 +2112,16 @@ export class DccComponent implements OnInit {
       );
     }
     if (tab === 'material') {
-      // Material: solo checar que material_description no esté vacío (al menos uno)
-      return !!(
-        this.iedTestedMaterial.material_description &&
-        this.iedTestedMaterial.material_description.trim()
-      );
+      // Material: todos los circuitos deben tener su material_description
+      if (!this.iedCircuits || this.iedCircuits.length === 0) {
+        return false;
+      }
+      return this.iedCircuits.every((circuit) => {
+        const material = this.getIedMaterialForCircuit(circuit.circuito);
+        return !!(
+          material.material_description && material.material_description.trim()
+        );
+      });
     }
     return false;
   }
@@ -2151,6 +2151,56 @@ export class DccComponent implements OnInit {
       this.setupIedCircuits();
     }
     this.regenerateIeCertificates();
+  }
+
+  private createEmptyIedTestedMaterial(): any {
+    return {
+      material_description: '',
+      cable_fabricante: '',
+      cable_modelo: '',
+      cable_metrajeA: '',
+      cable_metrajeB: '',
+      cable_metrajeC: '',
+      terminal1_fabricante: '',
+      terminal1_modelo: '',
+      terminal1_snA: '',
+      terminal1_snB: '',
+      terminal1_snC: '',
+      terminal2_fabricante: '',
+      terminal2_modelo: '',
+      terminal2_snA: '',
+      terminal2_snB: '',
+      terminal2_snC: '',
+      empalmes_fabricante: '',
+      empalmes_modelo: '',
+      empalmes_metrajeA: '',
+      empalmes_metrajeB: '',
+      empalmes_metrajeC: '',
+    };
+  }
+
+  private getIedMaterialForCircuit(circuito: number): any {
+    return (
+      this.iedTestedMaterialByCircuit[circuito] ||
+      this.createEmptyIedTestedMaterial()
+    );
+  }
+
+  private saveCurrentIedMaterialDraft(): void {
+    if (this.selectedIedCircuit == null) {
+      return;
+    }
+    this.iedTestedMaterialByCircuit[this.selectedIedCircuit] = {
+      ...this.iedTestedMaterial,
+    };
+  }
+
+  private selectIedMaterialCircuit(circuito: number): void {
+    this.saveCurrentIedMaterialDraft();
+    this.selectedIedCircuit = circuito;
+    this.iedTestedMaterial = {
+      ...this.getIedMaterialForCircuit(circuito),
+    };
   }
 
   // Maneja la selección de proyecto
@@ -2327,6 +2377,9 @@ export class DccComponent implements OnInit {
     this.ieCertificatesList = [];
     this.ieSelectedCertificate = null;
     this.ieSelectedCertificateIndex = -1;
+    this.selectedIedCircuit = null;
+    this.iedTestedMaterialByCircuit = {};
+    this.iedTestedMaterial = this.createEmptyIedTestedMaterial();
     this.updateIeCertificateNumber();
   }
 
@@ -2865,6 +2918,10 @@ export class DccComponent implements OnInit {
    * Se ejecuta cuando el usuario selecciona crear todos los certificados
    */
   startNewIeMultiple() {
+    if (this.isIedModal) {
+      this.saveCurrentIedMaterialDraft();
+    }
+
     const projectId =
       this.newIeProjectId && this.newIeProjectId.length > 0
         ? this.newIeProjectId[0].id
@@ -2999,44 +3056,38 @@ export class DccComponent implements OnInit {
               console.log('Item Response:', itemResponse);
 
               // Para IED: crear el ie_tested_material
-              if (
-                this.isIedModal &&
-                this.iedTestedMaterial.material_description
-              ) {
+              const circuitMaterial = this.isIedModal
+                ? this.getIedMaterialForCircuit(Number(certificate.circuito))
+                : this.iedTestedMaterial;
+
+              if (this.isIedModal && circuitMaterial.material_description) {
                 const testedMaterialAttributes = {
                   id_ie: certificate.name,
                   material_description:
-                    this.iedTestedMaterial.material_description || 'NV',
-                  cable_fabricante:
-                    this.iedTestedMaterial.cable_fabricante || 'NV',
-                  cable_modelo: this.iedTestedMaterial.cable_modelo || 'NV',
-                  cable_metrajeA: this.iedTestedMaterial.cable_metrajeA || 'NV',
-                  cable_metrajeB: this.iedTestedMaterial.cable_metrajeB || 'NV',
-                  cable_metrajeC: this.iedTestedMaterial.cable_metrajeC || 'NV',
+                    circuitMaterial.material_description || 'NV',
+                  cable_fabricante: circuitMaterial.cable_fabricante || 'NV',
+                  cable_modelo: circuitMaterial.cable_modelo || 'NV',
+                  cable_metrajeA: circuitMaterial.cable_metrajeA || 'NV',
+                  cable_metrajeB: circuitMaterial.cable_metrajeB || 'NV',
+                  cable_metrajeC: circuitMaterial.cable_metrajeC || 'NV',
                   terminal1_fabricante:
-                    this.iedTestedMaterial.terminal1_fabricante || 'NV',
-                  terminal1_modelo:
-                    this.iedTestedMaterial.terminal1_modelo || 'NV',
-                  terminal1_snA: this.iedTestedMaterial.terminal1_snA || 'NV',
-                  terminal1_snB: this.iedTestedMaterial.terminal1_snB || 'NV',
-                  terminal1_snC: this.iedTestedMaterial.terminal1_snC || 'NV',
+                    circuitMaterial.terminal1_fabricante || 'NV',
+                  terminal1_modelo: circuitMaterial.terminal1_modelo || 'NV',
+                  terminal1_snA: circuitMaterial.terminal1_snA || 'NV',
+                  terminal1_snB: circuitMaterial.terminal1_snB || 'NV',
+                  terminal1_snC: circuitMaterial.terminal1_snC || 'NV',
                   terminal2_fabricante:
-                    this.iedTestedMaterial.terminal2_fabricante || 'NV',
-                  terminal2_modelo:
-                    this.iedTestedMaterial.terminal2_modelo || 'NV',
-                  terminal2_snA: this.iedTestedMaterial.terminal2_snA || 'NV',
-                  terminal2_snB: this.iedTestedMaterial.terminal2_snB || 'NV',
-                  terminal2_snC: this.iedTestedMaterial.terminal2_snC || 'NV',
+                    circuitMaterial.terminal2_fabricante || 'NV',
+                  terminal2_modelo: circuitMaterial.terminal2_modelo || 'NV',
+                  terminal2_snA: circuitMaterial.terminal2_snA || 'NV',
+                  terminal2_snB: circuitMaterial.terminal2_snB || 'NV',
+                  terminal2_snC: circuitMaterial.terminal2_snC || 'NV',
                   empalmes_fabricante:
-                    this.iedTestedMaterial.empalmes_fabricante || 'NV',
-                  empalmes_modelo:
-                    this.iedTestedMaterial.empalmes_modelo || 'NV',
-                  empalmes_metrajeA:
-                    this.iedTestedMaterial.empalmes_metrajeA || 'NV',
-                  empalmes_metrajeB:
-                    this.iedTestedMaterial.empalmes_metrajeB || 'NV',
-                  empalmes_metrajeC:
-                    this.iedTestedMaterial.empalmes_metrajeC || 'NV',
+                    circuitMaterial.empalmes_fabricante || 'NV',
+                  empalmes_modelo: circuitMaterial.empalmes_modelo || 'NV',
+                  empalmes_metrajeA: circuitMaterial.empalmes_metrajeA || 'NV',
+                  empalmes_metrajeB: circuitMaterial.empalmes_metrajeB || 'NV',
+                  empalmes_metrajeC: circuitMaterial.empalmes_metrajeC || 'NV',
                 };
 
                 const createTestedMaterial = {

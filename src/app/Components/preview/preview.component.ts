@@ -1745,7 +1745,7 @@ ${this.generateResultDataXML(result.data)}
 
       // Template name
       template_name: isIeDocument
-        ? 'ie_plantilla_general.docx'
+        ? this.getIeTemplateNameByPt(data.administrativeData?.core?.pt_id)
         : technicalVerification
           ? 'dcc_technical_verification.docx'
           : 'dcc_plantilla_general.docx',
@@ -1759,6 +1759,27 @@ ${this.generateResultDataXML(result.data)}
       // Results
       results,
     };
+  }
+
+  /** Selecciona plantilla IE por PT; fallback a plantilla general. */
+  private getIeTemplateNameByPt(ptId?: string): string {
+    const normalized = String(ptId || '')
+      .toUpperCase()
+      .replace(/\s+/g, '')
+      .match(/PT-?(\d{1,2})/);
+
+    const ptNum = normalized ? normalized[1].padStart(2, '0') : '';
+
+    switch (ptNum) {
+      case '05':
+        return 'ie_05.docx';
+      case '12':
+        return 'ie_12.docx';
+      case '14':
+        return 'ie_14.docx';
+      default:
+        return 'ie_plantilla_general.docx';
+    }
   }
 
   /**

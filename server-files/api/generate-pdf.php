@@ -128,8 +128,18 @@ $isTechnicalVerification = (
     strtolower((string)$rawTechnicalVerification) === 'true'
 );
 
-if ($isIeDocument && $requestedTemplateName === 'ie_plantilla_general.docx') {
-    $templateName = 'ie_plantilla_general.docx';
+if ($isIeDocument) {
+    $allowedIeTemplates = [
+        'ie_05.docx',
+        'ie_12.docx',
+        'ie_14.docx',
+        'ie_plantilla_general.docx',
+    ];
+
+    $templateName = in_array($requestedTemplateName, $allowedIeTemplates, true)
+        ? $requestedTemplateName
+        : 'ie_plantilla_general.docx';
+
     $templatePath = $templatesDir . $templateName;
 } elseif ($isTechnicalVerification) {
     $templateName = 'dcc_technical_verification.docx';
