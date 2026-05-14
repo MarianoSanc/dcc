@@ -30,403 +30,539 @@
     </div>
 
     <div class="block-content">
-      <div *ngIf="!isEditingTestedMaterial" class="tested-material-view">
-        <div class="tm-description-row">
-          <span class="tm-description-label">Description:</span>
-          <span
-            class="tm-description-value"
-            *ngIf="testedMaterial.material_description"
-          >
-            Circuito formado por {{ testedMaterial.material_description }}, las
-            características principales se indican a continuación (información
-            proporcionada por el cliente):
-          </span>
-          <span class="tm-empty" *ngIf="!testedMaterial.material_description"
-            >No definido</span
-          >
+      <ng-container *ngIf="isGisMaterial(); else cableMaterialBlock">
+        <div *ngIf="!isEditingTestedMaterial" class="tested-material-view">
+          <table class="tm-table">
+            <tbody>
+              <tr>
+                <td class="tm-label">Fabricante:</td>
+                <td colspan="3">{{ testedMaterial.gis_fabricante || "—" }}</td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tipo/Designación/Modelo:</td>
+                <td colspan="3">{{ testedMaterial.gis_tipo || "—" }}</td>
+              </tr>
+              <tr>
+                <td class="tm-label">Fecha de fabricación:</td>
+                <td colspan="3">{{ testedMaterial.gis_fecha || "—" }}</td>
+              </tr>
+              <tr>
+                <td class="tm-label">Lote:</td>
+                <td colspan="3">{{ testedMaterial.gis_lote || "—" }}</td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tensión Nominal Un:</td>
+                <td colspan="3">{{ testedMaterial.gis_tension_un || "—" }}</td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tensión Asignada Ur:</td>
+                <td colspan="3">{{ testedMaterial.gis_tension_ur || "—" }}</td>
+              </tr>
+              <tr>
+                <td class="tm-label">Norma:</td>
+                <td colspan="3">{{ testedMaterial.gis_norma || "—" }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <table class="tm-table">
-          <tbody>
-            <tr class="tm-section-header">
-              <td colspan="4"><strong>Cable:</strong></td>
-            </tr>
-            <tr>
-              <td class="tm-label">Fabricante:</td>
-              <td colspan="3">{{ testedMaterial.cable_fabricante || "—" }}</td>
-            </tr>
-            <tr>
-              <td class="tm-label">Tipo/Designación/Modelo:</td>
-              <td colspan="3">{{ testedMaterial.cable_modelo || "—" }}</td>
-            </tr>
-            <tr>
-              <td class="tm-label">Metraje:</td>
-              <td class="tm-phase-label">Fase A:</td>
-              <td colspan="2">{{ testedMaterial.cable_metrajeA || "—" }}</td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase B:</td>
-              <td colspan="2">{{ testedMaterial.cable_metrajeB || "—" }}</td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase C:</td>
-              <td colspan="2">{{ testedMaterial.cable_metrajeC || "—" }}</td>
-            </tr>
-          </tbody>
+        <div *ngIf="isEditingTestedMaterial" class="tested-material-edit">
+          <table class="tm-table tm-edit-table">
+            <tbody>
+              <tr>
+                <td class="tm-label">Fabricante:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.gis_fabricante"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tipo/Designación/Modelo:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.gis_tipo"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Fecha de fabricación:</td>
+                <td colspan="3">
+                  <input
+                    type="date"
+                    [(ngModel)]="testedMaterial.gis_fecha"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Lote:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.gis_lote"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tensión Nominal Un:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.gis_tension_un"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tensión Asignada Ur:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.gis_tension_ur"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Norma:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.gis_norma"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
 
-          <tbody>
-            <tr class="tm-section-header">
-              <td colspan="4"><strong>Terminal Cercana (Figura 1):</strong></td>
-            </tr>
-            <tr>
-              <td class="tm-label">Fabricante:</td>
-              <td colspan="3">
-                {{ testedMaterial.terminal1_fabricante || "—" }}
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Tipo/Designación/Modelo:</td>
-              <td colspan="3">{{ testedMaterial.terminal1_modelo || "—" }}</td>
-            </tr>
-            <tr>
-              <td class="tm-label">Numero de Serie:</td>
-              <td class="tm-phase-label">Fase A:</td>
-              <td colspan="2">{{ testedMaterial.terminal1_snA || "—" }}</td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase B:</td>
-              <td colspan="2">{{ testedMaterial.terminal1_snB || "—" }}</td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase C:</td>
-              <td colspan="2">{{ testedMaterial.terminal1_snC || "—" }}</td>
-            </tr>
-          </tbody>
-
-          <tbody>
-            <tr class="tm-section-header">
-              <td colspan="4"><strong>Terminal Lejana (Figura 2):</strong></td>
-            </tr>
-            <tr>
-              <td class="tm-label">Fabricante:</td>
-              <td colspan="3">
-                {{ testedMaterial.terminal2_fabricante || "—" }}
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Tipo/Designación/Modelo:</td>
-              <td colspan="3">{{ testedMaterial.terminal2_modelo || "—" }}</td>
-            </tr>
-            <tr>
-              <td class="tm-label">Numero de Serie:</td>
-              <td class="tm-phase-label">Fase A:</td>
-              <td colspan="2">{{ testedMaterial.terminal2_snA || "—" }}</td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase B:</td>
-              <td colspan="2">{{ testedMaterial.terminal2_snB || "—" }}</td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase C:</td>
-              <td colspan="2">{{ testedMaterial.terminal2_snC || "—" }}</td>
-            </tr>
-          </tbody>
-
-          <tbody>
-            <tr class="tm-section-header">
-              <td colspan="4"><strong>Empalmes:</strong></td>
-            </tr>
-            <tr>
-              <td class="tm-label">Fabricante:</td>
-              <td colspan="3">
-                {{ testedMaterial.empalmes_fabricante || "—" }}
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Tipo/Designación/Modelo:</td>
-              <td colspan="3">{{ testedMaterial.empalmes_modelo || "—" }}</td>
-            </tr>
-            <tr>
-              <td class="tm-label">Numero de Serie:</td>
-              <td class="tm-phase-label">Fase A:</td>
-              <td colspan="2">{{ testedMaterial.empalmes_metrajeA || "—" }}</td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase B:</td>
-              <td colspan="2">{{ testedMaterial.empalmes_metrajeB || "—" }}</td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase C:</td>
-              <td colspan="2">{{ testedMaterial.empalmes_metrajeC || "—" }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div *ngIf="isEditingTestedMaterial" class="tested-material-edit">
-        <div class="form-group tm-full-row">
-          <label>Material Description:</label>
-          <div class="description-template-wrapper">
-            <span class="description-affix">Circuito formado por</span>
-            <input
-              type="text"
-              [(ngModel)]="testedMaterial.material_description"
-              placeholder="ej. tres sistemas de cable de alta tensión para 115 kV"
-              class="form-control description-variable"
-            />
-            <span class="description-affix"
-              >, las características principales se indican a continuación
-              (información proporcionada por el cliente):</span
+      <ng-template #cableMaterialBlock>
+        <div *ngIf="!isEditingTestedMaterial" class="tested-material-view">
+          <div class="tm-description-row">
+            <span class="tm-description-label">Description:</span>
+            <span
+              class="tm-description-value"
+              *ngIf="testedMaterial.material_description"
+            >
+              Circuito formado por {{ testedMaterial.material_description }},
+              las características principales se indican a continuación
+              (información proporcionada por el cliente):
+            </span>
+            <span class="tm-empty" *ngIf="!testedMaterial.material_description"
+              >No definido</span
             >
           </div>
+
+          <table class="tm-table">
+            <tbody>
+              <tr class="tm-section-header">
+                <td colspan="4"><strong>Cable:</strong></td>
+              </tr>
+              <tr>
+                <td class="tm-label">Fabricante:</td>
+                <td colspan="3">
+                  {{ testedMaterial.cable_fabricante || "—" }}
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tipo/Designación/Modelo:</td>
+                <td colspan="3">{{ testedMaterial.cable_modelo || "—" }}</td>
+              </tr>
+              <tr>
+                <td class="tm-label">Metraje:</td>
+                <td class="tm-phase-label">Fase A:</td>
+                <td colspan="2">{{ testedMaterial.cable_metrajeA || "—" }}</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase B:</td>
+                <td colspan="2">{{ testedMaterial.cable_metrajeB || "—" }}</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase C:</td>
+                <td colspan="2">{{ testedMaterial.cable_metrajeC || "—" }}</td>
+              </tr>
+            </tbody>
+
+            <tbody>
+              <tr class="tm-section-header">
+                <td colspan="4">
+                  <strong>Terminal Cercana (Figura 1):</strong>
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Fabricante:</td>
+                <td colspan="3">
+                  {{ testedMaterial.terminal1_fabricante || "—" }}
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tipo/Designación/Modelo:</td>
+                <td colspan="3">
+                  {{ testedMaterial.terminal1_modelo || "—" }}
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Numero de Serie:</td>
+                <td class="tm-phase-label">Fase A:</td>
+                <td colspan="2">{{ testedMaterial.terminal1_snA || "—" }}</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase B:</td>
+                <td colspan="2">{{ testedMaterial.terminal1_snB || "—" }}</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase C:</td>
+                <td colspan="2">{{ testedMaterial.terminal1_snC || "—" }}</td>
+              </tr>
+            </tbody>
+
+            <tbody>
+              <tr class="tm-section-header">
+                <td colspan="4">
+                  <strong>Terminal Lejana (Figura 2):</strong>
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Fabricante:</td>
+                <td colspan="3">
+                  {{ testedMaterial.terminal2_fabricante || "—" }}
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tipo/Designación/Modelo:</td>
+                <td colspan="3">
+                  {{ testedMaterial.terminal2_modelo || "—" }}
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Numero de Serie:</td>
+                <td class="tm-phase-label">Fase A:</td>
+                <td colspan="2">{{ testedMaterial.terminal2_snA || "—" }}</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase B:</td>
+                <td colspan="2">{{ testedMaterial.terminal2_snB || "—" }}</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase C:</td>
+                <td colspan="2">{{ testedMaterial.terminal2_snC || "—" }}</td>
+              </tr>
+            </tbody>
+
+            <tbody>
+              <tr class="tm-section-header">
+                <td colspan="4"><strong>Empalmes:</strong></td>
+              </tr>
+              <tr>
+                <td class="tm-label">Fabricante:</td>
+                <td colspan="3">
+                  {{ testedMaterial.empalmes_fabricante || "—" }}
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tipo/Designación/Modelo:</td>
+                <td colspan="3">{{ testedMaterial.empalmes_modelo || "—" }}</td>
+              </tr>
+              <tr>
+                <td class="tm-label">Numero de Serie:</td>
+                <td class="tm-phase-label">Fase A:</td>
+                <td colspan="2">
+                  {{ testedMaterial.empalmes_metrajeA || "—" }}
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase B:</td>
+                <td colspan="2">
+                  {{ testedMaterial.empalmes_metrajeB || "—" }}
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase C:</td>
+                <td colspan="2">
+                  {{ testedMaterial.empalmes_metrajeC || "—" }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <table class="tm-table tm-edit-table">
-          <tbody>
-            <tr class="tm-section-header">
-              <td colspan="4"><strong>Cable:</strong></td>
-            </tr>
-            <tr>
-              <td class="tm-label">Fabricante:</td>
-              <td colspan="3">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.cable_fabricante"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Tipo/Designación/Modelo:</td>
-              <td colspan="3">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.cable_modelo"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Metraje:</td>
-              <td class="tm-phase-label">Fase A:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.cable_metrajeA"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase B:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.cable_metrajeB"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase C:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.cable_metrajeC"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-          </tbody>
+        <div *ngIf="isEditingTestedMaterial" class="tested-material-edit">
+          <div class="form-group tm-full-row">
+            <label>Material Description:</label>
+            <div class="description-template-wrapper">
+              <span class="description-affix">Circuito formado por</span>
+              <input
+                type="text"
+                [(ngModel)]="testedMaterial.material_description"
+                placeholder="ej. tres sistemas de cable de alta tensión para 115 kV"
+                class="form-control description-variable"
+              />
+              <span class="description-affix"
+                >, las características principales se indican a continuación
+                (información proporcionada por el cliente):</span
+              >
+            </div>
+          </div>
 
-          <tbody>
-            <tr class="tm-section-header">
-              <td colspan="4"><strong>Terminal Cercana (Figura 1):</strong></td>
-            </tr>
-            <tr>
-              <td class="tm-label">Fabricante:</td>
-              <td colspan="3">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.terminal1_fabricante"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Tipo/Designación/Modelo:</td>
-              <td colspan="3">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.terminal1_modelo"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Numero de Serie:</td>
-              <td class="tm-phase-label">Fase A:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.terminal1_snA"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase B:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.terminal1_snB"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase C:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.terminal1_snC"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-          </tbody>
+          <table class="tm-table tm-edit-table">
+            <tbody>
+              <tr class="tm-section-header">
+                <td colspan="4"><strong>Cable:</strong></td>
+              </tr>
+              <tr>
+                <td class="tm-label">Fabricante:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.cable_fabricante"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tipo/Designación/Modelo:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.cable_modelo"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Metraje:</td>
+                <td class="tm-phase-label">Fase A:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.cable_metrajeA"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase B:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.cable_metrajeB"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase C:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.cable_metrajeC"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+            </tbody>
 
-          <tbody>
-            <tr class="tm-section-header">
-              <td colspan="4"><strong>Terminal Lejana (Figura 2):</strong></td>
-            </tr>
-            <tr>
-              <td class="tm-label">Fabricante:</td>
-              <td colspan="3">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.terminal2_fabricante"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Tipo/Designación/Modelo:</td>
-              <td colspan="3">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.terminal2_modelo"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Numero de Serie:</td>
-              <td class="tm-phase-label">Fase A:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.terminal2_snA"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase B:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.terminal2_snB"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase C:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.terminal2_snC"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-          </tbody>
+            <tbody>
+              <tr class="tm-section-header">
+                <td colspan="4">
+                  <strong>Terminal Cercana (Figura 1):</strong>
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Fabricante:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.terminal1_fabricante"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tipo/Designación/Modelo:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.terminal1_modelo"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Numero de Serie:</td>
+                <td class="tm-phase-label">Fase A:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.terminal1_snA"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase B:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.terminal1_snB"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase C:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.terminal1_snC"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+            </tbody>
 
-          <tbody>
-            <tr class="tm-section-header">
-              <td colspan="4"><strong>Empalmes:</strong></td>
-            </tr>
-            <tr>
-              <td class="tm-label">Fabricante:</td>
-              <td colspan="3">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.empalmes_fabricante"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Tipo/Designación/Modelo:</td>
-              <td colspan="3">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.empalmes_modelo"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td class="tm-label">Numero de Serie:</td>
-              <td class="tm-phase-label">Fase A:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.empalmes_metrajeA"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase B:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.empalmes_metrajeB"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td></td>
-              <td class="tm-phase-label">Fase C:</td>
-              <td colspan="2">
-                <input
-                  type="text"
-                  [(ngModel)]="testedMaterial.empalmes_metrajeC"
-                  class="tm-inline-input"
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+            <tbody>
+              <tr class="tm-section-header">
+                <td colspan="4">
+                  <strong>Terminal Lejana (Figura 2):</strong>
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Fabricante:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.terminal2_fabricante"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tipo/Designación/Modelo:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.terminal2_modelo"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Numero de Serie:</td>
+                <td class="tm-phase-label">Fase A:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.terminal2_snA"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase B:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.terminal2_snB"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase C:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.terminal2_snC"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+            </tbody>
+
+            <tbody>
+              <tr class="tm-section-header">
+                <td colspan="4"><strong>Empalmes:</strong></td>
+              </tr>
+              <tr>
+                <td class="tm-label">Fabricante:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.empalmes_fabricante"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Tipo/Designación/Modelo:</td>
+                <td colspan="3">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.empalmes_modelo"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td class="tm-label">Numero de Serie:</td>
+                <td class="tm-phase-label">Fase A:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.empalmes_metrajeA"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase B:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.empalmes_metrajeB"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td></td>
+                <td class="tm-phase-label">Fase C:</td>
+                <td colspan="2">
+                  <input
+                    type="text"
+                    [(ngModel)]="testedMaterial.empalmes_metrajeC"
+                    class="tm-inline-input"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-template>
     </div>
   </div>
 </div>

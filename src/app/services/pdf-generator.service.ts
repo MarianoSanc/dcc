@@ -161,6 +161,14 @@ export interface PdfTemplateData {
   empalmes_metrajeA?: string;
   empalmes_metrajeB?: string;
   empalmes_metrajeC?: string;
+  material_type?: string;
+  gis_fabricante?: string;
+  gis_tipo?: string;
+  gis_fecha?: string;
+  gis_lote?: string;
+  gis_tension_un?: string;
+  gis_tension_ur?: string;
+  gis_norma?: string;
 
   // Metrological Traceability
   metrologicalTraceability?: Array<{

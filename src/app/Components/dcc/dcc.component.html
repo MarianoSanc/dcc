@@ -259,7 +259,7 @@
           [class.completed]="iedTabsCompleted.circuits"
           (click)="setIedTab('circuits')"
         >
-          <span class="tab-title">1. Circuitos</span>
+          <span class="tab-title">1. Informes</span>
           <span class="tab-check" *ngIf="iedTabsCompleted.circuits">✓</span>
         </button>
         <button
@@ -526,42 +526,104 @@
               </select>
             </div>
 
-            <!-- Circuitos IED -->
+            <!-- Circuitos IED: Cable AT o Cable MT -->
             <div
               class="ied-circuits-section"
               *ngIf="
                 newIeProjectId &&
                 newIeProjectId.length > 0 &&
-                iedCircuits.length > 0
+                (iedProjectTypeFromEpv === 0 || iedProjectTypeFromEpv === 1)
               "
             >
               <label class="section-label">Nombre de los circuitos:</label>
-              <div
-                *ngFor="let circuit of iedCircuits"
-                class="ied-circuit-block"
-              >
+              <ng-container *ngIf="iedCircuits.length > 0; else sinCircuitos">
+                <div
+                  *ngFor="let circuit of iedCircuits"
+                  class="ied-circuit-block"
+                >
+                  <div class="circuit-header">
+                    <span class="circuit-label"
+                      >Circuito {{ circuit.circuito }}:</span
+                    >
+                    <input
+                      type="text"
+                      [(ngModel)]="circuit.customText"
+                      (ngModelChange)="onIedCircuitTextChange()"
+                      placeholder="Ej: KEKEN"
+                      class="form-control circuit-text-input"
+                    />
+                  </div>
+                  <div class="circuit-reports-preview">
+                    <div
+                      *ngFor="
+                        let report of getReportsForCircuit(circuit.circuito)
+                      "
+                      class="circuit-report-name"
+                    >
+                      {{ report.name }}
+                    </div>
+                  </div>
+                </div>
+              </ng-container>
+              <ng-template #sinCircuitos>
+                <div class="alert alert-warning" style="margin-top: 8px">
+                  ⚠️ No se encontraron circuitos en las OS. Contacta al
+                  departamento de ventas para actualizar la OS con la
+                  información de circuitos.
+                </div>
+              </ng-template>
+            </div>
+
+            <!-- GIS: sin circuitos, mismo layout visual que cables -->
+            <div
+              class="ied-circuits-section"
+              *ngIf="
+                newIeProjectId &&
+                newIeProjectId.length > 0 &&
+                iedProjectTypeFromEpv === 2
+              "
+            >
+              <label class="section-label">Nombre del informe (GIS):</label>
+              <div class="ied-circuit-block">
                 <div class="circuit-header">
-                  <span class="circuit-label"
-                    >Circuito {{ circuit.circuito }}:</span
-                  >
+                  <span class="circuit-label">Nombre:</span>
                   <input
                     type="text"
-                    [(ngModel)]="circuit.customText"
-                    (ngModelChange)="onIedCircuitTextChange()"
-                    placeholder="Ej: KEKEN"
+                    [(ngModel)]="ieNameSuffix"
+                    (ngModelChange)="onIeNameSuffixChange()"
+                    placeholder="Ej: BAHIA E08"
                     class="form-control circuit-text-input"
                   />
                 </div>
                 <div class="circuit-reports-preview">
                   <div
-                    *ngFor="
-                      let report of getReportsForCircuit(circuit.circuito)
-                    "
+                    *ngFor="let report of ieCertificatesList"
                     class="circuit-report-name"
                   >
                     {{ report.name }}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- Otros tipos EPV: no es Cable ni GIS -->
+            <div
+              class="form-group full-width"
+              *ngIf="
+                newIeProjectId &&
+                newIeProjectId.length > 0 &&
+                iedProjectTypeFromEpv !== null &&
+                iedProjectTypeFromEpv !== 0 &&
+                iedProjectTypeFromEpv !== 1 &&
+                iedProjectTypeFromEpv !== 2
+              "
+            >
+              <div class="alert alert-secondary" style="margin-top: 8px">
+                ℹ️ El tipo de proyecto en EPV (<strong>{{
+                  iedProjectEpvInfo
+                }}</strong
+                >) no es Cable AT, Cable MT ni GIS. Los informes se generarán
+                sin división por circuitos.
               </div>
             </div>
 
@@ -698,302 +760,422 @@
           <!-- PESTAÑA 3: Tested Material -->
           <div *ngIf="activeIedTab === 'material'" class="ied-tab-content">
             <div class="tested-material-form" style="margin-top: 10px">
-              <div class="form-group full-width" *ngIf="iedCircuits.length > 0">
-                <label for="ied_circuit_material_select"
-                  >Circuito a llenar:</label
-                >
-                <select
-                  id="ied_circuit_material_select"
-                  class="form-control"
-                  [ngModel]="selectedIedCircuit"
-                  (ngModelChange)="onIedMaterialCircuitChange($event)"
-                >
-                  <option
-                    *ngFor="let circuit of iedCircuits"
-                    [ngValue]="circuit.circuito"
-                  >
-                    Circuito {{ circuit.circuito
-                    }}{{ circuit.customText ? " - " + circuit.customText : "" }}
-                  </option>
-                </select>
-                <small class="text-muted"
-                  >Los datos capturados se aplican a todos los informes de este
-                  circuito.</small
-                >
-              </div>
-
-              <div
-                class="form-group full-width"
-                *ngIf="iedCircuits.length === 0"
+              <ng-container
+                *ngIf="
+                  iedProjectTypeFromEpv === 2;
+                  else iedCableOrOtherMaterial
+                "
               >
-                <div class="location-address-display">
-                  No hay circuitos disponibles para capturar Material
-                  Description.
+                <div class="form-group full-width">
+                  <div class="location-address-display">
+                    Los datos capturados se aplican a todos los informes GIS de
+                    la etapa seleccionada.
+                  </div>
                 </div>
-              </div>
 
-              <div class="form-group full-width">
-                <label for="ied_material_description"
-                  >Material Description:</label
+                <table class="tm-table ied-tm-edit-table">
+                  <tbody>
+                    <tr>
+                      <td class="tm-label">Fabricante:</td>
+                      <td colspan="3">
+                        <input
+                          type="text"
+                          [(ngModel)]="iedTestedMaterial.gis_fabricante"
+                          (ngModelChange)="onIedMaterialDescriptionChange()"
+                          class="tm-inline-input"
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="tm-label">Tipo/Designación/Modelo:</td>
+                      <td colspan="3">
+                        <input
+                          type="text"
+                          [(ngModel)]="iedTestedMaterial.gis_tipo"
+                          (ngModelChange)="onIedMaterialDescriptionChange()"
+                          class="tm-inline-input"
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="tm-label">Fecha de fabricación:</td>
+                      <td colspan="3">
+                        <input
+                          type="date"
+                          [(ngModel)]="iedTestedMaterial.gis_fecha"
+                          (ngModelChange)="onIedMaterialDescriptionChange()"
+                          class="tm-inline-input"
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="tm-label">Lote:</td>
+                      <td colspan="3">
+                        <input
+                          type="text"
+                          [(ngModel)]="iedTestedMaterial.gis_lote"
+                          (ngModelChange)="onIedMaterialDescriptionChange()"
+                          class="tm-inline-input"
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="tm-label">Tensión Nominal Un:</td>
+                      <td colspan="3">
+                        <input
+                          type="text"
+                          [(ngModel)]="iedTestedMaterial.gis_tension_un"
+                          (ngModelChange)="onIedMaterialDescriptionChange()"
+                          class="tm-inline-input"
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="tm-label">Tensión Asignada Ur:</td>
+                      <td colspan="3">
+                        <input
+                          type="text"
+                          [(ngModel)]="iedTestedMaterial.gis_tension_ur"
+                          (ngModelChange)="onIedMaterialDescriptionChange()"
+                          class="tm-inline-input"
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="tm-label">Norma:</td>
+                      <td colspan="3">
+                        <input
+                          type="text"
+                          [(ngModel)]="iedTestedMaterial.gis_norma"
+                          (ngModelChange)="onIedMaterialDescriptionChange()"
+                          class="tm-inline-input"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </ng-container>
+
+              <ng-template #iedCableOrOtherMaterial>
+                <ng-container
+                  *ngIf="
+                    iedProjectTypeFromEpv === 0 || iedProjectTypeFromEpv === 1;
+                    else iedOtherMaterial
+                  "
                 >
-                <div class="description-template-wrapper">
-                  <span class="description-affix">Circuito formado por</span>
-                  <input
-                    type="text"
-                    id="ied_material_description"
-                    [(ngModel)]="iedTestedMaterial.material_description"
-                    (ngModelChange)="onIedMaterialDescriptionChange()"
-                    placeholder="ej. tres sistemas de cable de alta tensión para 115 kV"
-                    class="form-control description-variable"
-                  />
-                  <span class="description-affix"
-                    >, las características principales se indican a continuación
-                    (información proporcionada por el cliente):</span
+                  <div
+                    class="form-group full-width"
+                    *ngIf="iedCircuits.length > 0"
                   >
+                    <label for="ied_circuit_material_select"
+                      >Circuito a llenar:</label
+                    >
+                    <select
+                      id="ied_circuit_material_select"
+                      class="form-control"
+                      [ngModel]="selectedIedCircuit"
+                      (ngModelChange)="onIedMaterialCircuitChange($event)"
+                    >
+                      <option
+                        *ngFor="let circuit of iedCircuits"
+                        [ngValue]="circuit.circuito"
+                      >
+                        Circuito {{ circuit.circuito
+                        }}{{
+                          circuit.customText ? " - " + circuit.customText : ""
+                        }}
+                      </option>
+                    </select>
+                    <small class="text-muted"
+                      >Los datos capturados se aplican a todos los informes de
+                      este circuito.</small
+                    >
+                  </div>
+
+                  <div
+                    class="form-group full-width"
+                    *ngIf="iedCircuits.length === 0"
+                  >
+                    <div class="location-address-display">
+                      No hay circuitos disponibles para capturar Material
+                      Description.
+                    </div>
+                  </div>
+
+                  <div class="form-group full-width">
+                    <label for="ied_material_description"
+                      >Material Description:</label
+                    >
+                    <div class="description-template-wrapper">
+                      <span class="description-affix"
+                        >Circuito formado por</span
+                      >
+                      <input
+                        type="text"
+                        id="ied_material_description"
+                        [(ngModel)]="iedTestedMaterial.material_description"
+                        (ngModelChange)="onIedMaterialDescriptionChange()"
+                        placeholder="ej. tres sistemas de cable de alta tensión para 115 kV"
+                        class="form-control description-variable"
+                      />
+                      <span class="description-affix"
+                        >, las características principales se indican a
+                        continuación (información proporcionada por el
+                        cliente):</span
+                      >
+                    </div>
+                  </div>
+
+                  <table class="tm-table ied-tm-edit-table">
+                    <tbody>
+                      <tr class="tm-section-header">
+                        <td colspan="4"><strong>Cable:</strong></td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Fabricante:</td>
+                        <td colspan="3">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.cable_fabricante"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Tipo/Designación/Modelo:</td>
+                        <td colspan="3">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.cable_modelo"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Metraje:</td>
+                        <td class="tm-phase-label">Fase A:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.cable_metrajeA"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td class="tm-phase-label">Fase B:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.cable_metrajeB"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td class="tm-phase-label">Fase C:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.cable_metrajeC"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+
+                    <tbody>
+                      <tr class="tm-section-header">
+                        <td colspan="4">
+                          <strong>Terminal Cercana (Figura 1):</strong>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Fabricante:</td>
+                        <td colspan="3">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.terminal1_fabricante"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Tipo/Designación/Modelo:</td>
+                        <td colspan="3">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.terminal1_modelo"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Numero de Serie:</td>
+                        <td class="tm-phase-label">Fase A:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.terminal1_snA"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td class="tm-phase-label">Fase B:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.terminal1_snB"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td class="tm-phase-label">Fase C:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.terminal1_snC"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+
+                    <tbody>
+                      <tr class="tm-section-header">
+                        <td colspan="4">
+                          <strong>Terminal Lejana (Figura 2):</strong>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Fabricante:</td>
+                        <td colspan="3">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.terminal2_fabricante"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Tipo/Designación/Modelo:</td>
+                        <td colspan="3">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.terminal2_modelo"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Numero de Serie:</td>
+                        <td class="tm-phase-label">Fase A:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.terminal2_snA"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td class="tm-phase-label">Fase B:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.terminal2_snB"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td class="tm-phase-label">Fase C:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.terminal2_snC"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+
+                    <tbody>
+                      <tr class="tm-section-header">
+                        <td colspan="4"><strong>Empalmes:</strong></td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Fabricante:</td>
+                        <td colspan="3">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.empalmes_fabricante"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Tipo/Designación/Modelo:</td>
+                        <td colspan="3">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.empalmes_modelo"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="tm-label">Numero de Serie:</td>
+                        <td class="tm-phase-label">Fase A:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.empalmes_metrajeA"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td class="tm-phase-label">Fase B:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.empalmes_metrajeB"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td class="tm-phase-label">Fase C:</td>
+                        <td colspan="2">
+                          <input
+                            type="text"
+                            [(ngModel)]="iedTestedMaterial.empalmes_metrajeC"
+                            class="tm-inline-input"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </ng-container>
+              </ng-template>
+
+              <ng-template #iedOtherMaterial>
+                <div class="location-address-display">
+                  No aplica captura especial de material de prueba para este
+                  tipo de proyecto.
                 </div>
-              </div>
-
-              <table class="tm-table ied-tm-edit-table">
-                <tbody>
-                  <tr class="tm-section-header">
-                    <td colspan="4"><strong>Cable:</strong></td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Fabricante:</td>
-                    <td colspan="3">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.cable_fabricante"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Tipo/Designación/Modelo:</td>
-                    <td colspan="3">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.cable_modelo"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Metraje:</td>
-                    <td class="tm-phase-label">Fase A:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.cable_metrajeA"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td></td>
-                    <td class="tm-phase-label">Fase B:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.cable_metrajeB"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td></td>
-                    <td class="tm-phase-label">Fase C:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.cable_metrajeC"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-
-                <tbody>
-                  <tr class="tm-section-header">
-                    <td colspan="4">
-                      <strong>Terminal Cercana (Figura 1):</strong>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Fabricante:</td>
-                    <td colspan="3">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.terminal1_fabricante"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Tipo/Designación/Modelo:</td>
-                    <td colspan="3">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.terminal1_modelo"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Numero de Serie:</td>
-                    <td class="tm-phase-label">Fase A:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.terminal1_snA"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td></td>
-                    <td class="tm-phase-label">Fase B:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.terminal1_snB"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td></td>
-                    <td class="tm-phase-label">Fase C:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.terminal1_snC"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-
-                <tbody>
-                  <tr class="tm-section-header">
-                    <td colspan="4">
-                      <strong>Terminal Lejana (Figura 2):</strong>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Fabricante:</td>
-                    <td colspan="3">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.terminal2_fabricante"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Tipo/Designación/Modelo:</td>
-                    <td colspan="3">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.terminal2_modelo"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Numero de Serie:</td>
-                    <td class="tm-phase-label">Fase A:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.terminal2_snA"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td></td>
-                    <td class="tm-phase-label">Fase B:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.terminal2_snB"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td></td>
-                    <td class="tm-phase-label">Fase C:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.terminal2_snC"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-
-                <tbody>
-                  <tr class="tm-section-header">
-                    <td colspan="4"><strong>Empalmes:</strong></td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Fabricante:</td>
-                    <td colspan="3">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.empalmes_fabricante"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Tipo/Designación/Modelo:</td>
-                    <td colspan="3">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.empalmes_modelo"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="tm-label">Numero de Serie:</td>
-                    <td class="tm-phase-label">Fase A:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.empalmes_metrajeA"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td></td>
-                    <td class="tm-phase-label">Fase B:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.empalmes_metrajeB"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td></td>
-                    <td class="tm-phase-label">Fase C:</td>
-                    <td colspan="2">
-                      <input
-                        type="text"
-                        [(ngModel)]="iedTestedMaterial.empalmes_metrajeC"
-                        class="tm-inline-input"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              </ng-template>
             </div>
           </div>
 

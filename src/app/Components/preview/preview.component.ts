@@ -1731,6 +1731,26 @@ ${this.generateResultDataXML(result.data)}
       empalmes_metrajeC: isIeDocument
         ? data.testedMaterial?.empalmes_metrajeC || ''
         : undefined,
+      material_type: isIeDocument
+        ? data.testedMaterial?.material_type || ''
+        : undefined,
+      gis_fabricante: isIeDocument
+        ? data.testedMaterial?.gis_fabricante || ''
+        : undefined,
+      gis_tipo: isIeDocument ? data.testedMaterial?.gis_tipo || '' : undefined,
+      gis_fecha: isIeDocument
+        ? data.testedMaterial?.gis_fecha || ''
+        : undefined,
+      gis_lote: isIeDocument ? data.testedMaterial?.gis_lote || '' : undefined,
+      gis_tension_un: isIeDocument
+        ? data.testedMaterial?.gis_tension_un || ''
+        : undefined,
+      gis_tension_ur: isIeDocument
+        ? data.testedMaterial?.gis_tension_ur || ''
+        : undefined,
+      gis_norma: isIeDocument
+        ? data.testedMaterial?.gis_norma || ''
+        : undefined,
 
       // Metrological Traceability
       metrologicalTraceability: this.formatMetrologicalTraceabilityDates(
@@ -1745,7 +1765,10 @@ ${this.generateResultDataXML(result.data)}
 
       // Template name
       template_name: isIeDocument
-        ? this.getIeTemplateNameByPt(data.administrativeData?.core?.pt_id)
+        ? this.getIeTemplateNameByPt(
+            data.administrativeData?.core?.pt_id,
+            data.testedMaterial,
+          )
         : technicalVerification
           ? 'dcc_technical_verification.docx'
           : 'dcc_plantilla_general.docx',
@@ -1761,14 +1784,35 @@ ${this.generateResultDataXML(result.data)}
     };
   }
 
-  /** Selecciona plantilla IE por PT; fallback a plantilla general. */
-  private getIeTemplateNameByPt(ptId?: string): string {
+  /** Selecciona plantilla IE por PT/material GIS; fallback a plantilla general. */
+  private getIeTemplateNameByPt(ptId?: string, testedMaterial?: any): string {
     const normalized = String(ptId || '')
       .toUpperCase()
       .replace(/\s+/g, '')
       .match(/PT-?(\d{1,2})/);
 
     const ptNum = normalized ? normalized[1].padStart(2, '0') : '';
+    const materialType = String(testedMaterial?.material_type || '')
+      .toLowerCase()
+      .trim();
+    const isGisTemplate =
+      ['02', '04', '08'].includes(ptNum) ||
+      (ptNum === '05' && materialType === 'gis');
+
+    if (isGisTemplate) {
+      switch (ptNum) {
+        case '02':
+          return 'ie_gis_02.docx';
+        case '04':
+          return 'ie_gis_04.docx';
+        case '05':
+          return 'ie_gis_05.docx';
+        case '08':
+          return 'ie_gis_08.docx';
+        default:
+          return 'ie_plantilla_general.docx';
+      }
+    }
 
     switch (ptNum) {
       case '05':

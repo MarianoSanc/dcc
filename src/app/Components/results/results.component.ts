@@ -1925,9 +1925,27 @@ export class ResultsComponent implements OnInit, OnDestroy {
 
   // ========== TESTED MATERIAL (IE only) ==========
 
-  private getEmptyTestedMaterial(): any {
+  private normalizeTestedMaterialPtNumber(ptId?: string | null): number | null {
+    const match = String(ptId || '')
+      .toUpperCase()
+      .replace(/\s+/g, '')
+      .match(/PT-?(\d{1,2})/);
+    if (!match) {
+      return null;
+    }
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private inferTestedMaterialType(ptId?: string | null): 'cable' | 'gis' {
+    const ptNumber = this.normalizeTestedMaterialPtNumber(ptId);
+    return ptNumber !== null && [2, 4, 8].includes(ptNumber) ? 'gis' : 'cable';
+  }
+
+  private getEmptyTestedMaterial(materialType: 'cable' | 'gis' = 'cable'): any {
     return {
       id: null,
+      material_type: materialType,
       material_description: '',
       cable_fabricante: '',
       cable_modelo: '',
@@ -1949,54 +1967,99 @@ export class ResultsComponent implements OnInit, OnDestroy {
       empalmes_metrajeA: '',
       empalmes_metrajeB: '',
       empalmes_metrajeC: '',
+      gis_fabricante: '',
+      gis_tipo: '',
+      gis_fecha: '',
+      gis_lote: '',
+      gis_tension_un: '',
+      gis_tension_ur: '',
+      gis_norma: '',
     };
   }
 
   private loadTestedMaterialFromDB(dccId: string) {
-    const query = {
+    const preferredType = this.inferTestedMaterialType(this.coreData?.pt_id);
+    const gisQuery = {
       action: 'get',
       bd: this.database,
-      table: 'ie_tested_material',
+      table: 'ie_tested_material_gis',
       opts: {
-        where: { id_dcc: dccId, deleted: 0 },
+        where: { id_ie: dccId, deleted: 0 },
       },
     };
 
-    this.dccDataService.post(query).subscribe({
-      next: (response: any) => {
-        const row = response?.result?.[0];
-        if (row) {
+    this.dccDataService.post(gisQuery).subscribe({
+      next: (gisResponse: any) => {
+        const gisRow = gisResponse?.result?.[0];
+        if (gisRow) {
           this.testedMaterial = {
-            id: row.id,
-            material_description: row.material_description || '',
-            cable_fabricante: row.cable_fabricante || '',
-            cable_modelo: row.cable_modelo || '',
-            cable_metrajeA: row.cable_metrajeA || '',
-            cable_metrajeB: row.cable_metrajeB || '',
-            cable_metrajeC: row.cable_metrajeC || '',
-            terminal1_fabricante: row.terminal1_fabricante || '',
-            terminal1_modelo: row.terminal1_modelo || '',
-            terminal1_snA: row.terminal1_snA || '',
-            terminal1_snB: row.terminal1_snB || '',
-            terminal1_snC: row.terminal1_snC || '',
-            terminal2_fabricante: row.terminal2_fabricante || '',
-            terminal2_modelo: row.terminal2_modelo || '',
-            terminal2_snA: row.terminal2_snA || '',
-            terminal2_snB: row.terminal2_snB || '',
-            terminal2_snC: row.terminal2_snC || '',
-            empalmes_fabricante: row.empalmes_fabricante || '',
-            empalmes_modelo: row.empalmes_modelo || '',
-            empalmes_metrajeA: row.empalmes_metrajeA || '',
-            empalmes_metrajeB: row.empalmes_metrajeB || '',
-            empalmes_metrajeC: row.empalmes_metrajeC || '',
+            ...this.getEmptyTestedMaterial('gis'),
+            id: gisRow.id,
+            material_type: 'gis',
+            gis_fabricante: gisRow.fabricante || '',
+            gis_tipo: gisRow.tipo || '',
+            gis_fecha: gisRow.fecha_fabricante || '',
+            gis_lote: gisRow.lote || '',
+            gis_tension_un: gisRow.tension_un || '',
+            gis_tension_ur: gisRow.tension_ur || '',
+            gis_norma: gisRow.norma || '',
           };
-        } else {
-          this.testedMaterial = this.getEmptyTestedMaterial();
+          this.dccDataService.updateTestedMaterial(this.testedMaterial);
+          return;
         }
-        this.dccDataService.updateTestedMaterial(this.testedMaterial);
+
+        const cableQuery = {
+          action: 'get',
+          bd: this.database,
+          table: 'ie_tested_material',
+          opts: {
+            where: { id_ie: dccId, deleted: 0 },
+          },
+        };
+
+        this.dccDataService.post(cableQuery).subscribe({
+          next: (response: any) => {
+            const row = response?.result?.[0];
+            if (row) {
+              this.testedMaterial = {
+                ...this.getEmptyTestedMaterial('cable'),
+                id: row.id,
+                material_type: 'cable',
+                material_description: row.material_description || '',
+                cable_fabricante: row.cable_fabricante || '',
+                cable_modelo: row.cable_modelo || '',
+                cable_metrajeA: row.cable_metrajeA || '',
+                cable_metrajeB: row.cable_metrajeB || '',
+                cable_metrajeC: row.cable_metrajeC || '',
+                terminal1_fabricante: row.terminal1_fabricante || '',
+                terminal1_modelo: row.terminal1_modelo || '',
+                terminal1_snA: row.terminal1_snA || '',
+                terminal1_snB: row.terminal1_snB || '',
+                terminal1_snC: row.terminal1_snC || '',
+                terminal2_fabricante: row.terminal2_fabricante || '',
+                terminal2_modelo: row.terminal2_modelo || '',
+                terminal2_snA: row.terminal2_snA || '',
+                terminal2_snB: row.terminal2_snB || '',
+                terminal2_snC: row.terminal2_snC || '',
+                empalmes_fabricante: row.empalmes_fabricante || '',
+                empalmes_modelo: row.empalmes_modelo || '',
+                empalmes_metrajeA: row.empalmes_metrajeA || '',
+                empalmes_metrajeB: row.empalmes_metrajeB || '',
+                empalmes_metrajeC: row.empalmes_metrajeC || '',
+              };
+            } else {
+              this.testedMaterial = this.getEmptyTestedMaterial(preferredType);
+            }
+            this.dccDataService.updateTestedMaterial(this.testedMaterial);
+          },
+          error: () => {
+            this.testedMaterial = this.getEmptyTestedMaterial(preferredType);
+            this.dccDataService.updateTestedMaterial(this.testedMaterial);
+          },
+        });
       },
       error: () => {
-        this.testedMaterial = this.getEmptyTestedMaterial();
+        this.testedMaterial = this.getEmptyTestedMaterial(preferredType);
         this.dccDataService.updateTestedMaterial(this.testedMaterial);
       },
     });
@@ -2035,30 +2098,47 @@ export class ResultsComponent implements OnInit, OnDestroy {
       didOpen: () => Swal.showLoading(),
     });
 
-    const attributes = {
-      id_dcc: dccId,
-      material_description: this.testedMaterial.material_description || '',
-      cable_fabricante: this.testedMaterial.cable_fabricante || '',
-      cable_modelo: this.testedMaterial.cable_modelo || '',
-      cable_metrajeA: this.testedMaterial.cable_metrajeA || '',
-      cable_metrajeB: this.testedMaterial.cable_metrajeB || '',
-      cable_metrajeC: this.testedMaterial.cable_metrajeC || '',
-      terminal1_fabricante: this.testedMaterial.terminal1_fabricante || '',
-      terminal1_modelo: this.testedMaterial.terminal1_modelo || '',
-      terminal1_snA: this.testedMaterial.terminal1_snA || '',
-      terminal1_snB: this.testedMaterial.terminal1_snB || '',
-      terminal1_snC: this.testedMaterial.terminal1_snC || '',
-      terminal2_fabricante: this.testedMaterial.terminal2_fabricante || '',
-      terminal2_modelo: this.testedMaterial.terminal2_modelo || '',
-      terminal2_snA: this.testedMaterial.terminal2_snA || '',
-      terminal2_snB: this.testedMaterial.terminal2_snB || '',
-      terminal2_snC: this.testedMaterial.terminal2_snC || '',
-      empalmes_fabricante: this.testedMaterial.empalmes_fabricante || '',
-      empalmes_modelo: this.testedMaterial.empalmes_modelo || '',
-      empalmes_metrajeA: this.testedMaterial.empalmes_metrajeA || '',
-      empalmes_metrajeB: this.testedMaterial.empalmes_metrajeB || '',
-      empalmes_metrajeC: this.testedMaterial.empalmes_metrajeC || '',
-    };
+    const materialType =
+      this.testedMaterial?.material_type === 'gis' ? 'gis' : 'cable';
+    const attributes =
+      materialType === 'gis'
+        ? {
+            id_ie: dccId,
+            fabricante: this.testedMaterial.gis_fabricante || '',
+            tipo: this.testedMaterial.gis_tipo || '',
+            fecha_fabricante: this.testedMaterial.gis_fecha || null,
+            lote: this.testedMaterial.gis_lote || '',
+            tension_un: this.testedMaterial.gis_tension_un || '',
+            tension_ur: this.testedMaterial.gis_tension_ur || '',
+            norma: this.testedMaterial.gis_norma || '',
+          }
+        : {
+            id_ie: dccId,
+            material_description:
+              this.testedMaterial.material_description || '',
+            cable_fabricante: this.testedMaterial.cable_fabricante || '',
+            cable_modelo: this.testedMaterial.cable_modelo || '',
+            cable_metrajeA: this.testedMaterial.cable_metrajeA || '',
+            cable_metrajeB: this.testedMaterial.cable_metrajeB || '',
+            cable_metrajeC: this.testedMaterial.cable_metrajeC || '',
+            terminal1_fabricante:
+              this.testedMaterial.terminal1_fabricante || '',
+            terminal1_modelo: this.testedMaterial.terminal1_modelo || '',
+            terminal1_snA: this.testedMaterial.terminal1_snA || '',
+            terminal1_snB: this.testedMaterial.terminal1_snB || '',
+            terminal1_snC: this.testedMaterial.terminal1_snC || '',
+            terminal2_fabricante:
+              this.testedMaterial.terminal2_fabricante || '',
+            terminal2_modelo: this.testedMaterial.terminal2_modelo || '',
+            terminal2_snA: this.testedMaterial.terminal2_snA || '',
+            terminal2_snB: this.testedMaterial.terminal2_snB || '',
+            terminal2_snC: this.testedMaterial.terminal2_snC || '',
+            empalmes_fabricante: this.testedMaterial.empalmes_fabricante || '',
+            empalmes_modelo: this.testedMaterial.empalmes_modelo || '',
+            empalmes_metrajeA: this.testedMaterial.empalmes_metrajeA || '',
+            empalmes_metrajeB: this.testedMaterial.empalmes_metrajeB || '',
+            empalmes_metrajeC: this.testedMaterial.empalmes_metrajeC || '',
+          };
 
     const existingId = this.testedMaterial.id;
 
@@ -2066,7 +2146,10 @@ export class ResultsComponent implements OnInit, OnDestroy {
       const updateQuery = {
         action: 'update',
         bd: this.database,
-        table: 'ie_tested_material',
+        table:
+          materialType === 'gis'
+            ? 'ie_tested_material_gis'
+            : 'ie_tested_material',
         opts: { attributes, where: { id: existingId } },
       };
       this.dccDataService.post(updateQuery).subscribe({
@@ -2077,7 +2160,10 @@ export class ResultsComponent implements OnInit, OnDestroy {
       const createQuery = {
         action: 'create',
         bd: this.database,
-        table: 'ie_tested_material',
+        table:
+          materialType === 'gis'
+            ? 'ie_tested_material_gis'
+            : 'ie_tested_material',
         opts: { attributes },
       };
       this.dccDataService.post(createQuery).subscribe({
@@ -2087,6 +2173,7 @@ export class ResultsComponent implements OnInit, OnDestroy {
           if (insertedId) {
             this.testedMaterial.id = insertedId;
           }
+          this.testedMaterial.material_type = materialType;
           this.onTestedMaterialSaved();
         },
         error: () => this.onTestedMaterialSaveError(),

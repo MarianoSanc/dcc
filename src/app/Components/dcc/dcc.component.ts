@@ -4,7 +4,7 @@ import { AdministrativeDataComponent } from '../administrative-data/administrati
 import { ItemsComponent } from '../items/items.component';
 import { StatementsComponent } from '../statements/statements.component';
 import { ResultsComponent } from '../results/results.component';
-import { TestedMaterialComponent } from '../tested-material/tested-material.component';
+import { TestedMaterialComponent } from '../tested-material';
 import { IeResultsComponent } from '../ie-results/ie-results.component';
 import { PreviewComponent } from '../preview/preview.component';
 import { FormsModule } from '@angular/forms';
@@ -135,6 +135,11 @@ export class DccComponent implements OnInit {
   selectedIedCircuit: number | null = null;
   iedTestedMaterialByCircuit: { [circuito: number]: any } = {};
   iedTestedMaterial: any = this.createEmptyIedTestedMaterial();
+  iedProjectTypeFromEpv: number | null = null; // Tipo de proyecto detectado en EPV
+  iedProjectAfInfo: string = ''; // Tipo de proyecto de AF (raw)
+  iedProjectEpvInfo: string = ''; // Tipo de proyecto de EPV (label)
+  iedProjectOsInfo: string = ''; // Etapas encontradas en OS
+  iedValidationTraceId: number = 0; // Identificador incremental para depurar flujo de validación IED
 
   ptOptions: string[] = [
     'PT-05',
@@ -1365,6 +1370,10 @@ export class DccComponent implements OnInit {
     this.selectedIedCircuit = null;
     this.iedTestedMaterialByCircuit = {};
     this.iedTestedMaterial = this.createEmptyIedTestedMaterial();
+    this.iedProjectTypeFromEpv = null;
+    this.iedProjectAfInfo = '';
+    this.iedProjectEpvInfo = '';
+    this.iedProjectOsInfo = '';
     this.ieCertificatesList = [];
     this.ieSelectedCertificateIndex = -1;
     this.ieCurrentDutService = null;
@@ -1740,6 +1749,13 @@ export class DccComponent implements OnInit {
     return Number.isFinite(ptAsNumber) && [5, 12, 14].includes(ptAsNumber);
   }
 
+  private isGisPt(ptValue: any): boolean {
+    const normalized = this.normalizePtForStorage(ptValue);
+    const numericPart = normalized.replace(/^PT-/i, '').trim();
+    const ptAsNumber = Number(numericPart);
+    return Number.isFinite(ptAsNumber) && [2, 4, 5, 8].includes(ptAsNumber);
+  }
+
   private extractPhaseOptions(dutServices: any[]): number[] {
     const uniquePhases = new Set<number>();
     (dutServices || []).forEach((dut) => {
@@ -1937,6 +1953,20 @@ export class DccComponent implements OnInit {
    * y preserva los textos personalizados ya ingresados.
    */
   private setupIedCircuits(): void {
+    const epvType = this.iedProjectTypeFromEpv;
+    const isCable = epvType === 0 || epvType === 1;
+    const isGis = epvType === 2;
+
+    // Para GIS y otros tipos no Cable: no se usan circuitos
+    if (!isCable) {
+      this.iedCircuits = [];
+      this.selectedIedCircuit = null;
+      this.iedTestedMaterialByCircuit = {};
+      this.iedTestedMaterial = this.createEmptyIedTestedMaterial();
+      return;
+    }
+
+    // Cable AT o Cable MT: detectar circuitos desde dut_services
     const filteredDuts = this.filterDutServicesByPhase(
       this.ieProjectDutServices,
       this.selectedIePhase,
@@ -1982,24 +2012,6 @@ export class DccComponent implements OnInit {
       this.selectedIedCircuit = null;
       this.iedTestedMaterial = this.createEmptyIedTestedMaterial();
     }
-
-    // Si hay DUTs con PT IED (05/12/14) pero sin circuito, avisar al usuario.
-    const hasIedPtWithoutCircuit = filteredDuts.some((dut) => {
-      const ptList = this.parsePtList(dut.pt);
-      const hasIedPt = ptList.some((pt) => this.isIedPt(pt));
-      return (
-        hasIedPt && (dut.circuito == null || String(dut.circuito).trim() === '')
-      );
-    });
-
-    if (hasIedPtWithoutCircuit) {
-      const projectId = this.newIeProjectId?.[0]?.id || 'PH';
-      Swal.fire({
-        icon: 'warning',
-        title: 'Informacion incompleta',
-        text: `No se tiene informacion de circuito en este ${projectId} favor de contactar al departamento de ventas para actualizar OS`,
-      });
-    }
   }
 
   /** Parsea el campo pt de un dut_service hacia un arreglo de strings limpios */
@@ -2034,6 +2046,94 @@ export class DccComponent implements OnInit {
 
     const certificates: any[] = [];
 
+    // GIS (y otros sin circuitos): generar certificados directamente desde DUTs con PT permitido
+    const isGis = this.iedProjectTypeFromEpv === 2;
+    const isOther =
+      this.iedProjectTypeFromEpv !== null &&
+      this.iedProjectTypeFromEpv !== 0 &&
+      this.iedProjectTypeFromEpv !== 1 &&
+      this.iedProjectTypeFromEpv !== 2;
+
+    const isAllowedPtForNoCircuit = (pt: any) =>
+      isGis ? this.isGisPt(pt) : this.isIedPt(pt);
+
+    if (isGis || isOther) {
+      console.log(
+        '🔍 [GIS/OTHER] regenerateIedCertificates - inicio rama GIS/Otro:',
+        {
+          projectId,
+          epvType: this.iedProjectTypeFromEpv,
+          isGis,
+          isOther,
+          selectedPhase: this.selectedIePhase,
+          totalDutServices: this.ieProjectDutServices.length,
+          filteredDutsCount: filteredDuts.length,
+          filteredDuts: filteredDuts.map((d) => ({
+            id: d.id,
+            pt: d.pt,
+            fase: d.fase,
+            circuito: d.circuito,
+          })),
+        },
+      );
+
+      const iedDuts = filteredDuts.filter((dut) => {
+        const ptList = this.parsePtList(dut.pt);
+        const hasIed = ptList.some((p) => isAllowedPtForNoCircuit(p));
+        console.log('🔍 [GIS/OTHER] Evaluando DUT:', {
+          id: dut.id,
+          pt: dut.pt,
+          ptList,
+          hasIedPt: hasIed,
+        });
+        return hasIed;
+      });
+
+      console.log('🔍 [GIS/OTHER] DUTs con PT IED encontrados:', {
+        count: iedDuts.length,
+        iedDuts: iedDuts.map((d) => ({ id: d.id, pt: d.pt, fase: d.fase })),
+      });
+
+      iedDuts.forEach((dut) => {
+        const ptList = this.parsePtList(dut.pt);
+        const effectivePts = ptList.filter((pt) => isAllowedPtForNoCircuit(pt));
+
+        effectivePts.forEach((pt: string) => {
+          const normalizedPt = pt ? this.normalizePtForStorage(pt) : '';
+          const ptNumber = normalizedPt.replace(/^PT-/i, '');
+          const suffix = this.ieNameSuffix ? ` ${this.ieNameSuffix}` : '';
+          const name = ptNumber
+            ? `${projectId}-00 IE ${ptNumber}${suffix}`
+            : `${projectId}-00 IE${suffix}`;
+
+          console.log('✅ [GIS/OTHER] Certificado generado:', {
+            name,
+            pt: normalizedPt,
+            suffix,
+          });
+
+          certificates.push({
+            name,
+            dutService: dut,
+            pt: normalizedPt,
+            counter: '',
+            circuito: null,
+            isTechnicalVerification: false,
+          });
+        });
+      });
+
+      console.log(
+        '✅ [GIS/OTHER] Total certificados generados:',
+        certificates.length,
+      );
+
+      this.ieCertificatesList = certificates;
+      this.ieSelectedCertificate = null;
+      this.ieSelectedCertificateIndex = -1;
+      return;
+    }
+
     this.iedCircuits.forEach((circuit) => {
       const circuitDuts = filteredDuts.filter((dut) => {
         if (Number(dut.circuito) !== circuit.circuito) return false;
@@ -2043,7 +2143,7 @@ export class DccComponent implements OnInit {
 
       circuitDuts.forEach((dut) => {
         const ptList = this.parsePtList(dut.pt);
-        const effectivePts = ptList.length > 0 ? ptList : [''];
+        const effectivePts = ptList.filter((pt) => this.isIedPt(pt));
 
         effectivePts.forEach((pt: string) => {
           const normalizedPt = pt ? this.normalizePtForStorage(pt) : '';
@@ -2076,6 +2176,29 @@ export class DccComponent implements OnInit {
   onIedCircuitTextChange(): void {
     this.regenerateIedCertificates();
     this.updateIedTabCompletion();
+  }
+
+  /**
+   * Llamado desde el HTML cuando cambia el sufijo de nombre (IE normal o IED GIS)
+   */
+  onIeNameSuffixChange(): void {
+    const projectId =
+      this.newIeProjectId && this.newIeProjectId.length > 0
+        ? this.newIeProjectId[0].id
+        : '';
+
+    console.log('✏️ [GIS] onIeNameSuffixChange llamado:', {
+      ieNameSuffix: this.ieNameSuffix,
+      projectId,
+      isIedModal: this.isIedModal,
+      epvType: this.iedProjectTypeFromEpv,
+    });
+
+    if (!projectId) {
+      return;
+    }
+
+    this.regenerateIeCertificates();
   }
 
   onIedMaterialCircuitChange(circuito: number): void {
@@ -2112,16 +2235,22 @@ export class DccComponent implements OnInit {
       );
     }
     if (tab === 'material') {
-      // Material: todos los circuitos deben tener su material_description
-      if (!this.iedCircuits || this.iedCircuits.length === 0) {
-        return false;
+      if (this.isIedGisProject()) {
+        return this.hasAnyIedGisMaterial(this.iedTestedMaterial);
       }
-      return this.iedCircuits.every((circuit) => {
-        const material = this.getIedMaterialForCircuit(circuit.circuito);
-        return !!(
-          material.material_description && material.material_description.trim()
-        );
-      });
+
+      if (this.isIedCableProject()) {
+        if (!this.iedCircuits || this.iedCircuits.length === 0) {
+          return false;
+        }
+
+        return this.iedCircuits.every((circuit) => {
+          const material = this.getIedMaterialForCircuit(circuit.circuito);
+          return this.hasAnyIedCableMaterial(material);
+        });
+      }
+
+      return true;
     }
     return false;
   }
@@ -2153,8 +2282,21 @@ export class DccComponent implements OnInit {
     this.regenerateIeCertificates();
   }
 
+  private isIedCableProject(): boolean {
+    return this.iedProjectTypeFromEpv === 0 || this.iedProjectTypeFromEpv === 1;
+  }
+
+  private isIedGisProject(): boolean {
+    return this.iedProjectTypeFromEpv === 2;
+  }
+
+  private hasAnyMaterialValue(material: any, keys: string[]): boolean {
+    return keys.some((key) => String(material?.[key] || '').trim().length > 0);
+  }
+
   private createEmptyIedTestedMaterial(): any {
     return {
+      material_type: this.isIedGisProject() ? 'gis' : 'cable',
       material_description: '',
       cable_fabricante: '',
       cable_modelo: '',
@@ -2176,6 +2318,95 @@ export class DccComponent implements OnInit {
       empalmes_metrajeA: '',
       empalmes_metrajeB: '',
       empalmes_metrajeC: '',
+      gis_fabricante: '',
+      gis_tipo: '',
+      gis_fecha: '',
+      gis_lote: '',
+      gis_tension_un: '',
+      gis_tension_ur: '',
+      gis_norma: '',
+    };
+  }
+
+  private hasAnyIedGisMaterial(material: any): boolean {
+    return this.hasAnyMaterialValue(material, [
+      'gis_fabricante',
+      'gis_tipo',
+      'gis_fecha',
+      'gis_lote',
+      'gis_tension_un',
+      'gis_tension_ur',
+      'gis_norma',
+    ]);
+  }
+
+  private hasAnyIedCableMaterial(material: any): boolean {
+    return !!(
+      material.material_description && material.material_description.trim()
+    );
+  }
+
+  private getIedMaterialForCertificate(certificate: any): any {
+    if (this.isIedGisProject()) {
+      return { ...this.iedTestedMaterial };
+    }
+    return this.getIedMaterialForCircuit(Number(certificate?.circuito));
+  }
+
+  private buildIedTestedMaterialInsert(
+    certificateName: string,
+    material: any,
+  ): any | null {
+    if (this.isIedGisProject()) {
+      if (!this.hasAnyIedGisMaterial(material)) {
+        return null;
+      }
+
+      return {
+        table: 'ie_tested_material_gis',
+        attributes: {
+          id_ie: certificateName,
+          fabricante: material.gis_fabricante || 'NV',
+          tipo: material.gis_tipo || 'NV',
+          fecha_fabricante: material.gis_fecha || null,
+          lote: material.gis_lote || 'NV',
+          tension_un: material.gis_tension_un || 'NV',
+          tension_ur: material.gis_tension_ur || 'NV',
+          norma: material.gis_norma || 'NV',
+        },
+      };
+    }
+
+    if (!this.hasAnyIedCableMaterial(material)) {
+      return null;
+    }
+
+    return {
+      table: 'ie_tested_material',
+      attributes: {
+        id_ie: certificateName,
+        material_description: material.material_description || 'NV',
+        cable_fabricante: material.cable_fabricante || 'NV',
+        cable_modelo: material.cable_modelo || 'NV',
+        cable_metrajeA: material.cable_metrajeA || 'NV',
+        cable_metrajeB: material.cable_metrajeB || 'NV',
+        cable_metrajeC: material.cable_metrajeC || 'NV',
+        terminal1_fabricante: material.terminal1_fabricante || 'NV',
+        terminal1_modelo: material.terminal1_modelo || 'NV',
+        terminal1_snA: material.terminal1_snA || 'NV',
+        terminal1_snB: material.terminal1_snB || 'NV',
+        terminal1_snC: material.terminal1_snC || 'NV',
+        terminal2_fabricante: material.terminal2_fabricante || 'NV',
+        terminal2_modelo: material.terminal2_modelo || 'NV',
+        terminal2_snA: material.terminal2_snA || 'NV',
+        terminal2_snB: material.terminal2_snB || 'NV',
+        terminal2_snC: material.terminal2_snC || 'NV',
+        empalmes_fabricante: material.empalmes_fabricante || 'NV',
+        empalmes_modelo: material.empalmes_modelo || 'NV',
+        empalmes_metrajeA: material.empalmes_metrajeA || 'NV',
+        empalmes_metrajeB: material.empalmes_metrajeB || 'NV',
+        empalmes_metrajeC: material.empalmes_metrajeC || 'NV',
+      },
     };
   }
 
@@ -2256,6 +2487,13 @@ export class DccComponent implements OnInit {
   onIeProjectSelect(item: any) {
     this.newIeProjectId = [item]; // Asegurar que sea un array con un solo elemento
     console.log('🎯 PROJECT SELECTED (IE):', item.id, item);
+    const traceId = ++this.iedValidationTraceId;
+    console.log('🧭 [IED VALIDATION] Flujo iniciado:', {
+      traceId,
+      projectId: item.id,
+      isIedModal: this.isIedModal,
+      timestamp: new Date().toISOString(),
+    });
 
     // Cargar account_id desde opportunity
     this.getAccountIdFromOpportunity(item.id).then((accountId) => {
@@ -2263,108 +2501,279 @@ export class DccComponent implements OnInit {
       console.log('💼 IE Account ID guardado:', this.ieAccountId);
     });
 
-    // Cargar servicios y DUT services de la BD orden
-    this.orderService.loadProjectData(item.id).then(
-      (data) => {
-        console.log('📊 PROJECT DATA LOADED:', {
-          projectId: item.id,
-          services: data.services,
-          dutServices: data.dutServices,
-        });
-
-        this.ieProjectDutServices = data.dutServices || [];
-        this.iePhaseOptions = this.extractPhaseOptions(
-          this.ieProjectDutServices,
+    if (this.isIedModal) {
+      // Para IED: esperar AF, EPV y datos de proyecto juntos antes de mostrar modal
+      const projectDataPromise = new Promise<void>((resolve) => {
+        this.orderService.loadProjectData(item.id).then(
+          (data) => {
+            console.log('📊 PROJECT DATA LOADED (IED):', {
+              projectId: item.id,
+              services: data.services,
+              dutServices: data.dutServices,
+            });
+            this.ieProjectDutServices = data.dutServices || [];
+            this.iePhaseOptions = this.extractPhaseOptions(
+              this.ieProjectDutServices,
+            );
+            this.selectedIePhase =
+              this.iePhaseOptions.length > 0 ? this.iePhaseOptions[0] : null;
+            if (this.iePhaseOptions.length === 0) {
+              this.iedProjectOsInfo = 'No hay etapas';
+            } else {
+              this.iedProjectOsInfo = this.iePhaseOptions
+                .map((p) => (p === 0 ? '0 (sin etapa)' : `${p}`))
+                .join(', ');
+            }
+            resolve();
+          },
+          (error) => {
+            console.error('❌ ERROR LOADING PROJECT DATA:', error);
+            this.iedProjectOsInfo = 'Error al cargar etapas';
+            resolve();
+          },
         );
-        this.selectedIePhase =
-          this.iePhaseOptions.length > 0 ? this.iePhaseOptions[0] : null;
+      });
 
-        if (this.isIedModal) {
-          this.setupIedCircuits();
-        }
+      Promise.all([
+        this.loadAfData(item.id, traceId),
+        this.loadEpvData(item.id, traceId),
+        projectDataPromise,
+      ]).then(() => {
+        this.showIedProjectValidationAlert(item.id, traceId);
+        this.setupIedCircuits();
         this.regenerateIeCertificates();
-      },
-      (error) => {
-        console.error('❌ ERROR LOADING PROJECT DATA:', error);
-      },
-    );
+      });
+    } else {
+      // Flujo normal IE
+      this.orderService.loadProjectData(item.id).then(
+        (data) => {
+          console.log('📊 PROJECT DATA LOADED:', {
+            projectId: item.id,
+            services: data.services,
+            dutServices: data.dutServices,
+          });
+          this.ieProjectDutServices = data.dutServices || [];
+          this.iePhaseOptions = this.extractPhaseOptions(
+            this.ieProjectDutServices,
+          );
+          this.selectedIePhase =
+            this.iePhaseOptions.length > 0 ? this.iePhaseOptions[0] : null;
+          this.regenerateIeCertificates();
+        },
+        (error) => {
+          console.error('❌ ERROR LOADING PROJECT DATA:', error);
+        },
+      );
+    }
 
     this.updateIeCertificateNumber();
   }
 
   /**
-   * Regenera los certificados IE cuando cambia el texto personalizado
+   * Carga y valida datos de AF y EPV para IED con consolidación en una alerta
    */
-  onIeNameSuffixChange() {
-    const projectId =
-      this.newIeProjectId && this.newIeProjectId.length > 0
-        ? this.newIeProjectId[0].id
-        : '';
-
-    if (!projectId) {
-      return;
-    }
-
-    this.regenerateIeCertificates();
-    console.log(
-      '✅ IE CERTIFICATES REGENERATED WITH SUFFIX:',
-      this.ieNameSuffix,
-    );
+  private loadIedProjectValidation(projectId: string, traceId: number): void {
+    console.log('🧭 [IED VALIDATION] Iniciando consultas AF/EPV en paralelo:', {
+      traceId,
+      projectId,
+    });
+    Promise.all([
+      this.loadAfData(projectId, traceId),
+      this.loadEpvData(projectId, traceId),
+    ])
+      .then(() => {
+        console.log('🧭 [IED VALIDATION] Consultas AF/EPV finalizadas:', {
+          traceId,
+          projectId,
+          afInfo: this.iedProjectAfInfo,
+          epvInfo: this.iedProjectEpvInfo,
+          epvType: this.iedProjectTypeFromEpv,
+        });
+        this.showIedProjectValidationAlert(projectId, traceId);
+      })
+      .catch((error) => {
+        console.error(
+          '❌ [IED VALIDATION] Error inesperado en Promise.all(AF/EPV):',
+          {
+            traceId,
+            projectId,
+            error,
+          },
+        );
+      });
   }
 
   /**
-   * Maneja la selección de un certificado desde la lista generada
-   * Carga los datos del DUT Service seleccionado
+   * Consulta factibilidad.test por id_project (devuelve Promise)
    */
-  onDccCertificateSelect(index: number) {
-    if (index < 0 || index >= this.dccCertificatesList.length) {
-      return;
-    }
+  private loadAfData(projectId: string, traceId: number): Promise<void> {
+    return new Promise((resolve) => {
+      const getAfQuery = {
+        action: 'get',
+        bd: 'factibilidad',
+        table: 'test',
+        opts: {
+          where: { id_project: projectId },
+          attributes: ['type'],
+        },
+      };
 
-    const certificate = this.dccCertificatesList[index];
-    console.log('🎯 DCC CERTIFICATE SELECTED:', certificate.name);
-    console.log('📋 DUT SERVICE DATA:', certificate.dutService);
+      console.log('🔎 [IED VALIDATION][AF] Query enviada:', {
+        traceId,
+        projectId,
+        query: getAfQuery,
+      });
 
-    this.dccCurrentDutService = certificate.dutService;
-    this.newDccPtId = certificate.pt;
-    this.newDccDutNumber = parseInt(certificate.counter);
-    this.dccSelectedCertificate = certificate; // Guardar certificado seleccionado
+      this.apiService.post(getAfQuery, UrlClass.URLNuevo).subscribe({
+        next: (response: any) => {
+          const afData = response?.result?.[0];
+          console.log('📥 [IED VALIDATION][AF] Respuesta recibida:', {
+            traceId,
+            projectId,
+            rawResponse: response,
+            selectedRow: afData,
+          });
 
-    // Actualizar el nombre del certificado
-    this.generatedCertificateNumber = certificate.name;
-    console.log('✅ DCC CERTIFICATE DATA LOADED:', {
-      name: certificate.name,
-      pt: certificate.pt,
-      dutNumber: certificate.counter,
-      dutService: certificate.dutService,
+          // Guardar solo el valor del tipo
+          this.iedProjectAfInfo = afData?.type ?? 'No hay AF';
+
+          console.log('✅ [IED VALIDATION][AF] Resultado procesado:', {
+            traceId,
+            projectId,
+            afInfo: this.iedProjectAfInfo,
+          });
+          resolve();
+        },
+        error: (error) => {
+          console.error('❌ [IED VALIDATION][AF] Error al consultar AF:', {
+            traceId,
+            projectId,
+            error,
+          });
+          this.iedProjectAfInfo = 'Error al cargar AF';
+          resolve();
+        },
+      });
     });
   }
 
   /**
-   * Maneja la selección de un certificado para IE
+   * Consulta comercial.epv_general por id_project (devuelve Promise)
+   * Mapea el type a su descripción
    */
-  onIeCertificateSelect(index: number) {
-    if (index < 0 || index >= this.ieCertificatesList.length) {
-      return;
+  private loadEpvData(projectId: string, traceId: number): Promise<void> {
+    return new Promise((resolve) => {
+      const getEpvQuery = {
+        action: 'get',
+        bd: 'comercial',
+        table: 'epv_general',
+        opts: {
+          where: { id_project: projectId },
+          attributes: ['type'],
+        },
+      };
+
+      console.log('🔎 [IED VALIDATION][EPV] Query enviada:', {
+        traceId,
+        projectId,
+        query: getEpvQuery,
+      });
+
+      this.apiService.post(getEpvQuery, UrlClass.URLNuevo).subscribe({
+        next: (response: any) => {
+          const epvData = response?.result?.[0];
+          const epvTypeMap: { [key: number]: string } = {
+            0: 'Cable AT',
+            1: 'Cable MT',
+            2: 'GIS',
+            3: 'Manejo de Gas SF6',
+            4: 'Manejo de Aceite',
+            5: 'Localización de Falla',
+            6: 'Calibración',
+            7: 'Venta de Equipo(s)',
+            8: 'Otro',
+          };
+
+          console.log('📥 [IED VALIDATION][EPV] Respuesta recibida:', {
+            traceId,
+            projectId,
+            rawResponse: response,
+            selectedRow: epvData,
+          });
+
+          // Guardar solo el label del tipo
+          if (epvData) {
+            const epvType = Number(epvData.type);
+            this.iedProjectTypeFromEpv = epvType;
+            this.iedProjectEpvInfo = epvTypeMap[epvType] || `Tipo ${epvType}`;
+          } else {
+            this.iedProjectTypeFromEpv = null;
+            this.iedProjectEpvInfo = 'No hay datos en EPV';
+          }
+
+          console.log('✅ [IED VALIDATION][EPV] Resultado procesado:', {
+            traceId,
+            projectId,
+            epvType: this.iedProjectTypeFromEpv,
+            epvInfo: this.iedProjectEpvInfo,
+          });
+          resolve();
+        },
+        error: (error) => {
+          console.error('❌ [IED VALIDATION][EPV] Error al consultar EPV:', {
+            traceId,
+            projectId,
+            error,
+          });
+          this.iedProjectEpvInfo = 'Error al cargar EPV';
+          resolve();
+        },
+      });
+    });
+  }
+
+  /**
+   * Muestra alerta consolidada con información de AF, EPV y OS
+   */
+  private showIedProjectValidationAlert(
+    projectId: string,
+    traceId: number,
+  ): void {
+    console.log('🛎️ [IED VALIDATION] Mostrando modal consolidado:', {
+      traceId,
+      projectId,
+      afInfo: this.iedProjectAfInfo,
+      epvInfo: this.iedProjectEpvInfo,
+      osInfo: this.iedProjectOsInfo,
+      epvType: this.iedProjectTypeFromEpv,
+    });
+
+    // Nota según el tipo de proyecto EPV
+    let epvNote = '';
+    const t = this.iedProjectTypeFromEpv;
+    if (t === 0 || t === 1) {
+      epvNote =
+        '<p style="color:#0d6efd;">ℹ️ Proyecto de cable: se dividirá por circuitos.</p>';
+    } else if (t === 2) {
+      epvNote =
+        '<p style="color:#0d6efd;">ℹ️ Proyecto GIS: no se divide por circuitos, solo se asigna un nombre adicional.</p>';
+    } else if (t !== null) {
+      epvNote =
+        '<p style="color:#856404;">⚠️ El tipo de proyecto no es Cable AT, Cable MT ni GIS. No se aplicará división por circuitos.</p>';
     }
 
-    const certificate = this.ieCertificatesList[index];
-    console.log('🎯 IE CERTIFICATE SELECTED:', certificate.name);
-    console.log('📋 DUT SERVICE DATA:', certificate.dutService);
-
-    this.ieCurrentDutService = certificate.dutService;
-    this.newIePtId = certificate.pt;
-    this.newIeDutNumber = parseInt(certificate.counter);
-    this.ieSelectedCertificate = certificate; // Guardar certificado seleccionado
-
-    // Actualizar el nombre del certificado
-    this.generatedIeCertificateNumber = certificate.name;
-    this.prefillIeDraftData(certificate);
-    console.log('✅ IE CERTIFICATE DATA LOADED:', {
-      name: certificate.name,
-      pt: certificate.pt,
-      dutNumber: certificate.counter,
-      dutService: certificate.dutService,
+    Swal.fire({
+      icon: 'info',
+      title: 'Información del Proyecto',
+      html: `
+        <div style="text-align: left; font-size: 0.95em;">
+          <p><strong>AF:</strong> Tipo de proyecto: ${this.iedProjectAfInfo}</p>
+          <p><strong>EPV:</strong> Tipo de proyecto es: ${this.iedProjectEpvInfo}</p>
+          <p><strong>OS:</strong> Etapas encontradas: ${this.iedProjectOsInfo}</p>
+          ${epvNote}
+        </div>
+      `,
+      confirmButtonText: 'Entendido',
     });
   }
 
@@ -2380,6 +2789,10 @@ export class DccComponent implements OnInit {
     this.selectedIedCircuit = null;
     this.iedTestedMaterialByCircuit = {};
     this.iedTestedMaterial = this.createEmptyIedTestedMaterial();
+    this.iedProjectTypeFromEpv = null;
+    this.iedProjectAfInfo = '';
+    this.iedProjectEpvInfo = '';
+    this.iedProjectOsInfo = '';
     this.updateIeCertificateNumber();
   }
 
@@ -2780,7 +3193,9 @@ export class DccComponent implements OnInit {
     // Validación: PT 5, 12 o 14 deben tener información de circuito
     const pt = this.newIePtId?.replace('PT-', '') || '';
     const requiresCircuito = this.isIedPt(this.newIePtId);
-    if (requiresCircuito && this.isIedModal) {
+    const isCableProject =
+      this.iedProjectTypeFromEpv === 0 || this.iedProjectTypeFromEpv === 1;
+    if (requiresCircuito && this.isIedModal && isCableProject) {
       const hasCircuito = this.iedCircuits?.some((c) => c.circuito);
       if (!hasCircuito) {
         Swal.fire({
@@ -2854,30 +3269,78 @@ export class DccComponent implements OnInit {
           // Si el IE se creó exitosamente, crear el item
           this.apiService.post(createItem, UrlClass.URLNuevo).subscribe({
             next: (itemResponse: any) => {
-              Swal.close();
+              const selectedMaterial = this.isIedModal
+                ? this.getIedMaterialForCertificate(selectedCertificate)
+                : this.iedTestedMaterial;
+              const testedMaterialInsert = this.isIedModal
+                ? this.buildIedTestedMaterialInsert(
+                    this.generatedIeCertificateNumber,
+                    selectedMaterial,
+                  )
+                : null;
 
-              if (itemResponse.result) {
-                Swal.fire({
-                  icon: 'success',
-                  title: '¡IE Creado!',
-                  text: `Se ha creado el IE ${this.generatedIeCertificateNumber} correctamente con su item asociado`,
-                  timer: 2500,
-                  showConfirmButton: false,
-                  position: 'top-end',
-                });
+              const finishSuccessFlow = () => {
+                Swal.close();
 
-                // Proceder a la interfaz principal
-                this.proceedToMainInterfaceIe();
-              } else {
-                Swal.fire({
-                  icon: 'warning',
-                  title: 'IE Creado Parcialmente',
-                  text: 'El IE se creó pero hubo un problema al crear el item asociado.',
-                });
+                if (itemResponse.result) {
+                  Swal.fire({
+                    icon: 'success',
+                    title: '¡IE Creado!',
+                    text: `Se ha creado el IE ${this.generatedIeCertificateNumber} correctamente con su item asociado`,
+                    timer: 2500,
+                    showConfirmButton: false,
+                    position: 'top-end',
+                  });
 
-                // Proceder a la interfaz principal de todos modos
-                this.proceedToMainInterfaceIe();
+                  this.proceedToMainInterfaceIe();
+                } else {
+                  Swal.fire({
+                    icon: 'warning',
+                    title: 'IE Creado Parcialmente',
+                    text: 'El IE se creó pero hubo un problema al crear el item asociado.',
+                  });
+
+                  this.proceedToMainInterfaceIe();
+                }
+              };
+
+              if (!testedMaterialInsert) {
+                finishSuccessFlow();
+                return;
               }
+
+              const createTestedMaterial = {
+                action: 'create',
+                bd: this.database,
+                table: testedMaterialInsert.table,
+                opts: {
+                  attributes: testedMaterialInsert.attributes,
+                },
+              };
+
+              this.apiService
+                .post(createTestedMaterial, UrlClass.URLNuevo)
+                .subscribe({
+                  next: () => {
+                    console.log(
+                      `✅ Tested Material para IE ${this.generatedIeCertificateNumber} creado en ${testedMaterialInsert.table}`,
+                    );
+                    finishSuccessFlow();
+                  },
+                  error: (materialError) => {
+                    Swal.close();
+                    console.error(
+                      '❌ Error al crear tested material del IE:',
+                      materialError,
+                    );
+                    Swal.fire({
+                      icon: 'warning',
+                      title: 'IE Creado Parcialmente',
+                      text: 'El IE se creó, pero hubo un error al guardar el material de prueba.',
+                    });
+                    this.proceedToMainInterfaceIe();
+                  },
+                });
             },
             error: (itemError) => {
               Swal.close();
@@ -2982,7 +3445,9 @@ export class DccComponent implements OnInit {
       // Validación: PT 5, 12 o 14 deben tener información de circuito
       const pt = certificate.pt?.replace('PT-', '') || '';
       const requiresCircuito = this.isIedPt(certificate.pt);
-      if (requiresCircuito && !certificate.circuito) {
+      const isCableProject =
+        this.iedProjectTypeFromEpv === 0 || this.iedProjectTypeFromEpv === 1;
+      if (requiresCircuito && isCableProject && !certificate.circuito) {
         Swal.fire({
           icon: 'warning',
           title: 'Información incompleta',
@@ -3055,47 +3520,20 @@ export class DccComponent implements OnInit {
               );
               console.log('Item Response:', itemResponse);
 
-              // Para IED: crear el ie_tested_material
-              const circuitMaterial = this.isIedModal
-                ? this.getIedMaterialForCircuit(Number(certificate.circuito))
+              const material = this.isIedModal
+                ? this.getIedMaterialForCertificate(certificate)
                 : this.iedTestedMaterial;
+              const testedMaterialInsert = this.isIedModal
+                ? this.buildIedTestedMaterialInsert(certificate.name, material)
+                : null;
 
-              if (this.isIedModal && circuitMaterial.material_description) {
-                const testedMaterialAttributes = {
-                  id_ie: certificate.name,
-                  material_description:
-                    circuitMaterial.material_description || 'NV',
-                  cable_fabricante: circuitMaterial.cable_fabricante || 'NV',
-                  cable_modelo: circuitMaterial.cable_modelo || 'NV',
-                  cable_metrajeA: circuitMaterial.cable_metrajeA || 'NV',
-                  cable_metrajeB: circuitMaterial.cable_metrajeB || 'NV',
-                  cable_metrajeC: circuitMaterial.cable_metrajeC || 'NV',
-                  terminal1_fabricante:
-                    circuitMaterial.terminal1_fabricante || 'NV',
-                  terminal1_modelo: circuitMaterial.terminal1_modelo || 'NV',
-                  terminal1_snA: circuitMaterial.terminal1_snA || 'NV',
-                  terminal1_snB: circuitMaterial.terminal1_snB || 'NV',
-                  terminal1_snC: circuitMaterial.terminal1_snC || 'NV',
-                  terminal2_fabricante:
-                    circuitMaterial.terminal2_fabricante || 'NV',
-                  terminal2_modelo: circuitMaterial.terminal2_modelo || 'NV',
-                  terminal2_snA: circuitMaterial.terminal2_snA || 'NV',
-                  terminal2_snB: circuitMaterial.terminal2_snB || 'NV',
-                  terminal2_snC: circuitMaterial.terminal2_snC || 'NV',
-                  empalmes_fabricante:
-                    circuitMaterial.empalmes_fabricante || 'NV',
-                  empalmes_modelo: circuitMaterial.empalmes_modelo || 'NV',
-                  empalmes_metrajeA: circuitMaterial.empalmes_metrajeA || 'NV',
-                  empalmes_metrajeB: circuitMaterial.empalmes_metrajeB || 'NV',
-                  empalmes_metrajeC: circuitMaterial.empalmes_metrajeC || 'NV',
-                };
-
+              if (testedMaterialInsert) {
                 const createTestedMaterial = {
                   action: 'create',
                   bd: this.database,
-                  table: 'ie_tested_material',
+                  table: testedMaterialInsert.table,
                   opts: {
-                    attributes: testedMaterialAttributes,
+                    attributes: testedMaterialInsert.attributes,
                   },
                 };
 
@@ -3104,7 +3542,7 @@ export class DccComponent implements OnInit {
                   .toPromise()
                   .then((materialResponse: any) => {
                     console.log(
-                      `✅ Tested Material para IE ${certificate.name} creado`,
+                      `✅ Tested Material para IE ${certificate.name} creado en ${testedMaterialInsert.table}`,
                     );
                     return {
                       ie: ieResponse,

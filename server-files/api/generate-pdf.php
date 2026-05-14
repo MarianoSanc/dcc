@@ -130,6 +130,10 @@ $isTechnicalVerification = (
 
 if ($isIeDocument) {
     $allowedIeTemplates = [
+        'ie_gis_02.docx',
+        'ie_gis_04.docx',
+        'ie_gis_05.docx',
+        'ie_gis_08.docx',
         'ie_05.docx',
         'ie_12.docx',
         'ie_14.docx',
