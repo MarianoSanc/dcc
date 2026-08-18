@@ -1,0 +1,150 @@
+<div class="project-list-container">
+  <div class="project-list-card">
+    <div class="header-row">
+      <h1>Listado de proyectos</h1>
+      <button class="btn btn-back" (click)="backToMenu()">
+        ← Volver al menú
+      </button>
+    </div>
+    <div>
+      <p>
+        Listado de proyectos que se han realizado en el rango de fechas
+        seleccionado.
+      </p>
+    </div>
+
+    <div class="filter-row">
+      <div class="filter-group">
+        <label>Desde</label>
+        <div class="selects">
+          <select [(ngModel)]="startMonth" (ngModelChange)="onSearch()">
+            <option *ngFor="let m of months" [value]="m.value">
+              {{ m.label }}
+            </option>
+          </select>
+          <select [(ngModel)]="startYear" (ngModelChange)="onSearch()">
+            <option *ngFor="let y of years" [value]="y">{{ y }}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Hasta</label>
+        <div class="selects">
+          <select [(ngModel)]="endMonth" (ngModelChange)="onSearch()">
+            <option *ngFor="let m of months" [value]="m.value">
+              {{ m.label }}
+            </option>
+          </select>
+          <select [(ngModel)]="endYear" (ngModelChange)="onSearch()">
+            <option *ngFor="let y of years" [value]="y">{{ y }}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>PH o PC</label>
+        <div class="selects">
+          <select [(ngModel)]="selectedType" (ngModelChange)="onSearch()">
+            <option value="Todos">Todos</option>
+            <option value="PH">PH</option>
+            <option value="PC">PC</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Tipo</label>
+        <div class="selects">
+          <select
+            [(ngModel)]="selectedProjectType"
+            (ngModelChange)="onSearch()"
+          >
+            <option *ngFor="let type of projectTypeOptions" [value]="type">
+              {{ type }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Etapa</label>
+        <div class="selects">
+          <select [(ngModel)]="selectedStage" (ngModelChange)="onSearch()">
+            <option *ngFor="let stage of stageOptions" [value]="stage">
+              {{ stage }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-group filter-search-group">
+        <label>Proyecto</label>
+        <div class="selects">
+          <input
+            type="text"
+            placeholder="Buscar proyecto..."
+            [(ngModel)]="filterProjectText"
+            (input)="onSearch()"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="!loading" class="results-count">
+      Mostrando {{ uniqueProjectCount }} proyecto{{
+        uniqueProjectCount === 1 ? "" : "s"
+      }}
+      <div class="total-unique-certs" *ngIf="uniqueProjectCount > 0">
+        Total de certificados/informes únicos: {{ totalUniqueCertificates }}
+      </div>
+    </div>
+
+    <div *ngIf="loading" class="loading">Cargando...</div>
+
+    <table *ngIf="!loading" class="projects-table">
+      <thead>
+        <tr>
+          <th>Proyecto</th>
+          <th>Tipo</th>
+          <th>Etapa</th>
+          <th>Fecha de Realizado</th>
+          <th>DCC/DIE</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let m of filteredMeetings">
+          <td>{{ m.name }}</td>
+          <td>{{ m.projectType || "-" }}</td>
+          <td>{{ m.projectStage || "-" }}</td>
+          <td>{{ m._start | date: "yyyy-MM-dd" }}</td>
+          <td class="cert-cell">
+            <div class="cert-badge">
+              <div class="cert-status">
+                {{
+                  m.certificateCount > 0
+                    ? "Sí (" + m.certificateCount + ")"
+                    : "No"
+                }}
+              </div>
+              <div
+                class="cert-tooltip"
+                *ngIf="m.certificates && m.certificates.length > 0"
+              >
+                <div class="cert-tooltip-title">Certificados:</div>
+                <div *ngFor="let cert of m.certificates" class="cert-item">
+                  {{ cert }}
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+        <tr *ngIf="filteredMeetings.length === 0">
+          <td colspan="5">
+            No se encontraron proyectos en el rango seleccionado.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

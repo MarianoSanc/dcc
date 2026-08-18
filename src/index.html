@@ -1,9 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>DCC / IE</title>
-    <base href="./" />
+    <script>
+      (function () {
+        const base = document.createElement("base");
+        const path = window.location.pathname || "/";
+        if (path.startsWith("/DCC")) {
+          base.href = "/DCC/";
+        } else {
+          base.href = "/";
+        }
+        document.head.appendChild(base);
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/x-icon" href="./assets/images/logoHV.png" />
     <link

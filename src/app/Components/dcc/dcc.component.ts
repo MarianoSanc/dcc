@@ -37,6 +37,8 @@ export class DccComponent implements OnInit {
 
   // Variable para guardar el modo de operación actual
   operationMode: 'create' | 'load' | 'xml' | null = null;
+  // Indicador de carga de pestañas
+  isLoading: boolean = false;
   // Tipo de documento: 'DCC' o 'IE'
   documentType: 'DCC' | 'IE' = 'DCC';
   // Controla la pantalla inicial de opciones
@@ -204,6 +206,16 @@ export class DccComponent implements OnInit {
     private dccDataService: DccDataService,
     private orderService: OrderService,
   ) {}
+
+  openProjectListWindow(): void {
+    const base = this.getBasePath();
+    window.open(`${base}/projects`, '_blank', 'noopener');
+  }
+
+  private getBasePath(): string {
+    const path = window.location.pathname || '/';
+    return path.startsWith('/DCC') ? '/DCC' : '';
+  }
 
   /**
    * Extrae el ID del usuario de la URL
@@ -1139,13 +1151,33 @@ export class DccComponent implements OnInit {
       return;
     }
 
-    // Permitir acceso y actualizar tab activo
-    this.activeTab = tabId;
+    this.isLoading = true;
 
-    // Actualizar el máximo alcanzado si es necesario
-    if (targetIndex > this.maxTabReached) {
-      this.maxTabReached = targetIndex;
-    }
+    // Simular la petición HTTP de carga de datos correspondientes a ese apartado
+    new Promise<void>((resolve) => {
+      // Simular retraso del backend para la obtención de datos
+      setTimeout(() => {
+        resolve();
+      }, 500);
+    })
+      .then(() => {
+        // Permitir acceso y actualizar tab activo
+        this.activeTab = tabId;
+
+        // Actualizar el máximo alcanzado si es necesario
+        if (targetIndex > this.maxTabReached) {
+          this.maxTabReached = targetIndex;
+        }
+
+        // Scroll al inicio de la página
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      })
+      .catch((error) => {
+        console.error('Error al cargar datos del apartado:', error);
+      })
+      .finally(() => {
+        this.isLoading = false;
+      });
   }
 
   // Verifica si un tab está disponible para acceder
@@ -1159,13 +1191,8 @@ export class DccComponent implements OnInit {
       (tab) => tab.id === this.activeTab,
     );
     if (currentIndex < this.tabs.length - 1) {
-      this.activeTab = this.tabs[currentIndex + 1].id;
-      // Actualizar el máximo alcanzado
-      if (currentIndex + 1 > this.maxTabReached) {
-        this.maxTabReached = currentIndex + 1;
-      }
-      // Scroll al inicio de la página
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const nextTabId = this.tabs[currentIndex + 1].id;
+      this.selectTab(nextTabId);
     }
   }
 
@@ -1175,9 +1202,8 @@ export class DccComponent implements OnInit {
       (tab) => tab.id === this.activeTab,
     );
     if (currentIndex > 0) {
-      this.activeTab = this.tabs[currentIndex - 1].id;
-      // Scroll al inicio de la página
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const prevTabId = this.tabs[currentIndex - 1].id;
+      this.selectTab(prevTabId);
     }
   }
 
@@ -1632,7 +1658,71 @@ export class DccComponent implements OnInit {
       return [];
     }
 
-    // Ordenar dutServices por id
+    if (documentType === 'DCC') {
+      const groupedCerts = this.groupCertificates(dutServices);
+      const certificates: any[] = [];
+
+      groupedCerts.forEach((group, index) => {
+        const counter = (index + 1).toString().padStart(2, '0');
+        const primaryDut = group.primaryDut;
+
+        const ptRaw = this.getDutField(primaryDut, 'pt') || '';
+        let ptString = ptRaw;
+        try {
+          const parsed = JSON.parse(ptRaw);
+          if (Array.isArray(parsed)) {
+            ptString = parsed.join(', ');
+          }
+        } catch (_) {}
+
+        let ptList = ptString
+          .split(',')
+          .map((pt: string) => pt.trim())
+          .filter((pt: string) => pt.length > 0);
+
+        const isTv = Boolean(
+          this.getDutField(primaryDut, 'technical_verification'),
+        );
+        const docLabel = isTv ? 'TV' : 'DCC';
+
+        if (ptList.length === 0) {
+          const certificateName = `${projectId}-00 ${docLabel} ${counter}`;
+          certificates.push({
+            name: certificateName,
+            id_dcc: certificateName,
+            dutService: this.getDutServiceRepresentation(primaryDut),
+            duts: group.duts,
+            pt: '',
+            counter: counter,
+            isTechnicalVerification: isTv,
+            sistema: group.sistema,
+            isGrouped: group.isGrouped,
+          });
+        } else {
+          ptList.forEach((pt: string) => {
+            const normalizedPt = this.normalizePtForStorage(pt);
+            const ptNumber = normalizedPt.replace(/^PT-/i, '');
+            const certificateName = `${projectId}-00 ${docLabel} ${ptNumber} ${counter}`;
+
+            certificates.push({
+              name: certificateName,
+              id_dcc: certificateName,
+              dutService: this.getDutServiceRepresentation(primaryDut),
+              duts: group.duts,
+              pt: normalizedPt,
+              counter: counter,
+              isTechnicalVerification: isTv,
+              sistema: group.sistema,
+              isGrouped: group.isGrouped,
+            });
+          });
+        }
+      });
+
+      console.log('✅ GENERATED DCC CERTIFICATES (GROUPED):', certificates);
+      return certificates;
+    }
+
     const sortedDutServices = [...dutServices].sort((a, b) => {
       const idA = parseInt(a.id) || 0;
       const idB = parseInt(b.id) || 0;
@@ -1642,11 +1732,8 @@ export class DccComponent implements OnInit {
     const certificates: any[] = [];
 
     sortedDutServices.forEach((dut, index) => {
-      // Número consecutivo del 1 al n
       const counter = (index + 1).toString().padStart(2, '0');
 
-      // El PT puede tener múltiples valores separados por comas: "PT-24, PT-44"
-      // O puede venir como JSON array desde la BD: ["47"] o ["PT-24","PT-44"]
       const ptRaw = dut.pt || '';
       let ptString = ptRaw;
       try {
@@ -1654,68 +1741,52 @@ export class DccComponent implements OnInit {
         if (Array.isArray(parsed)) {
           ptString = parsed.join(', ');
         }
-      } catch (_) {
-        /* not JSON, use as-is */
-      }
+      } catch (_) {}
       let ptList = ptString
         .split(',')
         .map((pt: string) => pt.trim())
         .filter((pt: string) => pt.length > 0);
 
-      // Detectar si es Technical Verification (solo aplica para DCC)
-      const isTv =
-        documentType === 'DCC' && Boolean(dut.technical_verification);
-      const docLabel = isTv ? 'TV' : documentType;
-
-      // Si no hay PTs, crear certificado sin PT
       if (ptList.length === 0) {
-        console.warn('⚠️ DUT SERVICE WITHOUT PT, CREATING WITHOUT PT:', dut);
         let certificateName = '';
-        if (documentType === 'IE') {
-          // Para IE: sin counter, usar sufijo personalizado
-          const suffix = this.ieNameSuffix ? ` ${this.ieNameSuffix}` : '';
-          certificateName = `${projectId}-00 ${documentType}${suffix}`;
-        } else {
-          // Para DCC/TV: con counter
-          certificateName = `${projectId}-00 ${docLabel} ${counter}`;
-        }
+        const suffix = this.ieNameSuffix ? ` ${this.ieNameSuffix}` : '';
+        certificateName = `${projectId}-00 ${documentType}${suffix}`;
+
         certificates.push({
           name: certificateName,
+          id_dcc: certificateName,
           dutService: dut,
+          duts: [dut],
           pt: '',
           counter: counter,
-          isTechnicalVerification: isTv,
+          isTechnicalVerification: false,
+          isGrouped: false,
         });
         return;
       }
 
-      // Crear un certificado por cada PT
       ptList.forEach((pt: string) => {
         const normalizedPt = this.normalizePtForStorage(pt);
-        // Extraer el número para mostrar en el nombre del certificado
         const ptNumber = normalizedPt.replace(/^PT-/i, '');
 
         let certificateName = '';
-        if (documentType === 'IE') {
-          // Para IE: sin counter de DUT, incluir texto personalizado
-          const suffix = this.ieNameSuffix ? ` ${this.ieNameSuffix}` : '';
-          certificateName = `${projectId}-00 ${documentType} ${ptNumber}${suffix}`;
-        } else {
-          // Para DCC/TV: mantener formato original con counter
-          certificateName = `${projectId}-00 ${docLabel} ${ptNumber} ${counter}`;
-        }
+        const suffix = this.ieNameSuffix ? ` ${this.ieNameSuffix}` : '';
+        certificateName = `${projectId}-00 ${documentType} ${ptNumber}${suffix}`;
 
         certificates.push({
           name: certificateName,
+          id_dcc: certificateName,
           dutService: dut,
+          duts: [dut],
           pt: normalizedPt,
           counter: counter,
-          isTechnicalVerification: isTv,
+          isTechnicalVerification: false,
+          isGrouped: false,
         });
       });
     });
 
-    console.log('✅ GENERATED CERTIFICATES:', certificates);
+    console.log('✅ GENERATED IE CERTIFICATES:', certificates);
     return certificates;
   }
 
@@ -2362,19 +2433,20 @@ export class DccComponent implements OnInit {
         return null;
       }
 
-      return {
-        table: 'ie_tested_material_gis',
-        attributes: {
-          id_ie: certificateName,
-          fabricante: material.gis_fabricante || 'NV',
-          tipo: material.gis_tipo || 'NV',
-          fecha_fabricante: material.gis_fecha || null,
-          lote: material.gis_lote || 'NV',
-          tension_un: material.gis_tension_un || 'NV',
-          tension_ur: material.gis_tension_ur || 'NV',
-          norma: material.gis_norma || 'NV',
-        },
+      const attrs: any = {
+        id_ie: certificateName,
+        fabricante: material.gis_fabricante || 'NV',
+        tipo: material.gis_tipo || 'NV',
+        lote: material.gis_lote || 'NV',
+        tension_un: material.gis_tension_un || 'NV',
+        tension_ur: material.gis_tension_ur || 'NV',
+        norma: material.gis_norma || 'NV',
       };
+      if (material.gis_fecha) {
+        attrs.fecha_fabricante = material.gis_fecha;
+      }
+
+      return { table: 'ie_tested_material_gis', attributes: attrs };
     }
 
     if (!this.hasAnyIedCableMaterial(material)) {
@@ -3101,16 +3173,21 @@ export class DccComponent implements OnInit {
           console.log(`✅ DCC ${certificate.name} creado exitosamente`);
           console.log('DCC Response:', dccResponse);
 
-          // Crear el item asociado con todos los campos requeridos
+          const payload = this.prepareSavePayload([certificate]);
+          const mainItemAttr = payload.dcc_item[0] || {
+            id_dcc: certificate.name,
+            description: '',
+          };
+
           const createItem = {
             action: 'create',
             bd: this.database,
             table: 'dcc_item',
             opts: {
               attributes: {
-                id_dcc: certificate.name,
-                object: dutService.description || '',
-                serial_number: dutService.serial_number || '',
+                id_dcc: mainItemAttr.id_dcc,
+                description: mainItemAttr.description || '',
+                deleted: 0,
               },
             },
           };
@@ -3128,7 +3205,42 @@ export class DccComponent implements OnInit {
                 `✅ Item para DCC ${certificate.name} creado exitosamente`,
               );
               console.log('Item Response:', itemResponse);
-              return { dcc: dccResponse, item: itemResponse };
+
+              const childPromises = payload.dcc_items.map((childItem: any) => {
+                const createChild = {
+                  action: 'create',
+                  bd: this.database,
+                  table: 'dcc_items',
+                  opts: {
+                    attributes: {
+                      id_item: childItem.id_item,
+                      id_dcc: childItem.id_dcc,
+                      object: childItem.object || '',
+                      manufacturer: childItem.manufacturer || '',
+                      model: childItem.model || '',
+                      serial_number: childItem.serial_number || '',
+                      costumer_asset: childItem.costumer_asset || '',
+                      comment: childItem.comment || '',
+                      item_order: childItem.item_order || 0,
+                      deleted: 0,
+                    },
+                  },
+                };
+                return this.apiService
+                  .post(createChild, UrlClass.URLNuevo)
+                  .toPromise();
+              });
+
+              return Promise.all(childPromises).then((childResponses: any) => {
+                console.log(
+                  `✅ Hijos para DCC ${certificate.name} creados exitosamente`,
+                );
+                return {
+                  dcc: dccResponse,
+                  item: itemResponse,
+                  children: childResponses,
+                };
+              });
             })
             .catch((itemError: any) => {
               console.error(
@@ -3262,11 +3374,25 @@ export class DccComponent implements OnInit {
       },
     };
 
-    // Crear primero el IE y luego el item
-    this.apiService.post(createIe, UrlClass.URLNuevo).subscribe({
-      next: (ieResponse: any) => {
-        if (ieResponse.result) {
-          // Si el IE se creó exitosamente, crear el item
+    // Antes de crear, comprobar si el IE ya existe para evitar duplicados
+    const checkIeExists = {
+      action: 'get',
+      bd: this.database,
+      table: 'dcc_data',
+      opts: { where: { id: this.generatedIeCertificateNumber } },
+    };
+
+    this.apiService.post(checkIeExists, UrlClass.URLNuevo).subscribe({
+      next: (checkResp: any) => {
+        const exists =
+          Array.isArray(checkResp?.result) && checkResp.result.length > 0;
+        if (exists) {
+          // Si ya existe, procedemos a crear el item (si hace falta) y el material
+          console.log(
+            'ℹ️ IE ya existe, se omitirá su creación:',
+            this.generatedIeCertificateNumber,
+          );
+          // Crear item
           this.apiService.post(createItem, UrlClass.URLNuevo).subscribe({
             next: (itemResponse: any) => {
               const selectedMaterial = this.isIedModal
@@ -3307,6 +3433,14 @@ export class DccComponent implements OnInit {
               if (!testedMaterialInsert) {
                 finishSuccessFlow();
                 return;
+              }
+
+              // Ensure fecha_fabricante is not sent as empty string
+              if (
+                testedMaterialInsert.attributes &&
+                testedMaterialInsert.attributes.fecha_fabricante === ''
+              ) {
+                delete testedMaterialInsert.attributes.fecha_fabricante;
               }
 
               const createTestedMaterial = {
@@ -3485,10 +3619,28 @@ export class DccComponent implements OnInit {
         },
       };
 
-      // Crear promesa para este IE
+      // Crear promesa para este IE (verificar existencia antes de crear)
       const promise = this.apiService
-        .post(createIe, UrlClass.URLNuevo)
+        .post(
+          {
+            action: 'get',
+            bd: this.database,
+            table: 'dcc_data',
+            opts: { where: { id: certificate.name } },
+          },
+          UrlClass.URLNuevo,
+        )
         .toPromise()
+        .then((checkResp: any) => {
+          const exists =
+            Array.isArray(checkResp?.result) && checkResp.result.length > 0;
+          if (exists) {
+            console.log('ℹ️ IE ya existe (omitido):', certificate.name);
+            // Still attempt to create item and material
+            return { ie: checkResp };
+          }
+          return this.apiService.post(createIe, UrlClass.URLNuevo).toPromise();
+        })
         .then((ieResponse: any) => {
           console.log(`✅ IE ${certificate.name} creado exitosamente`);
           console.log('IE Response:', ieResponse);
@@ -3627,5 +3779,184 @@ export class DccComponent implements OnInit {
     if (this.statementsComponent) {
       this.statementsComponent.loadStatementsFromDatabase(this.databaseName);
     }
+  }
+
+  onDccCertificateSelect(index: number) {
+    this.dccSelectedCertificateIndex = index;
+    this.dccSelectedCertificate = this.dccCertificatesList[index];
+  }
+
+  onIeCertificateSelect(index: number) {
+    this.ieSelectedCertificateIndex = index;
+    this.ieSelectedCertificate = this.ieCertificatesList[index];
+  }
+
+  /**
+   * Fase 1: Agrupa los DUTs por sistema.
+   */
+  groupCertificates(duts: any[]): any[] {
+    if (!duts || duts.length === 0) {
+      return [];
+    }
+
+    const groupedBySystem: { [sistema: string]: any[] } = {};
+    const independentCertificates: any[] = [];
+
+    duts.forEach((dut) => {
+      const sistema = this.getDutField(dut, 'sistema');
+
+      if (!sistema || String(sistema).trim() === '') {
+        independentCertificates.push({
+          sistema: undefined,
+          isGrouped: false,
+          primaryDut: dut,
+          duts: [dut],
+        });
+      } else {
+        const key = String(sistema).trim();
+        if (!groupedBySystem[key]) {
+          groupedBySystem[key] = [];
+        }
+        groupedBySystem[key].push(dut);
+      }
+    });
+
+    const systemCertificates = Object.keys(groupedBySystem).map(
+      (sistemaName) => {
+        const systemDuts = groupedBySystem[sistemaName];
+        systemDuts.sort((a, b) => this.compareDutOrden(a, b));
+
+        return {
+          sistema: sistemaName,
+          isGrouped: true,
+          primaryDut: systemDuts[0],
+          duts: systemDuts,
+        };
+      },
+    );
+
+    return [...systemCertificates, ...independentCertificates];
+  }
+
+  /**
+   * Fase 2: Construye el objeto JSON para guardar en dcc_item y dcc_items.
+   */
+  prepareSavePayload(groupedCertificates: any[]): any {
+    const dccItemPayload: any[] = [];
+    const dccItemsPayload: any[] = [];
+
+    groupedCertificates.forEach((cert) => {
+      const certificateId = cert.id_dcc || cert.name || '';
+      
+      // La description del dcc_item SIEMPRE debe ser igual a la propiedad description del PRIMER DUT
+      const firstDut = cert.duts && cert.duts.length > 0 ? cert.duts[0] : cert.primaryDut;
+      const descriptionVal = this.getDutField(firstDut, 'description') || '';
+
+      console.log(`[prepareSavePayload Logging] Certificado: ${certificateId}`, {
+        totalDuts: cert.duts?.length || 0,
+        firstDut: firstDut,
+        description: descriptionVal
+      });
+
+      dccItemPayload.push({
+        id_dcc: certificateId,
+        description: descriptionVal,
+      });
+
+      const childDuts = cert.duts || [cert.primaryDut];
+      childDuts.forEach((dut: any, index: number) => {
+        dccItemsPayload.push({
+          id_dcc: certificateId,
+          object: this.getDutField(dut, 'description') || '',
+          manufacturer: this.getDutField(dut, 'manufacturer') || '',
+          model: this.getDutField(dut, 'model') || '',
+          serial_number: this.getDutField(dut, 'serial_number') || '',
+          costumer_asset: this.getDutField(dut, 'customer_asset_id') || '',
+          comment: this.getDutField(dut, 'rango_calibracion') || '',
+          id_item: 1,
+          item_order: index + 1,
+        });
+      });
+    });
+
+    return {
+      dcc_item: dccItemPayload,
+      dcc_items: dccItemsPayload,
+    };
+  }
+
+  buildDccItemPayload(groupedCertificates: any[]): any[] {
+    if (!groupedCertificates || groupedCertificates.length === 0) {
+      return [];
+    }
+
+    return groupedCertificates.map((cert) => {
+      const certificateId = cert.id_dcc || cert.name || this.generatedCertificateNumber;
+      
+      // La description del dcc_item SIEMPRE debe ser igual a la propiedad description del PRIMER DUT
+      const firstDut = cert.duts && cert.duts.length > 0 ? cert.duts[0] : cert.primaryDut;
+      const descriptionVal = this.getDutField(firstDut, 'description') || '';
+
+      console.log(`[buildDccItemPayload Logging] Certificado: ${certificateId}`, {
+        totalDuts: cert.duts?.length || 0,
+        firstDut: firstDut,
+        description: descriptionVal
+      });
+
+      return {
+        action: 'create',
+        bd: this.database,
+        table: 'dcc_item',
+        opts: {
+          attributes: {
+            id_dcc: certificateId,
+            description: descriptionVal
+          }
+        }
+      };
+    });
+  }
+
+  private getDutField(dut: any, field: string): any {
+    if (!dut) return undefined;
+    if (dut.dut_service && dut.dut_service[field] !== undefined) {
+      return dut.dut_service[field];
+    }
+    if (dut.dutService && dut.dutService[field] !== undefined) {
+      return dut.dutService[field];
+    }
+    return dut[field];
+  }
+
+  private getDutServiceRepresentation(dut: any): any {
+    if (!dut) return null;
+    if (dut.dutService) return dut.dutService;
+    if (dut.dut_service) return dut.dut_service;
+    return dut;
+  }
+
+  private compareDutOrden(a: any, b: any): number {
+    const valA = this.getDutField(a, 'orden');
+    const valB = this.getDutField(b, 'orden');
+
+    if (valA === undefined || valA === null) return 1;
+    if (valB === undefined || valB === null) return -1;
+
+    const partsA = String(valA)
+      .split('.')
+      .map((p) => parseFloat(p) || 0);
+    const partsB = String(valB)
+      .split('.')
+      .map((p) => parseFloat(p) || 0);
+
+    const maxLength = Math.max(partsA.length, partsB.length);
+    for (let i = 0; i < maxLength; i++) {
+      const numA = partsA[i] || 0;
+      const numB = partsB[i] || 0;
+      if (numA !== numB) {
+        return numA - numB;
+      }
+    }
+    return 0;
   }
 }

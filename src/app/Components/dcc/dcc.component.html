@@ -1,8 +1,8 @@
-﻿<div class="dcc-container">
+<div class="dcc-container">
   <!-- Initial Options Screen -->
   <div *ngIf="showInitialOptions" class="initial-options">
     <div class="options-content">
-      <h1>Gestión de DCC / IE</h1>
+      <h1>Gestión de DCC / DIE</h1>
       <p>Selecciona una opción para continuar:</p>
 
       <div class="option-buttons">
@@ -23,7 +23,7 @@
         </button>
         <button class="option-btn load-dcc-btn" (click)="openDccSelectModal()">
           <i class="material-icons">folder_open</i>
-          <span>Cargar DCC/IE</span>
+          <span>Cargar DCC/DIE</span>
         </button>
         <button
           class="option-btn load-btn"
@@ -32,6 +32,16 @@
         >
           <i class="material-icons">upload_file</i>
           <span>Cargar XML ()</span>
+        </button>
+      </div>
+      <div class="option-buttons secondary-row">
+        <button
+          class="option-btn list-projects-btn"
+          (click)="openProjectListWindow()"
+          type="button"
+        >
+          <i class="material-icons">view_list</i>
+          <span>Listado de proyectos</span>
         </button>
       </div>
     </div>
@@ -1356,8 +1366,14 @@
 
     <!-- Tab Content -->
     <div class="tab-content">
+      <!-- Loading indicator -->
+      <div *ngIf="isLoading" class="loading-container tab-panel">
+        <div class="spinner"></div>
+        <p class="loading-text">Cargando datos del apartado...</p>
+      </div>
+
       <!-- Administrative Data Tab -->
-      <div *ngIf="activeTab === 'administrative-data'" class="tab-panel">
+      <div *ngIf="!isLoading && activeTab === 'administrative-data'" class="tab-panel">
         <app-administrative-data
           [documentType]="documentType"
         ></app-administrative-data>
@@ -1372,7 +1388,7 @@
       </div>
 
       <!-- Items Tab -->
-      <div *ngIf="activeTab === 'items'" class="tab-panel">
+      <div *ngIf="!isLoading && activeTab === 'items'" class="tab-panel">
         <app-items></app-items>
         <!-- Navigation Buttons -->
         <div class="step-navigation">
@@ -1388,7 +1404,7 @@
       </div>
 
       <!-- Tested Material Tab (IE/IED only) -->
-      <div *ngIf="activeTab === 'tested-material'" class="tab-panel">
+      <div *ngIf="!isLoading && activeTab === 'tested-material'" class="tab-panel">
         <ng-container *ngComponentOutlet="testedMaterialCmp"></ng-container>
         <!-- Navigation Buttons -->
         <div class="step-navigation">
@@ -1404,7 +1420,7 @@
       </div>
 
       <!-- Statements Tab -->
-      <div *ngIf="activeTab === 'statements'" class="tab-panel">
+      <div *ngIf="!isLoading && activeTab === 'statements'" class="tab-panel">
         <app-statements></app-statements>
         <!-- Navigation Buttons -->
         <div class="step-navigation">
@@ -1420,7 +1436,7 @@
       </div>
 
       <!-- Results Tab -->
-      <div *ngIf="activeTab === 'results'" class="tab-panel">
+      <div *ngIf="!isLoading && activeTab === 'results'" class="tab-panel">
         <app-results [operationMode]="operationMode"></app-results>
         <!-- Navigation Buttons -->
         <div class="step-navigation">
@@ -1436,7 +1452,7 @@
       </div>
 
       <!-- IE Results Tab -->
-      <div *ngIf="activeTab === 'ie-results'" class="tab-panel">
+      <div *ngIf="!isLoading && activeTab === 'ie-results'" class="tab-panel">
         <ng-container *ngComponentOutlet="ieResultsCmp"></ng-container>
         <!-- Navigation Buttons -->
         <div class="step-navigation">
@@ -1452,7 +1468,7 @@
       </div>
 
       <!-- Preview Tab -->
-      <div *ngIf="activeTab === 'preview'" class="tab-panel">
+      <div *ngIf="!isLoading && activeTab === 'preview'" class="tab-panel">
         <app-preview></app-preview>
         <!-- Navigation Buttons -->
         <div class="step-navigation">

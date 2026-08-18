@@ -21,6 +21,7 @@ export class TestedMaterialComponent implements OnInit, OnDestroy {
   testedMaterial: any = {};
   testedMaterialBackup: any = {};
   isEditingTestedMaterial: boolean = false;
+  isLoadingTestedMaterial: boolean = false;
 
   constructor(private dccDataService: DccDataService) {}
 
@@ -57,6 +58,11 @@ export class TestedMaterialComponent implements OnInit, OnDestroy {
     return this.getCurrentMaterialType() === 'gis';
   }
 
+  getDisplayMaterialType(): string {
+    const type = this.getCurrentMaterialType();
+    return type === 'gis' ? 'GIS' : 'Cable';
+  }
+
   private isIeCertificate(certificateNumber?: string | null): boolean {
     return /\bIE\b/i.test(certificateNumber || '');
   }
@@ -80,10 +86,81 @@ export class TestedMaterialComponent implements OnInit, OnDestroy {
     return ptNumber !== null && [2, 4, 8].includes(ptNumber) ? 'gis' : 'cable';
   }
 
+  private async loadProjectTypeFromDB(
+    certificateNumber: string,
+  ): Promise<'cable' | 'gis' | null> {
+    return new Promise<'cable' | 'gis' | null>((resolve) => {
+      const projectKey =
+        this.extractProjectKeyFromCertificate(certificateNumber);
+      if (!projectKey) {
+        resolve(null);
+        return;
+      }
+
+      const prefix = projectKey.slice(0, 2).toUpperCase();
+      const isPh = prefix === 'PH';
+      const table = isPh ? 'opportunity' : 'opportunity_calpro';
+      const getProjectType = {
+        action: 'get',
+        bd: 'hvtest2',
+        table,
+        opts: {
+          where: { id: projectKey },
+          attributes: isPh ? ['dut'] : ['tipo'],
+        },
+      };
+
+      this.dccDataService.post(getProjectType).subscribe({
+        next: (response: any) => {
+          const record = response?.result?.[0];
+          if (!record) {
+            resolve(null);
+            return;
+          }
+
+          const typeValue = isPh ? record.dut : record.tipo;
+          if (!typeValue) {
+            resolve(null);
+            return;
+          }
+
+          const typeStr = typeValue.toString().toLowerCase().trim();
+          // Si contiene GIS, es GIS
+          if (typeStr.includes('gis')) {
+            resolve('gis');
+          } else {
+            resolve('cable');
+          }
+        },
+        error: () => resolve(null),
+      });
+    });
+  }
+
+  private extractProjectKeyFromCertificate(cert: string): string {
+    const text = (cert || '').toString().trim().toUpperCase();
+    const match = text.match(/^([A-Z]{2}\d{4})/);
+    return match ? match[1] : '';
+  }
+
   private getCurrentMaterialType(): 'cable' | 'gis' {
-    return this.testedMaterial?.material_type === 'gis'
-      ? 'gis'
-      : this.inferMaterialTypeFromPt(this.coreData?.pt_id);
+    // Si el material_type está explícitamente establecido, usarlo
+    if (this.testedMaterial?.material_type) {
+      return this.testedMaterial.material_type === 'gis' ? 'gis' : 'cable';
+    }
+    // Si hay datos GIS específicos, es GIS
+    if (this.testedMaterial?.gis_fabricante || this.testedMaterial?.gis_tipo) {
+      return 'gis';
+    }
+    // Si hay datos Cable específicos, es Cable
+    if (
+      this.testedMaterial?.cable_fabricante ||
+      this.testedMaterial?.terminal1_fabricante
+    ) {
+      return 'cable';
+    }
+    // Finalmente, inferir según PT
+    return this.inferMaterialTypeFromPt(this.coreData?.pt_id);
   }
 
   private getEmptyTestedMaterial(materialType: 'cable' | 'gis'): any {
@@ -166,52 +243,64 @@ export class TestedMaterialComponent implements OnInit, OnDestroy {
   }
 
   private loadTestedMaterialFromDB(dccId: string): void {
-    const preferredType = this.inferMaterialTypeFromPt(this.coreData?.pt_id);
-    const gisQuery = {
-      action: 'get',
-      bd: this.database,
-      table: 'ie_tested_material_gis',
-      opts: {
-        where: { id_ie: dccId, deleted: 0 },
-      },
-    };
+    // Indicate loading state
+    this.isLoadingTestedMaterial = true;
 
-    this.dccDataService.post(gisQuery).subscribe({
-      next: (gisResponse: any) => {
-        const gisRow = gisResponse?.result?.[0];
-        if (gisRow) {
-          this.testedMaterial = this.mapGisRow(gisRow);
+    // Primero intentar cargar el tipo de proyecto desde hvtest2
+    this.loadProjectTypeFromDB(dccId).then((projectType) => {
+      const preferredType =
+        projectType || this.inferMaterialTypeFromPt(this.coreData?.pt_id);
+
+      const gisQuery = {
+        action: 'get',
+        bd: this.database,
+        table: 'ie_tested_material_gis',
+        opts: {
+          where: { id_ie: dccId, deleted: 0 },
+        },
+      };
+
+      this.dccDataService.post(gisQuery).subscribe({
+        next: (gisResponse: any) => {
+          const gisRow = gisResponse?.result?.[0];
+          if (gisRow) {
+            this.testedMaterial = this.mapGisRow(gisRow);
+            this.dccDataService.updateTestedMaterial(this.testedMaterial);
+            this.isLoadingTestedMaterial = false;
+            return;
+          }
+
+          const cableQuery = {
+            action: 'get',
+            bd: this.database,
+            table: 'ie_tested_material',
+            opts: {
+              where: { id_ie: dccId, deleted: 0 },
+            },
+          };
+
+          this.dccDataService.post(cableQuery).subscribe({
+            next: (cableResponse: any) => {
+              const cableRow = cableResponse?.result?.[0];
+              this.testedMaterial = cableRow
+                ? this.mapCableRow(cableRow)
+                : this.getEmptyTestedMaterial(preferredType);
+              this.dccDataService.updateTestedMaterial(this.testedMaterial);
+              this.isLoadingTestedMaterial = false;
+            },
+            error: () => {
+              this.testedMaterial = this.getEmptyTestedMaterial(preferredType);
+              this.dccDataService.updateTestedMaterial(this.testedMaterial);
+              this.isLoadingTestedMaterial = false;
+            },
+          });
+        },
+        error: () => {
+          this.testedMaterial = this.getEmptyTestedMaterial(preferredType);
           this.dccDataService.updateTestedMaterial(this.testedMaterial);
-          return;
-        }
-
-        const cableQuery = {
-          action: 'get',
-          bd: this.database,
-          table: 'ie_tested_material',
-          opts: {
-            where: { id_ie: dccId, deleted: 0 },
-          },
-        };
-
-        this.dccDataService.post(cableQuery).subscribe({
-          next: (cableResponse: any) => {
-            const cableRow = cableResponse?.result?.[0];
-            this.testedMaterial = cableRow
-              ? this.mapCableRow(cableRow)
-              : this.getEmptyTestedMaterial(preferredType);
-            this.dccDataService.updateTestedMaterial(this.testedMaterial);
-          },
-          error: () => {
-            this.testedMaterial = this.getEmptyTestedMaterial(preferredType);
-            this.dccDataService.updateTestedMaterial(this.testedMaterial);
-          },
-        });
-      },
-      error: () => {
-        this.testedMaterial = this.getEmptyTestedMaterial(preferredType);
-        this.dccDataService.updateTestedMaterial(this.testedMaterial);
-      },
+          this.isLoadingTestedMaterial = false;
+        },
+      });
     });
   }
 
@@ -252,16 +341,22 @@ export class TestedMaterialComponent implements OnInit, OnDestroy {
       materialType === 'gis' ? 'ie_tested_material_gis' : 'ie_tested_material';
     const attributes =
       materialType === 'gis'
-        ? {
-            id_ie: dccId,
-            fabricante: this.testedMaterial.gis_fabricante || '',
-            tipo: this.testedMaterial.gis_tipo || '',
-            fecha_fabricante: this.testedMaterial.gis_fecha || null,
-            lote: this.testedMaterial.gis_lote || '',
-            tension_un: this.testedMaterial.gis_tension_un || '',
-            tension_ur: this.testedMaterial.gis_tension_ur || '',
-            norma: this.testedMaterial.gis_norma || '',
-          }
+        ? (() => {
+            const attrs: any = {
+              id_ie: dccId,
+              fabricante: this.testedMaterial.gis_fabricante || '',
+              tipo: this.testedMaterial.gis_tipo || '',
+              lote: this.testedMaterial.gis_lote || '',
+              tension_un: this.testedMaterial.gis_tension_un || '',
+              tension_ur: this.testedMaterial.gis_tension_ur || '',
+              norma: this.testedMaterial.gis_norma || '',
+            };
+            // Only include fecha_fabricante when provided (avoid inserting empty string)
+            if (this.testedMaterial.gis_fecha) {
+              attrs.fecha_fabricante = this.testedMaterial.gis_fecha;
+            }
+            return attrs;
+          })()
         : {
             id_ie: dccId,
             material_description:

@@ -4,7 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { DccDataService } from '../../services/dcc-data.service';
 import { ApiService } from '../../api/api.service';
 import { UrlClass } from '../../shared/models/url.model';
-import { Subscription } from 'rxjs';
+import { Subscription, of } from 'rxjs';
+import { switchMap, finalize, catchError, map } from 'rxjs/operators';
 import Swal from 'sweetalert2';
 
 @Component({
@@ -20,6 +21,7 @@ export class ItemsComponent implements OnInit, OnDestroy {
   editingStates: { [key: string]: boolean } = {};
   isEditingDescription: boolean = false;
   isEditingItems: boolean = false;
+  isLoading: boolean = false;
 
   private subscription = new Subscription();
   private database: string = 'calibraciones';
@@ -60,6 +62,8 @@ export class ItemsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoading = true;
+
     const getItem = {
       action: 'get',
       bd: this.database,
@@ -72,92 +76,90 @@ export class ItemsComponent implements OnInit, OnDestroy {
       },
     };
 
-    this.apiService.post(getItem, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        if (response.result && response.result.length > 0) {
-          const item = response.result[0];
-          this.dccItemId = item.id;
-          this.description = item.description || '';
-          this.loadItemsFromDB(item.id, dccId);
-        } else {
+    this.apiService.post(getItem, UrlClass.URLNuevo)
+      .pipe(
+        switchMap((responseItem: any) => {
+          if (responseItem.result && responseItem.result.length > 0) {
+            const item = responseItem.result[0];
+            const itemId = item.id;
+            const description = item.description || '';
+
+            const getItems = {
+              action: 'get',
+              bd: this.database,
+              table: 'dcc_items',
+              opts: {
+                where: {
+                  id_item: itemId,
+                  id_dcc: dccId,
+                  deleted: 0,
+                },
+                order_by: ['item_order', 'ASC'],
+              },
+            };
+
+            return this.apiService.post(getItems, UrlClass.URLNuevo).pipe(
+              switchMap((responseItems: any) => {
+                if (responseItems?.result && responseItems.result.length > 0) {
+                  return of({
+                    itemId,
+                    description,
+                    items: responseItems.result,
+                  });
+                } else {
+                  // Fallback alternative query
+                  const getItemsAlternative = {
+                    action: 'get',
+                    bd: this.database,
+                    table: 'dcc_items',
+                    opts: {
+                      where: {
+                        id_dcc: dccId,
+                        deleted: 0,
+                      },
+                      order_by: ['item_order', 'ASC'],
+                    },
+                  };
+                  return this.apiService.post(getItemsAlternative, UrlClass.URLNuevo).pipe(
+                    map((responseAlt: any) => ({
+                      itemId,
+                      description,
+                      items: responseAlt?.result || [],
+                    }))
+                  );
+                }
+              }),
+              catchError((err) => {
+                console.error('Error loading items from items table:', err);
+                return of({ itemId, description, items: [] });
+              })
+            );
+          } else {
+            return of({ itemId: null, description: '', items: [] });
+          }
+        }),
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe({
+        next: (data: { itemId: number | null; description: string; items: any[] }) => {
+          this.dccItemId = data.itemId;
+          this.description = data.description;
+          this.itemsList = data.items;
+          if (this.itemsList.length > 0) {
+            this.autoAssignOrderIfNeeded();
+          }
+          this.dccDataService.updateItemsList(this.itemsList, this.description);
+        },
+        error: (error) => {
+          console.error('Error loading items/description from database:', error);
           this.dccItemId = null;
           this.description = '';
           this.itemsList = [];
-          // Actualizar el servicio con datos vacíos
           this.dccDataService.updateItemsList([], '');
-        }
-      },
-      error: (error) => {
-        console.error('Error loading description:', error);
-        this.description = '';
-        this.itemsList = [];
-        this.dccDataService.updateItemsList([], '');
-      },
-    });
-  }
-
-  private loadItemsFromDB(itemId: number, dccId: string): void {
-    const getItems = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_items',
-      opts: {
-        where: {
-          id_item: itemId,
-          id_dcc: dccId,
-          deleted: 0,
         },
-        order_by: ['item_order', 'ASC'],
-      },
-    };
-
-    this.apiService.post(getItems, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        if (response?.result && response.result.length > 0) {
-          this.itemsList = response.result;
-          this.autoAssignOrderIfNeeded();
-        } else {
-          this.loadItemsFromDBAlternative(dccId);
-          return;
-        }
-        this.dccDataService.updateItemsList(this.itemsList, this.description);
-      },
-      error: (error) => {
-        this.itemsList = [];
-        this.dccDataService.updateItemsList([], this.description);
-      },
-    });
-  }
-
-  private loadItemsFromDBAlternative(dccId: string): void {
-    const getItems = {
-      action: 'get',
-      bd: this.database,
-      table: 'dcc_items',
-      opts: {
-        where: {
-          id_dcc: dccId,
-          deleted: 0,
-        },
-        order_by: ['item_order', 'ASC'],
-      },
-    };
-
-    this.apiService.post(getItems, UrlClass.URLNuevo).subscribe({
-      next: (response: any) => {
-        this.itemsList = response.result || [];
-        if (this.itemsList.length > 0) {
-          // Auto-asignar orden si todos los items tienen order = 0
-          this.autoAssignOrderIfNeeded();
-        }
-        // Actualizar el servicio global con itemsList y description
-        this.dccDataService.updateItemsList(this.itemsList, this.description);
-      },
-      error: (error) => {
-        this.itemsList = [];
-        this.dccDataService.updateItemsList([], this.description);
-      },
-    });
+      });
   }
 
   isEditing(key: string): boolean {

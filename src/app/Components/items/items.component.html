@@ -1,243 +1,251 @@
 <div class="items-container">
-  <div class="section-header">
-    <h3>Items (DUT)</h3>
-    <p>Gestión de descripción e identificaciones de objetos</p>
+  <!-- Loading indicator -->
+  <div *ngIf="isLoading" class="loading-container">
+    <div class="spinner"></div>
+    <p class="loading-text">Cargando datos del apartado...</p>
   </div>
 
-  <!-- Description Block -->
-  <div class="data-block">
-    <div class="block-header">
-      <h4>Description</h4>
-      <div class="block-actions">
-        <button
-          *ngIf="!isEditingDescription"
-          class="edit-btn"
-          (click)="toggleEditDescription()"
-        >
-          <i class="material-icons">edit</i>
-          Editar
-        </button>
-
-        <ng-container *ngIf="isEditingDescription">
-          <button class="save-btn" (click)="saveDescription()">
-            <i class="material-icons">save</i>
-            Guardar
-          </button>
-          <button class="cancel-btn" (click)="toggleEditDescription()">
-            <i class="material-icons">close</i>
-            Cancelar
-          </button>
-        </ng-container>
-      </div>
+  <ng-container *ngIf="!isLoading">
+    <div class="section-header">
+      <h3>Items (DUT)</h3>
+      <p>Gestión de descripción e identificaciones de objetos</p>
     </div>
 
-    <div class="block-content">
-      <!-- View Mode -->
-      <div *ngIf="!isEditingDescription" class="description-view">
-        <p class="description-text">{{ description || "No definida" }}</p>
-      </div>
-
-      <!-- Edit Mode -->
-      <div *ngIf="isEditingDescription" class="description-edit">
-        <textarea
-          [(ngModel)]="description"
-          placeholder="Ingrese la descripción del DCC/IE"
-          rows="15"
-          class="description-textarea"
-        ></textarea>
-      </div>
-    </div>
-  </div>
-
-  <!-- Items Block -->
-  <div class="data-block">
-    <div class="block-header">
-      <h4>Items</h4>
-      <div class="block-actions">
-        <button
-          *ngIf="!isEditing('items')"
-          class="edit-btn"
-          (click)="toggleEdit('items')"
-        >
-          <i class="material-icons">edit</i>
-          Editar
-        </button>
-
-        <ng-container *ngIf="isEditing('items')">
-          <button class="add-btn" (click)="addItem()">
-            <i class="material-icons">add</i>
-            Agregar Item
+    <!-- Description Block -->
+    <div class="data-block">
+      <div class="block-header">
+        <h4>Description</h4>
+        <div class="block-actions">
+          <button
+            *ngIf="!isEditingDescription"
+            class="edit-btn"
+            (click)="toggleEditDescription()"
+          >
+            <i class="material-icons">edit</i>
+            Editar
           </button>
-          <button class="save-btn" (click)="saveBlock('items')">
-            <i class="material-icons">save</i>
-            Guardar
-          </button>
-          <button class="cancel-btn" (click)="cancelEdit('items')">
-            <i class="material-icons">close</i>
-            Cancelar
-          </button>
-        </ng-container>
-      </div>
-    </div>
 
-    <div class="block-content">
-      <!-- View Mode -->
-      <div
-        *ngIf="!isEditing('items') && itemsList?.length > 0"
-        class="items-view"
-      >
-        <div class="items-table-wrapper">
-          <table class="items-table">
-            <thead>
-              <tr>
-                <th class="item-number">#</th>
-                <th>Object Name</th>
-                <th>Manufacturer</th>
-                <th>Model</th>
-                <th>Serial Number</th>
-                <th>Customer Asset ID</th>
-                <th>Comment</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let item of itemsList; let i = index">
-                <td class="item-number">{{ i + 1 }}</td>
-                <td>{{ item.object || "-" }}</td>
-                <td>{{ item.manufacturer || "-" }}</td>
-                <td>{{ item.model || "-" }}</td>
-                <td>{{ item.serial_number || "-" }}</td>
-                <td>{{ item.costumer_asset || "-" }}</td>
-                <td>{{ item.comment || "-" }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <ng-container *ngIf="isEditingDescription">
+            <button class="save-btn" (click)="saveDescription()">
+              <i class="material-icons">save</i>
+              Guardar
+            </button>
+            <button class="cancel-btn" (click)="toggleEditDescription()">
+              <i class="material-icons">close</i>
+              Cancelar
+            </button>
+          </ng-container>
         </div>
       </div>
 
-      <!-- Edit Mode -->
-      <div *ngIf="isEditing('items')" class="items-edit">
-        <div class="items-table-wrapper">
-          <table class="items-table editable">
-            <thead>
-              <tr>
-                <th class="item-number">#</th>
-                <th>Object Name</th>
-                <th>Manufacturer</th>
-                <th>Model</th>
-                <th>Serial Number</th>
-                <th>Customer Asset ID</th>
-                <th>Comment</th>
-                <th class="actions-column">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                *ngFor="let item of itemsList; let i = index"
-                [class.marked-for-deletion]="item._markedForDeletion"
-              >
-                <td class="item-number">
-                  <span>{{ i + 1 }}</span>
-                  <span
-                    *ngIf="item._markedForDeletion"
-                    class="deletion-indicator"
-                    title="Marcado para eliminación"
-                  >
-                    <i class="material-icons">delete_forever</i>
-                  </span>
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    [(ngModel)]="item.object"
-                    placeholder="Object name"
-                    [disabled]="item._markedForDeletion"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    [(ngModel)]="item.manufacturer"
-                    placeholder="Manufacturer"
-                    [disabled]="item._markedForDeletion"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    [(ngModel)]="item.model"
-                    placeholder="Model"
-                    [disabled]="item._markedForDeletion"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    [(ngModel)]="item.serial_number"
-                    placeholder="Serial #"
-                    [disabled]="item._markedForDeletion"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    [(ngModel)]="item.costumer_asset"
-                    placeholder="Asset ID"
-                    [disabled]="item._markedForDeletion"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    [(ngModel)]="item.comment"
-                    placeholder="Comment"
-                    [disabled]="item._markedForDeletion"
-                  />
-                </td>
-                <td class="actions-column">
-                  <div class="row-actions">
-                    <button
-                      class="reorder-btn up-btn"
-                      (click)="moveItemUp(i)"
-                      [disabled]="i === 0"
-                      title="Mover hacia arriba"
+      <div class="block-content">
+        <!-- View Mode -->
+        <div *ngIf="!isEditingDescription" class="description-view">
+          <p class="description-text">{{ description || "No definida" }}</p>
+        </div>
+
+        <!-- Edit Mode -->
+        <div *ngIf="isEditingDescription" class="description-edit">
+          <textarea
+            [(ngModel)]="description"
+            placeholder="Ingrese la descripción del DCC/IE"
+            rows="15"
+            class="description-textarea"
+          ></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Items Block -->
+    <div class="data-block">
+      <div class="block-header">
+        <h4>Items</h4>
+        <div class="block-actions">
+          <button
+            *ngIf="!isEditing('items')"
+            class="edit-btn"
+            (click)="toggleEdit('items')"
+          >
+            <i class="material-icons">edit</i>
+            Editar
+          </button>
+
+          <ng-container *ngIf="isEditing('items')">
+            <button class="add-btn" (click)="addItem()">
+              <i class="material-icons">add</i>
+              Agregar Item
+            </button>
+            <button class="save-btn" (click)="saveBlock('items')">
+              <i class="material-icons">save</i>
+              Guardar
+            </button>
+            <button class="cancel-btn" (click)="cancelEdit('items')">
+              <i class="material-icons">close</i>
+              Cancelar
+            </button>
+          </ng-container>
+        </div>
+      </div>
+
+      <div class="block-content">
+        <!-- View Mode -->
+        <div
+          *ngIf="!isEditing('items') && itemsList?.length > 0"
+          class="items-view"
+        >
+          <div class="items-table-wrapper">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th class="item-number">#</th>
+                  <th>Object Name</th>
+                  <th>Manufacturer</th>
+                  <th>Model</th>
+                  <th>Serial Number</th>
+                  <th>Customer Asset ID</th>
+                  <th>Comment</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let item of itemsList; let i = index">
+                  <td class="item-number">{{ i + 1 }}</td>
+                  <td>{{ item.object || "-" }}</td>
+                  <td>{{ item.manufacturer || "-" }}</td>
+                  <td>{{ item.model || "-" }}</td>
+                  <td>{{ item.serial_number || "-" }}</td>
+                  <td>{{ item.costumer_asset || "-" }}</td>
+                  <td>{{ item.comment || "-" }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Edit Mode -->
+        <div *ngIf="isEditing('items')" class="items-edit">
+          <div class="items-table-wrapper">
+            <table class="items-table editable">
+              <thead>
+                <tr>
+                  <th class="item-number">#</th>
+                  <th>Object Name</th>
+                  <th>Manufacturer</th>
+                  <th>Model</th>
+                  <th>Serial Number</th>
+                  <th>Customer Asset ID</th>
+                  <th>Comment</th>
+                  <th class="actions-column">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  *ngFor="let item of itemsList; let i = index"
+                  [class.marked-for-deletion]="item._markedForDeletion"
+                >
+                  <td class="item-number">
+                    <span>{{ i + 1 }}</span>
+                    <span
+                      *ngIf="item._markedForDeletion"
+                      class="deletion-indicator"
+                      title="Marcado para eliminación"
                     >
-                      <i class="material-icons">arrow_upward</i>
-                    </button>
-                    <button
-                      class="reorder-btn down-btn"
-                      (click)="moveItemDown(i)"
-                      [disabled]="i === itemsList.length - 1"
-                      title="Mover hacia abajo"
-                    >
-                      <i class="material-icons">arrow_downward</i>
-                    </button>
-                    <button
-                      class="remove-btn"
-                      (click)="removeItem(i)"
+                      <i class="material-icons">delete_forever</i>
+                    </span>
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      [(ngModel)]="item.object"
+                      placeholder="Object name"
                       [disabled]="item._markedForDeletion"
-                      title="Eliminar item"
-                    >
-                      <i class="material-icons">delete</i>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      [(ngModel)]="item.manufacturer"
+                      placeholder="Manufacturer"
+                      [disabled]="item._markedForDeletion"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      [(ngModel)]="item.model"
+                      placeholder="Model"
+                      [disabled]="item._markedForDeletion"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      [(ngModel)]="item.serial_number"
+                      placeholder="Serial #"
+                      [disabled]="item._markedForDeletion"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      [(ngModel)]="item.costumer_asset"
+                      placeholder="Asset ID"
+                      [disabled]="item._markedForDeletion"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      [(ngModel)]="item.comment"
+                      placeholder="Comment"
+                      [disabled]="item._markedForDeletion"
+                    />
+                  </td>
+                  <td class="actions-column">
+                    <div class="row-actions">
+                      <button
+                        class="reorder-btn up-btn"
+                        (click)="moveItemUp(i)"
+                        [disabled]="i === 0"
+                        title="Mover hacia arriba"
+                      >
+                        <i class="material-icons">arrow_upward</i>
+                      </button>
+                      <button
+                        class="reorder-btn down-btn"
+                        (click)="moveItemDown(i)"
+                        [disabled]="i === itemsList.length - 1"
+                        title="Mover hacia abajo"
+                      >
+                        <i class="material-icons">arrow_downward</i>
+                      </button>
+                      <button
+                        class="remove-btn"
+                        (click)="removeItem(i)"
+                        [disabled]="item._markedForDeletion"
+                        title="Eliminar item"
+                      >
+                        <i class="material-icons">delete</i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
 
-      <!-- Empty State -->
-      <div
-        *ngIf="!isEditing('items') && !itemsList?.length"
-        class="empty-state"
-      >
-        <div class="empty-content">
-          <i class="material-icons">inventory_2</i>
-          <h4>No hay items registrados</h4>
-          <p>Haz clic en "Editar" para agregar items a este certificado.</p>
+        <!-- Empty State -->
+        <div
+          *ngIf="!isEditing('items') && !itemsList?.length"
+          class="empty-state"
+        >
+          <div class="empty-content">
+            <i class="material-icons">inventory_2</i>
+            <h4>No hay items registrados</h4>
+            <p>Haz clic en "Editar" para agregar items a este certificado.</p>
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  </ng-container>
 </div>
