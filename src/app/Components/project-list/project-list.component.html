@@ -1,15 +1,15 @@
 <div class="project-list-container">
   <div class="project-list-card">
     <div class="header-row">
-      <h1>Listado de proyectos</h1>
+      <h1>Histórico de servicios</h1>
       <button class="btn btn-back" (click)="backToMenu()">
         ← Volver al menú
       </button>
     </div>
     <div>
       <p>
-        Listado de proyectos que se han realizado en el rango de fechas
-        seleccionado.
+        Histórico de servicios adjudicados, realizados y finalizados en el rango
+        de fechas seleccionado.
       </p>
     </div>
 
@@ -43,7 +43,7 @@
       </div>
 
       <div class="filter-group">
-        <label>PH o PC</label>
+        <label>Tipo de servicio</label>
         <div class="selects">
           <select [(ngModel)]="selectedType" (ngModelChange)="onSearch()">
             <option value="Todos">Todos</option>
@@ -54,7 +54,7 @@
       </div>
 
       <div class="filter-group">
-        <label>Tipo</label>
+        <label>Dut</label>
         <div class="selects">
           <select
             [(ngModel)]="selectedProjectType"
@@ -67,12 +67,57 @@
         </div>
       </div>
 
-      <div class="filter-group">
+      <div class="filter-group multiselect-group">
         <label>Etapa</label>
+        <div class="multiselect-container">
+          <button
+            type="button"
+            class="multiselect-trigger"
+            (click)="toggleStageDropdown()"
+          >
+            <span class="trigger-text">{{ getStageButtonText() }}</span>
+            <span class="trigger-arrow">{{
+              isStageDropdownOpen ? "▲" : "▼"
+            }}</span>
+          </button>
+
+          <div class="multiselect-dropdown" *ngIf="isStageDropdownOpen">
+            <div class="multiselect-actions">
+              <button
+                type="button"
+                class="action-btn"
+                (click)="selectAllStages()"
+              >
+                Todas
+              </button>
+              <button type="button" class="action-btn" (click)="clearStages()">
+                Limpiar
+              </button>
+            </div>
+            <div class="multiselect-options">
+              <label
+                *ngFor="let stage of stageOptions"
+                class="multiselect-option"
+                (click)="$event.stopPropagation()"
+              >
+                <input
+                  type="checkbox"
+                  [checked]="isStageSelected(stage)"
+                  (change)="toggleStage(stage)"
+                />
+                <span>{{ stage }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Acreditados</label>
         <div class="selects">
-          <select [(ngModel)]="selectedStage" (ngModelChange)="onSearch()">
-            <option *ngFor="let stage of stageOptions" [value]="stage">
-              {{ stage }}
+          <select [(ngModel)]="selectedAccredited" (ngModelChange)="onSearch()">
+            <option *ngFor="let opt of accreditedOptions" [value]="opt">
+              {{ opt }}
             </option>
           </select>
         </div>
@@ -91,33 +136,155 @@
       </div>
     </div>
 
-    <div *ngIf="!loading" class="results-count">
-      Mostrando {{ uniqueProjectCount }} proyecto{{
-        uniqueProjectCount === 1 ? "" : "s"
-      }}
-      <div class="total-unique-certs" *ngIf="uniqueProjectCount > 0">
-        Total de certificados/informes únicos: {{ totalUniqueCertificates }}
+    <div *ngIf="!loading" class="results-row">
+      <div class="results-count">
+        <div class="main-count">
+          Mostrando {{ uniqueProjectCount }} proyecto{{
+            uniqueProjectCount === 1 ? "" : "s"
+          }}
+        </div>
+        <div class="sub-count">Total de OS: {{ totalOsCount }}</div>
+        <div class="sub-count">Total de DCC/DIE: {{ totalDccCount }}</div>
+        <div class="sub-count">
+          Total de Adjuntos CRM: {{ totalAttachmentsCount }}
+        </div>
+      </div>
+      <div class="results-actions">
+        <div class="sort-buttons-group">
+          <span class="sort-label">Ordenar:</span>
+          <button
+            type="button"
+            class="btn-sort"
+            [class.active]="sortField === 'fecha_adjudicado'"
+            (click)="sortBy('fecha_adjudicado')"
+            title="Ordenar por Fecha de Adjudicado"
+          >
+            Fecha Adjudicado
+            <span class="sort-arrow">{{
+              getSortIcon("fecha_adjudicado")
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="btn-sort"
+            [class.active]="sortField === 'fecha_realizado'"
+            (click)="sortBy('fecha_realizado')"
+            title="Ordenar por Fecha de Realizado"
+          >
+            Fecha Realizado
+            <span class="sort-arrow">{{ getSortIcon("fecha_realizado") }}</span>
+          </button>
+        </div>
+        <button
+          type="button"
+          class="btn-collapse"
+          (click)="toggleTableCollapse()"
+        >
+          {{
+            isTableCollapsed
+              ? "▼ Mostrar tabla principal"
+              : "▲ Ocultar tabla principal"
+          }}
+        </button>
       </div>
     </div>
 
     <div *ngIf="loading" class="loading">Cargando...</div>
 
-    <table *ngIf="!loading" class="projects-table">
+    <!-- <div *ngIf="!loading && !isTableCollapsed" class="table-legend-bar">
+      <span class="asterisk-red">*</span>
+      <span class="legend-text"
+        >Identifica que el documento en la columna <strong>DCC/DIE</strong> no
+        está acreditado</span
+      >
+    </div> -->
+
+    <table *ngIf="!loading && !isTableCollapsed" class="projects-table">
       <thead>
         <tr>
           <th>Proyecto</th>
           <th>Tipo</th>
           <th>Etapa</th>
-          <th>Fecha de Realizado</th>
+          <th
+            class="sortable-th"
+            (click)="sortBy('fecha_adjudicado')"
+            title="Ordenar por Fecha de Adjudicado"
+          >
+            <div class="th-content">
+              <span>Fecha de Adjudicado</span>
+              <span
+                class="sort-indicator"
+                [class.active]="sortField === 'fecha_adjudicado'"
+              >
+                {{ getSortIcon("fecha_adjudicado") }}
+              </span>
+            </div>
+          </th>
+          <th
+            class="sortable-th"
+            (click)="sortBy('fecha_realizado')"
+            title="Ordenar por Fecha de Realizado"
+          >
+            <div class="th-content">
+              <span>Fecha de Realizado</span>
+              <span
+                class="sort-indicator"
+                [class.active]="sortField === 'fecha_realizado'"
+              >
+                {{ getSortIcon("fecha_realizado") }}
+              </span>
+            </div>
+          </th>
+          <th>Acreditados</th>
+          <th>OS</th>
           <th>DCC/DIE</th>
+          <th>Adjuntos CRM</th>
         </tr>
       </thead>
       <tbody>
         <tr *ngFor="let m of filteredMeetings">
-          <td>{{ m.name }}</td>
+          <td>
+            <a
+              class="project-link"
+              [href]="getCrmUrl(m)"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {{ m.name }}
+            </a>
+          </td>
           <td>{{ m.projectType || "-" }}</td>
           <td>{{ m.projectStage || "-" }}</td>
-          <td>{{ m._start | date: "yyyy-MM-dd" }}</td>
+          <td>{{ (m.fecha_adjudicado | date: "yyyy-MM-dd") || "-" }}</td>
+          <td>{{ (m.fecha_realizado | date: "yyyy-MM-dd") || "-" }}</td>
+          <td class="cert-cell">
+            <div
+              class="cert-badge"
+              [title]="
+                m.accredited_status === 'Parcial' ? m.accredited_detail : ''
+              "
+            >
+              <div class="cert-status">{{ m.accredited_status }}</div>
+              <div
+                class="cert-tooltip"
+                *ngIf="m.accredited_status === 'Parcial' && m.accredited_detail"
+              >
+                <div class="cert-tooltip-title">Acreditación:</div>
+                <div class="cert-item">{{ m.accredited_detail }}</div>
+              </div>
+            </div>
+          </td>
+          <td class="cert-cell">
+            <div class="cert-badge">
+              <div class="cert-status">{{ m.os_dut_count }}</div>
+              <div class="cert-tooltip" *ngIf="m.os_pts && m.os_pts.length > 0">
+                <div class="cert-tooltip-title">PTs:</div>
+                <div *ngFor="let pt of m.os_pts" class="cert-item">
+                  {{ pt }}
+                </div>
+              </div>
+            </div>
+          </td>
           <td class="cert-cell">
             <div class="cert-badge">
               <div class="cert-status">
@@ -126,25 +293,271 @@
                     ? "Sí (" + m.certificateCount + ")"
                     : "No"
                 }}
+                <span
+                  *ngIf="m.dcc_has_unaccredited"
+                  class="asterisk-red"
+                  title="DCC/DIE no acreditado"
+                  >*</span
+                >
               </div>
               <div
                 class="cert-tooltip"
-                *ngIf="m.certificates && m.certificates.length > 0"
+                *ngIf="
+                  (m.dcc_certificates && m.dcc_certificates.length > 0) ||
+                  (m.certificates && m.certificates.length > 0)
+                "
               >
                 <div class="cert-tooltip-title">Certificados:</div>
-                <div *ngFor="let cert of m.certificates" class="cert-item">
-                  {{ cert }}
+                <div
+                  *ngFor="
+                    let cert of m.dcc_certificates &&
+                    m.dcc_certificates.length > 0
+                      ? m.dcc_certificates
+                      : m.certificates
+                  "
+                  class="cert-item"
+                >
+                  <span>{{ cert.id || cert }}</span>
+                  <span
+                    *ngIf="cert.accredited === false"
+                    class="asterisk-red"
+                    title="No acreditado"
+                    >*</span
+                  >
+                </div>
+                <div *ngIf="m.dcc_has_unaccredited" class="cert-tooltip-footer">
+                  <span class="asterisk-red">*</span> No acreditado
+                </div>
+              </div>
+            </div>
+          </td>
+          <td class="cert-cell">
+            <div class="cert-badge">
+              <div class="cert-status">
+                {{
+                  (m.attachmentCount || 0) > 0
+                    ? "Sí (" + m.attachmentCount + ")"
+                    : "No"
+                }}
+              </div>
+              <div
+                class="cert-tooltip"
+                *ngIf="m.attachments && m.attachments.length > 0"
+              >
+                <div class="cert-tooltip-title">Documentos:</div>
+                <div *ngFor="let doc of m.attachments" class="cert-item">
+                  {{ doc }}
                 </div>
               </div>
             </div>
           </td>
         </tr>
         <tr *ngIf="filteredMeetings.length === 0">
-          <td colspan="5">
+          <td colspan="9">
             No se encontraron proyectos en el rango seleccionado.
           </td>
         </tr>
       </tbody>
     </table>
+
+    <!-- Sección Inferior: Tablas Lado a Lado de Conteo de PTs -->
+    <div *ngIf="!loading" class="pt-summary-container">
+      <!-- Tabla PH -->
+      <div class="pt-summary-card ph-card">
+        <div class="pt-summary-header">
+          <h3>PTs - PH</h3>
+        </div>
+        <table class="projects-table">
+          <thead>
+            <tr>
+              <th>PT</th>
+              <th style="text-align: right">OS</th>
+              <th style="text-align: right">DCC/DIE</th>
+              <th style="text-align: right">CRM</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let item of phPtCounts"
+              class="clickable-pt-row"
+              (click)="abrirModalPT(item)"
+            >
+              <td>{{ item.pt }}</td>
+              <td style="text-align: right; font-weight: 600">{{ item.os }}</td>
+              <td style="text-align: right; font-weight: 600">
+                {{ item.dcc }}
+              </td>
+              <td style="text-align: right; font-weight: 600">
+                {{ item.crm }}
+              </td>
+            </tr>
+            <tr *ngIf="phPtCounts.length === 0">
+              <td colspan="4" style="text-align: center; color: #888">
+                Sin registros
+              </td>
+            </tr>
+          </tbody>
+          <tfoot *ngIf="phPtCounts.length > 0">
+            <tr class="total-row">
+              <td>Total</td>
+              <td style="text-align: right; font-weight: 700">
+                {{ getTotals(phPtCounts).os }}
+              </td>
+              <td style="text-align: right; font-weight: 700">
+                {{ getTotals(phPtCounts).dcc }}
+              </td>
+              <td style="text-align: right; font-weight: 700">
+                {{ getTotals(phPtCounts).crm }}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Tabla PC -->
+      <div class="pt-summary-card pc-card">
+        <div class="pt-summary-header">
+          <h3>PTs - PC</h3>
+        </div>
+        <table class="projects-table">
+          <thead>
+            <tr>
+              <th>PT</th>
+              <th style="text-align: right">OS</th>
+              <th style="text-align: right">DCC/DIE</th>
+              <th style="text-align: right">CRM</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let item of pcPtCounts"
+              class="clickable-pt-row"
+              (click)="abrirModalPT(item)"
+            >
+              <td>{{ item.pt }}</td>
+              <td style="text-align: right; font-weight: 600">{{ item.os }}</td>
+              <td style="text-align: right; font-weight: 600">
+                {{ item.dcc }}
+              </td>
+              <td style="text-align: right; font-weight: 600">
+                {{ item.crm }}
+              </td>
+            </tr>
+            <tr *ngIf="pcPtCounts.length === 0">
+              <td colspan="4" style="text-align: center; color: #888">
+                Sin registros
+              </td>
+            </tr>
+          </tbody>
+          <tfoot *ngIf="pcPtCounts.length > 0">
+            <tr class="total-row">
+              <td>Total</td>
+              <td style="text-align: right; font-weight: 700">
+                {{ getTotals(pcPtCounts).os }}
+              </td>
+              <td style="text-align: right; font-weight: 700">
+                {{ getTotals(pcPtCounts).dcc }}
+              </td>
+              <td style="text-align: right; font-weight: 700">
+                {{ getTotals(pcPtCounts).crm }}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Interactivo Detalle PT -->
+  <div
+    class="modal-backdrop"
+    *ngIf="mostrarModalPT && ptSeleccionado"
+    (click)="cerrarModalPT()"
+  >
+    <div class="modal-content pt-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="header-title">
+          <h2>Detalle de Proyectos — {{ ptSeleccionado.pt }}</h2>
+        </div>
+        <button class="btn-close" (click)="cerrarModalPT()" title="Cerrar">
+          ✕
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="pt-modal-summary">
+          <div class="summary-badge">
+            <span class="badge-label">OS:</span>
+            <span class="badge-value">{{ ptSeleccionado.os }}</span>
+          </div>
+          <div class="summary-badge">
+            <span class="badge-label">DCC/DIE:</span>
+            <span class="badge-value">{{ ptSeleccionado.dcc }}</span>
+          </div>
+          <div class="summary-badge">
+            <span class="badge-label">CRM:</span>
+            <span class="badge-value">{{ ptSeleccionado.crm }}</span>
+          </div>
+        </div>
+
+        <p class="modal-instruction">
+          Haz clic en una fila para filtrar la tabla principal por ese proyecto:
+        </p>
+
+        <!-- Tabla Comparativa Minimalista -->
+        <div class="modal-table-container">
+          <table class="modal-compare-table">
+            <thead>
+              <tr>
+                <th class="col-project">Proyecto</th>
+                <th class="col-check">OS</th>
+                <th class="col-check">DCC/DIE</th>
+                <th class="col-check">CRM</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let p of proyectosComparativosModal"
+                class="clickable-modal-row"
+                [ngClass]="{ 'row-discrepancy': p.hasDiscrepancy }"
+                (click)="seleccionarProyectoDesdeModal(p.nombre)"
+                title="Filtrar por {{ p.nombre }}"
+              >
+                <td class="col-project">{{ p.nombre }}</td>
+                <td class="col-check">
+                  <span *ngIf="p.countOS > 0" class="count-value">{{
+                    p.countOS
+                  }}</span>
+                  <span *ngIf="p.countOS === 0" class="dash-icon">-</span>
+                </td>
+                <td class="col-check">
+                  <span *ngIf="p.countDCC > 0" class="count-value">{{
+                    p.countDCC
+                  }}</span>
+                  <span *ngIf="p.countDCC === 0" class="dash-icon">-</span>
+                </td>
+                <td class="col-check">
+                  <span *ngIf="p.countCRM > 0" class="count-value">{{
+                    p.countCRM
+                  }}</span>
+                  <span *ngIf="p.countCRM === 0" class="dash-icon">-</span>
+                </td>
+              </tr>
+              <tr *ngIf="proyectosComparativosModal.length === 0">
+                <td colspan="4" class="empty-state">
+                  No hay proyectos registrados para este PT.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-close" (click)="cerrarModalPT()">
+          Cerrar
+        </button>
+      </div>
+    </div>
   </div>
 </div>

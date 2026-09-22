@@ -6,7 +6,11 @@
       <p>Selecciona una opción para continuar:</p>
 
       <div class="option-buttons">
-        <button class="option-btn create-btn" (click)="openCreateDccModal()">
+        <button
+          *ngIf="canShow('btn_create_dcc')"
+          class="option-btn create-btn"
+          (click)="openCreateDccModal()"
+        >
           <i class="material-icons">add_circle</i>
           <span>Crear DCC</span>
         </button>
@@ -15,17 +19,23 @@
           <span>Crear IE</span>
         </button> -->
         <button
+          *ngIf="canShow('btn_create_ied')"
           class="option-btn create-ied-btn"
           (click)="openCreateIedModal()"
         >
           <i class="material-icons">add_circle</i>
           <span>Crear IED</span>
         </button>
-        <button class="option-btn load-dcc-btn" (click)="openDccSelectModal()">
+        <button
+          *ngIf="canShow('btn_load_dcc')"
+          class="option-btn load-dcc-btn"
+          (click)="openDccSelectModal()"
+        >
           <i class="material-icons">folder_open</i>
           <span>Cargar DCC/DIE</span>
         </button>
         <button
+          *ngIf="canShow('btn_load_xml')"
           class="option-btn load-btn"
           (click)="loadExistingDCC()"
           disabled
@@ -36,12 +46,22 @@
       </div>
       <div class="option-buttons secondary-row">
         <button
+          *ngIf="canShow('btn_history')"
           class="option-btn list-projects-btn"
           (click)="openProjectListWindow()"
           type="button"
         >
           <i class="material-icons">view_list</i>
-          <span>Listado de proyectos</span>
+          <span>Histórico de servicios</span>
+        </button>
+        <button
+          *ngIf="canShow('btn_access')"
+          class="option-btn access-btn"
+          (click)="openAccessModal()"
+          type="button"
+        >
+          <i class="material-icons">security</i>
+          <span>Accesos</span>
         </button>
       </div>
     </div>
@@ -1373,7 +1393,10 @@
       </div>
 
       <!-- Administrative Data Tab -->
-      <div *ngIf="!isLoading && activeTab === 'administrative-data'" class="tab-panel">
+      <div
+        *ngIf="!isLoading && activeTab === 'administrative-data'"
+        class="tab-panel"
+      >
         <app-administrative-data
           [documentType]="documentType"
         ></app-administrative-data>
@@ -1404,7 +1427,10 @@
       </div>
 
       <!-- Tested Material Tab (IE/IED only) -->
-      <div *ngIf="!isLoading && activeTab === 'tested-material'" class="tab-panel">
+      <div
+        *ngIf="!isLoading && activeTab === 'tested-material'"
+        class="tab-panel"
+      >
         <ng-container *ngComponentOutlet="testedMaterialCmp"></ng-container>
         <!-- Navigation Buttons -->
         <div class="step-navigation">
@@ -1481,4 +1507,13 @@
       </div>
     </div>
   </div>
+
+  <!-- Modal de Control de Accesos por Rol -->
+  <app-access-modal
+    [isOpen]="showAccessModal"
+    [rawRoles]="roles"
+    (close)="closeAccessModal()"
+    (saved)="onPermissionsSaved()"
+  ></app-access-modal>
 </div>
+

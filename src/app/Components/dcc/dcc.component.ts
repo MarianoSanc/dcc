@@ -12,6 +12,9 @@ import { NgMultiSelectDropDownModule } from 'ng-multiselect-dropdown';
 import { ApiService } from '../../api/api.service';
 import { DccDataService } from '../../services/dcc-data.service';
 import { OrderService } from '../../services/order.service';
+import { AuthService } from '../../services/auth.service';
+import { AccessModalComponent } from '../access-modal/access-modal.component';
+import { HasPermissionPipe } from '../../shared/pipes/has-permission.pipe';
 import Swal from 'sweetalert2';
 import { UrlClass } from '../../shared/models/url.model';
 
@@ -27,6 +30,8 @@ import { UrlClass } from '../../shared/models/url.model';
     PreviewComponent,
     FormsModule,
     NgMultiSelectDropDownModule,
+    AccessModalComponent,
+    HasPermissionPipe,
   ],
   templateUrl: './dcc.component.html',
   styleUrl: './dcc.component.css',
@@ -41,6 +46,12 @@ export class DccComponent implements OnInit {
   isLoading: boolean = false;
   // Tipo de documento: 'DCC' o 'IE'
   documentType: 'DCC' | 'IE' = 'DCC';
+  // Roles de usuario (PDP-)
+  roles: any[] = [];
+  // Control de accesos y permisos por rol
+  showAccessModal: boolean = false;
+  userRoleIds: string[] = [];
+  activePermissions: any[] = [];
   // Controla la pantalla inicial de opciones
   showInitialOptions: boolean = true;
   // Controla la visualización de la interfaz principal (tabs)
@@ -205,11 +216,35 @@ export class DccComponent implements OnInit {
     private apiService: ApiService,
     private dccDataService: DccDataService,
     private orderService: OrderService,
+    private authService: AuthService,
   ) {}
 
   openProjectListWindow(): void {
     const base = this.getBasePath();
     window.open(`${base}/projects`, '_blank', 'noopener');
+  }
+
+  openAccessModal(): void {
+    this.showAccessModal = true;
+  }
+
+  closeAccessModal(): void {
+    this.showAccessModal = false;
+  }
+
+  onPermissionsSaved(): void {
+    this.authService.loadUserPermissions(true);
+  }
+
+  canShow(moduleId: string): boolean {
+    // Si aún no hay permisos en la base de datos, permitir abrir Accesos para configuración inicial
+    if (
+      moduleId === 'btn_access' &&
+      (!this.activePermissions || this.activePermissions.length === 0)
+    ) {
+      return true;
+    }
+    return this.authService.canShow(moduleId);
   }
 
   private getBasePath(): string {
@@ -218,14 +253,17 @@ export class DccComponent implements OnInit {
   }
 
   /**
-   * Extrae el ID del usuario de la URL
-   * Ejemplo: http://192.168.1.200:81/DCC/view?id=63c704bfb9c9d8482
-   * Retorna: 63c704bfb9c9d8482
+   * Obtiene el ID del usuario desde localStorage ('espo-user-lastUserId')
+   * Imprime el ID en consola.
+   * (Sustituye la extracción anterior desde la URL: ?id=...)
    */
+  private getUserId(): string {
+    return this.authService.getUserId();
+  }
+
+  // Alias para mantener compatibilidad
   private getUserIdFromUrl(): string {
-    const urlParams = new URLSearchParams(window.location.search);
-    const userId = urlParams.get('id');
-    return userId || '';
+    return this.getUserId();
   }
 
   /**
@@ -251,7 +289,6 @@ export class DccComponent implements OnInit {
         next: (response: any) => {
           const opportunity = response?.result?.[0];
           const accountId = opportunity?.account_id || null;
-          console.log('🏛️ Account ID from opportunity_calpro:', accountId);
           resolve(accountId);
         },
         error: (error) => {
@@ -285,7 +322,6 @@ export class DccComponent implements OnInit {
         next: (response: any) => {
           const opportunity = response?.result?.[0];
           const accountId = opportunity?.account_id || null;
-          console.log('🏛️ Account ID from opportunity:', accountId);
           resolve(accountId);
         },
         error: (error) => {
@@ -298,6 +334,17 @@ export class DccComponent implements OnInit {
 
   // Al iniciar el componente, carga la lista de DCCs existentes
   ngOnInit() {
+    this.getUserId();
+    this.authService.loadUserPermissions();
+    this.authService.roles$.subscribe((roles) => {
+      this.roles = roles;
+    });
+    this.authService.userRoleIds$.subscribe((ids) => {
+      this.userRoleIds = ids;
+    });
+    this.authService.activePermissions$.subscribe((perms) => {
+      this.activePermissions = perms;
+    });
     this.loadExistingDccList();
     this.updateTabsForDocumentType();
     // Suscribirse a cambios en el certificate_number para detectar tipo automáticamente
@@ -1719,7 +1766,6 @@ export class DccComponent implements OnInit {
         }
       });
 
-      console.log('✅ GENERATED DCC CERTIFICATES (GROUPED):', certificates);
       return certificates;
     }
 
@@ -1872,7 +1918,7 @@ export class DccComponent implements OnInit {
       attributes.id_customer = this.ieAccountId;
     }
 
-    const createdBy = this.getUserIdFromUrl();
+    const createdBy = this.getUserId();
     if (createdBy) {
       attributes.created_by = createdBy;
     }
@@ -3091,8 +3137,8 @@ export class DccComponent implements OnInit {
       // Usar el account_id cargado previamente desde opportunity_calpro
       const idContact = this.dccAccountId;
 
-      // Obtener el user ID de la URL
-      const createdBy = this.getUserIdFromUrl();
+      // Obtener el user ID desde localStorage ('espo-user-lastUserId')
+      const createdBy = this.getUserId();
 
       // Datos que se guardarán para cada DCC
       const attributes: any = {
@@ -3847,16 +3893,20 @@ export class DccComponent implements OnInit {
 
     groupedCertificates.forEach((cert) => {
       const certificateId = cert.id_dcc || cert.name || '';
-      
+
       // La description del dcc_item SIEMPRE debe ser igual a la propiedad description del PRIMER DUT
-      const firstDut = cert.duts && cert.duts.length > 0 ? cert.duts[0] : cert.primaryDut;
+      const firstDut =
+        cert.duts && cert.duts.length > 0 ? cert.duts[0] : cert.primaryDut;
       const descriptionVal = this.getDutField(firstDut, 'description') || '';
 
-      console.log(`[prepareSavePayload Logging] Certificado: ${certificateId}`, {
-        totalDuts: cert.duts?.length || 0,
-        firstDut: firstDut,
-        description: descriptionVal
-      });
+      console.log(
+        `[prepareSavePayload Logging] Certificado: ${certificateId}`,
+        {
+          totalDuts: cert.duts?.length || 0,
+          firstDut: firstDut,
+          description: descriptionVal,
+        },
+      );
 
       dccItemPayload.push({
         id_dcc: certificateId,
@@ -3891,17 +3941,22 @@ export class DccComponent implements OnInit {
     }
 
     return groupedCertificates.map((cert) => {
-      const certificateId = cert.id_dcc || cert.name || this.generatedCertificateNumber;
-      
+      const certificateId =
+        cert.id_dcc || cert.name || this.generatedCertificateNumber;
+
       // La description del dcc_item SIEMPRE debe ser igual a la propiedad description del PRIMER DUT
-      const firstDut = cert.duts && cert.duts.length > 0 ? cert.duts[0] : cert.primaryDut;
+      const firstDut =
+        cert.duts && cert.duts.length > 0 ? cert.duts[0] : cert.primaryDut;
       const descriptionVal = this.getDutField(firstDut, 'description') || '';
 
-      console.log(`[buildDccItemPayload Logging] Certificado: ${certificateId}`, {
-        totalDuts: cert.duts?.length || 0,
-        firstDut: firstDut,
-        description: descriptionVal
-      });
+      console.log(
+        `[buildDccItemPayload Logging] Certificado: ${certificateId}`,
+        {
+          totalDuts: cert.duts?.length || 0,
+          firstDut: firstDut,
+          description: descriptionVal,
+        },
+      );
 
       return {
         action: 'create',
@@ -3910,9 +3965,9 @@ export class DccComponent implements OnInit {
         opts: {
           attributes: {
             id_dcc: certificateId,
-            description: descriptionVal
-          }
-        }
+            description: descriptionVal,
+          },
+        },
       };
     });
   }

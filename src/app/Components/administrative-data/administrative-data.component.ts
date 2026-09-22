@@ -372,9 +372,6 @@ export class AdministrativeDataComponent implements OnInit {
 
   // Método para manejar selección desde ng-multiselect-dropdown
   onCustomerDropdownSelect(item: any) {
-    console.log('=== CUSTOMER DROPDOWN SELECT ===');
-    console.log('Item received:', item);
-
     if (item) {
       this.selectedCustomerId = item.id;
       this.selectedCustomerDropdown = [item];
@@ -1323,9 +1320,7 @@ export class AdministrativeDataComponent implements OnInit {
       .getApiService()
       .post(deleteRequest, UrlClass.URLNuevo)
       .subscribe({
-        next: (response: any) => {
-          console.log('Persona eliminada de BD:', response);
-        },
+        next: (response: any) => {},
         error: (error: any) => {
           console.error('Error al eliminar persona de BD:', error);
         },

@@ -1,0 +1,64 @@
+<div class="modal-backdrop" *ngIf="isOpen" (click)="onClose()">
+  <div class="modal-content access-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="header-title">
+        <i class="material-icons">security</i>
+        <h2>Matriz de Permisos y Accesos por Rol</h2>
+      </div>
+      <button class="btn-close" (click)="onClose()" title="Cerrar">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div *ngIf="loading" class="loading-state">
+        <i class="material-icons spin">refresh</i>
+        <p>Cargando permisos actuales...</p>
+      </div>
+
+      <div *ngIf="!loading" class="table-responsive">
+        <table class="matrix-table">
+          <thead>
+            <tr>
+              <th class="role-col">Rol (PDP)</th>
+              <th *ngFor="let mod of modules" class="module-col">
+                {{ mod.label }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let role of sortedRoles" class="matrix-row">
+              <td class="role-cell">
+                <span class="role-badge">{{ role.pdp || role.name }}</span>
+              </td>
+              <td *ngFor="let mod of modules" class="cell-check">
+                <label class="switch">
+                  <input
+                    type="checkbox"
+                    [checked]="permissionsMatrix[role.id]?.[mod.id]"
+                    (change)="togglePermission(role.id, mod.id)"
+                  />
+                  <span class="slider round"></span>
+                </label>
+              </td>
+            </tr>
+            <tr *ngIf="sortedRoles.length === 0">
+              <td [attr.colspan]="modules.length + 1" class="empty-cell">
+                No se encontraron roles disponibles con prefijo PDP-.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="onClose()" [disabled]="saving">
+        Cancelar
+      </button>
+      <button class="btn btn-primary" (click)="savePermissions()" [disabled]="saving">
+        <i class="material-icons" *ngIf="!saving">save</i>
+        <i class="material-icons spin" *ngIf="saving">refresh</i>
+        <span>{{ saving ? 'Guardando...' : 'Guardar Permisos' }}</span>
+      </button>
+    </div>
+  </div>
+</div>

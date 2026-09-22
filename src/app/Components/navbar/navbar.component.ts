@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { ActivatedRoute } from '@angular/router';
 import { UrlClass } from '../../shared/models/url.model';
 import { ApiService } from '../../api/api.service';
+import { AuthService } from '../../services/auth.service';
 
 
 @Component({
@@ -23,15 +24,20 @@ export class NavbarComponent implements OnInit {
   usuario_creador: string = '';
 
 
-  constructor(private backend: ApiService, private http: HttpClient, private router: Router, private route: ActivatedRoute) { }
+  constructor(
+    private backend: ApiService,
+    private http: HttpClient,
+    private router: Router,
+    private route: ActivatedRoute,
+    private authService: AuthService
+  ) { }
 
   ngOnInit(): void {
-    this.route.queryParams.subscribe(params => {
-      this.usuario_creador = params['id'];
-      if (this.usuario_creador) {
-        this.revisarTareasvencidas();
-      }
-    });
+    this.usuario_creador = this.authService.getUserId();
+    this.authService.loadUserPermissions();
+    if (this.usuario_creador) {
+      this.revisarTareasvencidas();
+    }
   }
 
 

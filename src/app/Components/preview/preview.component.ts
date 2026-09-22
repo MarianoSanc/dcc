@@ -2153,10 +2153,10 @@ ${this.generateResultDataXML(result.data)}
       return '';
     }
 
-    if (!technicalVerification) {
-      return certificateNumber;
+    if (technicalVerification) {
+      return certificateNumber.replace(/\b(DCC|CC)\b/g, 'TV');
     }
 
-    return certificateNumber.replace(' DCC ', ' TV ');
+    return certificateNumber.replace(/\bDCC\b/g, 'CC');
   }
 }

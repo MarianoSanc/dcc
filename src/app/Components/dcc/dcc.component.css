@@ -108,6 +108,20 @@
   color: #111;
 }
 
+.option-btn.access-btn {
+  background: white;
+  color: #1e3a8a;
+  border: 1px solid #93c5fd;
+  min-width: 200px;
+  max-width: 320px;
+  box-shadow: 0 4px 12px rgba(30, 58, 138, 0.08);
+}
+.option-btn.access-btn:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #3b82f6;
+}
+
 /* Modal Styles */
 .modal-backdrop {
   position: fixed;
